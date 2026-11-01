@@ -101,7 +101,8 @@ launch_interrupted() {
 # lock on natural exit or interruption.
 launch() {
   SDL_BG=${SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS:-1}
-  setsid $RUN env WINEPREFIX="$PREFIX" SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS="$SDL_BG" $GPU "$@" > "$STATE/play.log" 2>&1 < /dev/null &
+  SDL_JOY_BG=${SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS:-1}
+  setsid $RUN env WINEPREFIX="$PREFIX" SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS="$SDL_BG" SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS="$SDL_JOY_BG" $GPU "$@" > "$STATE/play.log" 2>&1 < /dev/null &
   pid=$!
   stats=$(proc_stat "$pid") || {
     wait "$pid"
@@ -157,7 +158,7 @@ INNER
 }
 
 settings() {
-  $RUN env WINEPREFIX="$PREFIX" SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS="${SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS:-1}" $GPU wine "$LAUNCHER" --settings --linux 2>/dev/null
+  $RUN env WINEPREFIX="$PREFIX" SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS="${SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS:-1}" SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS="${SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS:-1}" $GPU wine "$LAUNCHER" --settings --linux 2>/dev/null
   rc=$?
   # Do not let the desktop settings wineserver capture the subsequent game.
   $RUN env WINEPREFIX="$PREFIX" wineserver -w 2>/dev/null

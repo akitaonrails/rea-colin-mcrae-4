@@ -8,7 +8,8 @@ use std::path::PathBuf;
 use crate::config::{Resolution, Settings};
 use crate::patch::sha256;
 
-pub const DGVOODOO_DLLS: [&str; 4] = ["D3D8.dll", "D3DImm.dll", "DDraw.dll", "D3D9.dll"];
+pub const DGVOODOO_DLLS: [&str; 1] = ["D3D9.dll"];
+pub const DXVK_DLLS: [&str; 2] = ["d3d11.dll", "dxgi.dll"];
 pub const XIDI_DLL: &str = "dinput8.dll";
 const OWNERSHIP_FILE: &str = ".cmr4-launcher-components";
 type Ownership = std::collections::BTreeMap<String, String>;
@@ -55,12 +56,15 @@ dinput8.dll = C:\Windows\system32\dinput8.dll
 ActiveVirtualControllerMask = 0x01
 ";
 
-pub const WINE_OVERRIDES: &str = "dinput8,dsound,d3d8,d3d9=n,b;mscoree=d";
+pub const WINE_OVERRIDES: &str = "dinput8,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d";
 
-pub fn validate(components: &Path, controller: bool) -> Result<(), String> {
+pub fn validate(components: &Path, controller: bool, wine: bool) -> Result<(), String> {
     let mut names = DGVOODOO_DLLS.to_vec();
     if controller {
         names.push(XIDI_DLL);
+    }
+    if wine {
+        names.extend(DXVK_DLLS);
     }
     let missing: Vec<_> = names
         .into_iter()
@@ -77,7 +81,7 @@ pub fn validate(components: &Path, controller: bool) -> Result<(), String> {
     }
 }
 
-pub fn dgvoodoo_conf(settings: &Settings) -> String {
+pub fn dgvoodoo_conf(settings: &Settings, wine: bool, gamescope: bool) -> String {
     let (resolution, enumerated) = match settings.resolution() {
         Resolution::Original => ("unforced".into(), String::new()),
         Resolution::Custom(width, height) => (
@@ -85,14 +89,20 @@ pub fn dgvoodoo_conf(settings: &Settings) -> String {
             format!("{width}x{height}@60"),
         ),
     };
+    let fullscreen_attributes = if wine && !gamescope { "fake" } else { "" };
     format!(
-        "[GeneralExt]\n\
+        "[General]\n\
+         FullScreenMode                      = true\n\
+         ScalingMode                         = stretched_ar\n\n\
+         [GeneralExt]\n\
+         FullscreenAttributes                = {fullscreen_attributes}\n\
          FPSLimit                            = {}\n\n\
          [DirectX]\n\
          Resolution                          = {resolution}\n\
          Filtering                           = appdriven\n\
          Antialiasing                        = appdriven\n\
-         ForceVerticalSync                   = {}\n\n\
+         ForceVerticalSync                   = {}\n\
+         dgVoodooWatermark                   = false\n\n\
          [DirectXExt]\n\
          ExtraEnumeratedResolutions          = {enumerated}\n",
         settings.fps_limit().unwrap_or(0),
@@ -214,6 +224,28 @@ fn disable_xidi(game: &Path, runtime: &Path, ownership: &mut Ownership) -> Resul
     write_ownership(runtime, ownership)
 }
 
+fn disable_dxvk(game: &Path, runtime: &Path, ownership: &mut Ownership) -> Result<(), String> {
+    for name in DXVK_DLLS {
+        let destination = runtime.join(name);
+        if destination.exists() && !is_owned(runtime, name, ownership)? {
+            return Err(format!(
+                "runtime {name} is not launcher-owned; refusing to remove a modified DLL"
+            ));
+        }
+        if destination.exists() {
+            let source = game.join(name);
+            if source.is_file() {
+                copy(&source, &destination)?;
+            } else {
+                fs::remove_file(&destination)
+                    .map_err(|error| format!("cannot remove launcher-installed {name}: {error}"))?;
+            }
+        }
+        ownership.remove(name);
+    }
+    write_ownership(runtime, ownership)
+}
+
 /// Installs only launcher-owned wrappers. Other runtime DLLs, including a
 /// user's DSOAL `dsound.dll`, are deliberately untouched.
 pub fn install(
@@ -221,14 +253,26 @@ pub fn install(
     runtime: &Path,
     components: &Path,
     settings: &Settings,
+    wine: bool,
+    gamescope: bool,
 ) -> Result<(), String> {
-    validate(components, settings.controller())?;
+    validate(components, settings.controller(), wine)?;
     let mut ownership = read_ownership(runtime);
     for name in DGVOODOO_DLLS {
         install_wrapper(game, runtime, components, name, &mut ownership)?;
     }
-    fs::write(runtime.join("dgVoodoo.conf"), dgvoodoo_conf(settings))
-        .map_err(|error| format!("cannot write dgVoodoo.conf: {error}"))?;
+    if wine {
+        for name in DXVK_DLLS {
+            install_wrapper(game, runtime, components, name, &mut ownership)?;
+        }
+    } else {
+        disable_dxvk(game, runtime, &mut ownership)?;
+    }
+    fs::write(
+        runtime.join("dgVoodoo.conf"),
+        dgvoodoo_conf(settings, wine, gamescope),
+    )
+    .map_err(|error| format!("cannot write dgVoodoo.conf: {error}"))?;
 
     if settings.controller() {
         install_wrapper(game, runtime, components, XIDI_DLL, &mut ownership)?;
@@ -247,14 +291,14 @@ pub fn install(
 /// Replaces only rules for DLLs this launcher owns and keeps all unrelated
 /// user rules. The required rule stays first and deterministic.
 pub fn wine_overrides(existing: Option<&str>, controller: bool) -> String {
-    let mut replaced = vec!["dsound", "d3d8", "d3d9", "mscoree"];
+    let mut replaced = vec!["dsound", "d3d9", "d3d11", "dxgi", "mscoree"];
     if controller {
         replaced.push("dinput8");
     }
     let required = if controller {
         WINE_OVERRIDES
     } else {
-        "dsound,d3d8,d3d9=n,b;mscoree=d"
+        "dsound,d3d9,d3d11,dxgi=n,b;mscoree=d"
     };
     let mut result = vec![required.to_owned()];
     for rule in existing.into_iter().flat_map(|rules| rules.split(';')) {
@@ -297,7 +341,7 @@ mod tests {
 
     fn write_components(path: &Path) {
         fs::create_dir_all(path).unwrap();
-        for name in DGVOODOO_DLLS.into_iter().chain([XIDI_DLL]) {
+        for name in DGVOODOO_DLLS.into_iter().chain(DXVK_DLLS).chain([XIDI_DLL]) {
             fs::write(path.join(name), format!("bundle {name}")).unwrap();
         }
     }
@@ -324,11 +368,12 @@ mod tests {
     #[test]
     fn dgvoodoo_values_are_in_their_real_sections() {
         let settings = Settings {
+            resolution: Some(Resolution::Custom(3840, 2160)),
             fps_limit: Some(60),
             vsync: Some(true),
             ..Settings::default()
         };
-        let text = dgvoodoo_conf(&settings);
+        let text = dgvoodoo_conf(&settings, false, false);
         let general = ini_section(&text, "GeneralExt");
         let directx = ini_section(&text, "DirectX");
         let extended = ini_section(&text, "DirectXExt");
@@ -337,9 +382,26 @@ mod tests {
         assert_eq!(directx["Antialiasing"], "appdriven");
         assert_eq!(directx["Filtering"], "appdriven");
         assert_eq!(directx["ForceVerticalSync"], "true");
+        assert_eq!(directx["dgVoodooWatermark"], "false");
         assert_eq!(extended["ExtraEnumeratedResolutions"], "3840x2160@60");
         assert!(!directx.contains_key("FPSLimit"));
         assert!(!directx.contains_key("ExtraEnumeratedResolutions"));
+    }
+
+    #[test]
+    fn dgvoodoo_display_policy_matches_platform_context() {
+        let settings = Settings::default();
+        for (wine, gamescope, attributes) in
+            [(false, false, ""), (true, true, ""), (true, false, "fake")]
+        {
+            let text = dgvoodoo_conf(&settings, wine, gamescope);
+            let general = ini_section(&text, "General");
+            let extended = ini_section(&text, "GeneralExt");
+            assert_eq!(general["FullScreenMode"], "true");
+            assert_eq!(general["ScalingMode"], "stretched_ar");
+            assert_eq!(extended["FullscreenAttributes"], attributes);
+            assert_eq!(extended["FPSLimit"], "0");
+        }
     }
 
     #[test]
@@ -348,7 +410,7 @@ mod tests {
             resolution: Some(Resolution::Original),
             ..Settings::default()
         };
-        let text = dgvoodoo_conf(&settings);
+        let text = dgvoodoo_conf(&settings, false, false);
         assert_eq!(ini_section(&text, "DirectX")["Resolution"], "unforced");
         assert_eq!(
             ini_section(&text, "DirectXExt")["ExtraEnumeratedResolutions"],
@@ -380,10 +442,21 @@ mod tests {
     fn missing_components_fail_clearly_and_check_can_skip_them() {
         let components = temp("missing");
         fs::create_dir_all(&components).unwrap();
-        let error = validate(&components, true).unwrap_err();
-        assert!(error.contains("D3D8.dll"));
+        let error = validate(&components, true, true).unwrap_err();
+        assert!(error.contains("D3D9.dll"));
         assert!(error.contains("dinput8.dll"));
-        assert!(validate(&components, false).is_err());
+        assert!(error.contains("dxgi.dll"));
+        assert!(validate(&components, false, true).is_err());
+        assert!(validate(&components, true, false).is_err());
+        for name in DGVOODOO_DLLS.into_iter().chain([XIDI_DLL]) {
+            fs::write(components.join(name), name).unwrap();
+        }
+        assert_eq!(validate(&components, true, false), Ok(()));
+        assert!(
+            validate(&components, true, true)
+                .unwrap_err()
+                .contains("dxgi.dll")
+        );
         fs::remove_dir_all(components).unwrap();
     }
 
@@ -394,11 +467,19 @@ mod tests {
         let components = temp("conflict-components");
         fs::create_dir_all(&game).unwrap();
         write_components(&components);
-        for name in DGVOODOO_DLLS.into_iter().chain([XIDI_DLL]) {
+        for name in DGVOODOO_DLLS.into_iter().chain(DXVK_DLLS).chain([XIDI_DLL]) {
             let runtime = runtimes.join(name);
             fs::create_dir_all(&runtime).unwrap();
             fs::write(runtime.join(name), b"user DLL").unwrap();
-            let error = install(&game, &runtime, &components, &Settings::default()).unwrap_err();
+            let error = install(
+                &game,
+                &runtime,
+                &components,
+                &Settings::default(),
+                false,
+                false,
+            )
+            .unwrap_err();
             assert!(error.contains("not launcher-owned"), "{error}");
             assert_eq!(fs::read(runtime.join(name)).unwrap(), b"user DLL");
         }
@@ -415,24 +496,40 @@ mod tests {
         fs::create_dir_all(&game).unwrap();
         fs::create_dir_all(&runtime).unwrap();
         write_components(&components);
-        for name in DGVOODOO_DLLS.into_iter().chain([XIDI_DLL]) {
+        for name in DGVOODOO_DLLS.into_iter().chain(DXVK_DLLS).chain([XIDI_DLL]) {
             let source = format!("source {name}");
             fs::write(game.join(name), &source).unwrap();
             fs::write(runtime.join(name), &source).unwrap();
         }
-        install(&game, &runtime, &components, &Settings::default()).unwrap();
+        install(
+            &game,
+            &runtime,
+            &components,
+            &Settings::default(),
+            true,
+            false,
+        )
+        .unwrap();
         let ownership = read_ownership(&runtime);
-        for name in DGVOODOO_DLLS.into_iter().chain([XIDI_DLL]) {
+        for name in DGVOODOO_DLLS.into_iter().chain(DXVK_DLLS).chain([XIDI_DLL]) {
             assert!(ownership.contains_key(name));
             assert_eq!(
                 fs::read(runtime.join(name)).unwrap(),
                 format!("bundle {name}").as_bytes()
             );
         }
-        fs::write(components.join("D3D8.dll"), b"updated bundle").unwrap();
-        install(&game, &runtime, &components, &Settings::default()).unwrap();
+        fs::write(components.join("D3D9.dll"), b"updated bundle").unwrap();
+        install(
+            &game,
+            &runtime,
+            &components,
+            &Settings::default(),
+            true,
+            false,
+        )
+        .unwrap();
         assert_eq!(
-            fs::read(runtime.join("D3D8.dll")).unwrap(),
+            fs::read(runtime.join("D3D9.dll")).unwrap(),
             b"updated bundle"
         );
         for path in [game, runtime, components] {
@@ -447,12 +544,20 @@ mod tests {
         let components = temp("divergent-components");
         fs::create_dir_all(&game).unwrap();
         write_components(&components);
-        for name in DGVOODOO_DLLS.into_iter().chain([XIDI_DLL]) {
+        for name in DGVOODOO_DLLS.into_iter().chain(DXVK_DLLS).chain([XIDI_DLL]) {
             fs::write(game.join(name), format!("source {name}")).unwrap();
             let runtime = runtimes.join(name);
             fs::create_dir_all(&runtime).unwrap();
             fs::write(runtime.join(name), b"divergent runtime DLL").unwrap();
-            let error = install(&game, &runtime, &components, &Settings::default()).unwrap_err();
+            let error = install(
+                &game,
+                &runtime,
+                &components,
+                &Settings::default(),
+                false,
+                false,
+            )
+            .unwrap_err();
             assert!(error.contains("not launcher-owned"), "{error}");
             assert_eq!(
                 fs::read(runtime.join(name)).unwrap(),
@@ -460,6 +565,38 @@ mod tests {
             );
         }
         for path in [game, runtimes, components] {
+            fs::remove_dir_all(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn dxvk_is_wine_only_and_owned_files_are_removed_for_native_windows() {
+        let game = temp("dxvk-game");
+        let runtime = temp("dxvk-runtime");
+        let components = temp("dxvk-components");
+        fs::create_dir_all(&game).unwrap();
+        fs::create_dir_all(&runtime).unwrap();
+        write_components(&components);
+        let settings = Settings::default();
+        install(&game, &runtime, &components, &settings, true, false).unwrap();
+        for name in DXVK_DLLS {
+            assert_eq!(
+                fs::read(runtime.join(name)).unwrap(),
+                format!("bundle {name}").as_bytes()
+            );
+        }
+        assert_eq!(
+            ini_section(
+                &fs::read_to_string(runtime.join("dgVoodoo.conf")).unwrap(),
+                "GeneralExt"
+            )["FullscreenAttributes"],
+            "fake"
+        );
+        install(&game, &runtime, &components, &settings, false, false).unwrap();
+        for name in DXVK_DLLS {
+            assert!(!runtime.join(name).exists());
+        }
+        for path in [game, runtime, components] {
             fs::remove_dir_all(path).unwrap();
         }
     }
@@ -474,7 +611,7 @@ mod tests {
         write_components(&components);
         fs::write(runtime.join("dsound.dll"), b"user DSOAL").unwrap();
         let on = Settings::default();
-        install(&game, &runtime, &components, &on).unwrap();
+        install(&game, &runtime, &components, &on, false, false).unwrap();
         assert_eq!(
             fs::read(runtime.join(XIDI_DLL)).unwrap(),
             b"bundle dinput8.dll"
@@ -485,7 +622,7 @@ mod tests {
             controller: Some(false),
             ..Settings::default()
         };
-        install(&game, &runtime, &components, &off).unwrap();
+        install(&game, &runtime, &components, &off, false, false).unwrap();
         assert!(!runtime.join(XIDI_DLL).exists());
         assert!(!runtime.join("Xidi.ini").exists());
         assert_eq!(fs::read(runtime.join("dsound.dll")).unwrap(), b"user DSOAL");
@@ -503,13 +640,21 @@ mod tests {
         fs::create_dir_all(&game).unwrap();
         fs::create_dir_all(&runtime).unwrap();
         write_components(&components);
-        install(&game, &runtime, &components, &Settings::default()).unwrap();
+        install(
+            &game,
+            &runtime,
+            &components,
+            &Settings::default(),
+            false,
+            false,
+        )
+        .unwrap();
         fs::write(game.join(XIDI_DLL), b"source proxy").unwrap();
         let off = Settings {
             controller: Some(false),
             ..Settings::default()
         };
-        install(&game, &runtime, &components, &off).unwrap();
+        install(&game, &runtime, &components, &off, false, false).unwrap();
         assert_eq!(fs::read(runtime.join(XIDI_DLL)).unwrap(), b"source proxy");
         for path in [game, runtime, components] {
             fs::remove_dir_all(path).unwrap();
@@ -524,14 +669,22 @@ mod tests {
         fs::create_dir_all(&game).unwrap();
         fs::create_dir_all(&runtime).unwrap();
         write_components(&components);
-        install(&game, &runtime, &components, &Settings::default()).unwrap();
+        install(
+            &game,
+            &runtime,
+            &components,
+            &Settings::default(),
+            false,
+            false,
+        )
+        .unwrap();
         fs::write(runtime.join(XIDI_DLL), b"user changed").unwrap();
         fs::write(game.join(XIDI_DLL), b"source proxy").unwrap();
         let off = Settings {
             controller: Some(false),
             ..Settings::default()
         };
-        let error = install(&game, &runtime, &components, &off).unwrap_err();
+        let error = install(&game, &runtime, &components, &off, false, false).unwrap_err();
         assert!(error.contains("refusing to replace or remove"), "{error}");
         assert_eq!(fs::read(runtime.join(XIDI_DLL)).unwrap(), b"user changed");
         assert_eq!(fs::read(game.join(XIDI_DLL)).unwrap(), b"source proxy");
@@ -544,12 +697,12 @@ mod tests {
     fn controller_on_forces_xidi_and_preserves_unrelated_rules() {
         assert_eq!(wine_overrides(None, true), WINE_OVERRIDES);
         assert_eq!(
-            wine_overrides(Some("dxgi=n,b;DINPUT8=b;foo=b;mscoree=n"), true),
-            format!("{WINE_OVERRIDES};dxgi=n,b;foo=b")
+            wine_overrides(Some("bnet=n,b;DINPUT8=b;foo=b;mscoree=n"), true),
+            format!("{WINE_OVERRIDES};bnet=n,b;foo=b")
         );
         assert_eq!(
             wine_overrides(Some("d3d8,d3d9=b;dsound=n"), true),
-            WINE_OVERRIDES
+            format!("{WINE_OVERRIDES};d3d8=b")
         );
     }
 
@@ -557,11 +710,14 @@ mod tests {
     fn controller_off_preserves_user_dinput8_rule_only() {
         assert_eq!(
             wine_overrides(None, false),
-            "dsound,d3d8,d3d9=n,b;mscoree=d"
+            "dsound,d3d9,d3d11,dxgi=n,b;mscoree=d"
         );
         assert_eq!(
-            wine_overrides(Some("dinput8=b;dxgi=n,b;d3d8=b;dinput8,dsound=n"), false),
-            "dsound,d3d8,d3d9=n,b;mscoree=d;dinput8=b;dxgi=n,b;dinput8=n"
+            wine_overrides(
+                Some("dinput8=b;bnet=n,b;d3d8=b;dinput8,dsound=n;dxgi=b"),
+                false
+            ),
+            "dsound,d3d9,d3d11,dxgi=n,b;mscoree=d;dinput8=b;bnet=n,b;d3d8=b;dinput8=n"
         );
     }
 }

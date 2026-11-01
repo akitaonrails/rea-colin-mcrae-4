@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use crate::config::{Resolution, Settings};
+use crate::config::{Resolution, Settings, default_resolution};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Form {
@@ -16,7 +16,7 @@ pub struct Form {
 }
 
 impl Form {
-    pub fn new(settings: &Settings) -> Self {
+    pub fn new(settings: &Settings, screen: Option<(u32, u32)>) -> Self {
         let path = |path: &Option<PathBuf>| {
             path.as_ref()
                 .map(|path| path.display().to_string())
@@ -25,7 +25,9 @@ impl Form {
         Self {
             game: path(&settings.game),
             runtime: path(&settings.runtime),
-            resolution: settings.resolution(),
+            resolution: settings
+                .resolution
+                .unwrap_or_else(|| default_resolution(screen)),
             widescreen: settings.widescreen(),
             fps_limit: settings.fps_limit(),
             vsync: settings.vsync(),
@@ -33,8 +35,8 @@ impl Form {
         }
     }
 
-    pub fn first_run() -> Self {
-        Self::new(&Settings::default())
+    pub fn first_run(screen: Option<(u32, u32)>) -> Self {
+        Self::new(&Settings::default(), screen)
     }
 
     pub fn original_picture(&mut self) {
@@ -72,20 +74,15 @@ pub const FRAME_RATES: [(Option<u32>, &str); 5] = [
 ];
 pub const VSYNCS: [(bool, &str); 2] = [(false, "Off"), (true, "On")];
 
-fn landscape((a, b): (u32, u32)) -> Option<(u32, u32)> {
-    let (width, height) = (a.max(b) & !1, a.min(b) & !1);
-    (width > 640 && height > 480 && width <= 7680 && height <= 4320).then_some((width, height))
-}
-
 pub fn resolutions(screen: Option<(u32, u32)>) -> Vec<(Resolution, String)> {
     let common = [(1920, 1080), (2560, 1440), (3840, 2160)];
     let mut result = vec![(Resolution::Original, "Original".to_string())];
-    if let Some(size) = screen.and_then(landscape)
-        && !common.contains(&size)
+    if let Resolution::Custom(width, height) = default_resolution(screen)
+        && !common.contains(&(width, height))
     {
         result.push((
-            Resolution::Custom(size.0, size.1),
-            format!("Screen {}×{}", size.0, size.1),
+            Resolution::Custom(width, height),
+            format!("Screen fit {width}×{height}"),
         ));
     }
     for (width, height) in common {
@@ -174,7 +171,7 @@ mod tests {
 
     #[test]
     fn first_run_uses_cmr04_modern_defaults_not_a_device_preset() {
-        let form = Form::first_run();
+        let form = Form::first_run(Some((3840, 2160)));
         assert_eq!(form.resolution, Resolution::Custom(3840, 2160));
         assert!(form.widescreen);
         assert!(form.controller);
@@ -184,7 +181,7 @@ mod tests {
 
     #[test]
     fn every_public_setting_round_trips() {
-        let mut form = Form::first_run();
+        let mut form = Form::first_run(Some((3840, 2160)));
         form.game = r"D:\Games\CMR04".into();
         form.runtime = r"D:\CMR04 Runtime".into();
         form.resolution = Resolution::Custom(1920, 1080);
@@ -195,7 +192,7 @@ mod tests {
         let text = form.save();
         let (settings, warnings) = Settings::parse_file(&text);
         assert!(warnings.is_empty(), "{warnings:?}");
-        assert_eq!(Form::new(&settings), form);
+        assert_eq!(Form::new(&settings, Some((3840, 2160))), form);
         assert!(!text.contains("scaler"));
         assert!(!text.contains("buttons"));
         assert!(!text.contains("\nsaves ="));
@@ -203,7 +200,7 @@ mod tests {
 
     #[test]
     fn original_preset_only_changes_resolution_and_widescreen() {
-        let mut form = Form::first_run();
+        let mut form = Form::first_run(Some((3840, 2160)));
         form.fps_limit = Some(60);
         form.original_picture();
         assert_eq!(form.resolution, Resolution::Original);
@@ -214,9 +211,9 @@ mod tests {
 
     #[test]
     fn screen_resolution_is_offered_once_and_original_is_available() {
-        let choices = resolutions(Some((2560, 1600)));
+        let choices = resolutions(Some((1280, 800)));
         assert_eq!(choices[0].0, Resolution::Original);
-        assert_eq!(choices[1].0, Resolution::Custom(2560, 1600));
+        assert_eq!(choices[1].0, Resolution::Custom(1280, 720));
         let listed = resolutions(Some((1920, 1080)));
         assert_eq!(
             listed

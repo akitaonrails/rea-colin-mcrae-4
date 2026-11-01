@@ -139,7 +139,7 @@ fn normalize(path: &Path) -> PathBuf {
 /// Resolves a path even when its final components do not exist. Canonicalizing
 /// the nearest existing ancestor resolves symlinks and Windows path aliases;
 /// normalizing the appended suffix then handles `.` and `..` lexically.
-fn resolve(path: &Path, cwd: &Path) -> Result<PathBuf, String> {
+pub fn resolve(path: &Path, cwd: &Path) -> Result<PathBuf, String> {
     let absolute = if path.is_absolute() {
         path.to_path_buf()
     } else {
@@ -173,6 +173,45 @@ fn resolve(path: &Path, cwd: &Path) -> Result<PathBuf, String> {
             Err(error) => return Err(format!("cannot resolve {}: {error}", path.display())),
         }
     }
+}
+
+#[cfg(windows)]
+fn strip_os_prefix(value: &std::ffi::OsStr, prefix: &[u16]) -> Option<std::ffi::OsString> {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    let wide: Vec<u16> = value.encode_wide().collect();
+    wide.starts_with(prefix)
+        .then(|| std::ffi::OsString::from_wide(&wide[prefix.len()..]))
+}
+
+#[cfg(unix)]
+fn strip_os_prefix(value: &std::ffi::OsStr, prefix: &[u8]) -> Option<std::ffi::OsString> {
+    use std::os::unix::ffi::{OsStrExt, OsStringExt};
+    let bytes = value.as_bytes();
+    bytes
+        .starts_with(prefix)
+        .then(|| std::ffi::OsString::from_vec(bytes[prefix.len()..].to_vec()))
+}
+
+/// Converts Win32 extended-length paths back to the ordinary drive/UNC form
+/// understood by CMR04, without changing the path's textual content otherwise.
+pub fn simplify_extended_length(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    const EXTENDED: &[u16] = &[92, 92, 63, 92];
+    #[cfg(windows)]
+    const UNC: &[u16] = &[85, 78, 67, 92];
+    #[cfg(unix)]
+    const EXTENDED: &[u8] = b"\\\\?\\";
+    #[cfg(unix)]
+    const UNC: &[u8] = b"UNC\\";
+    if let Some(rest) = strip_os_prefix(path.as_os_str(), EXTENDED) {
+        if let Some(unc) = strip_os_prefix(&rest, UNC) {
+            let mut simplified = std::ffi::OsString::from("\\\\");
+            simplified.push(unc);
+            return PathBuf::from(simplified);
+        }
+        return PathBuf::from(rest);
+    }
+    path.to_path_buf()
 }
 
 fn check_separate_from(game: &Path, runtime: &Path, cwd: &Path) -> Result<(), String> {
@@ -364,11 +403,29 @@ mod tests {
     fn nonexistent_relative_and_dotdot_children_are_refused_without_creation() {
         let game = temp("relative-overlap");
         fs::create_dir_all(&game).unwrap();
+        let accepted = resolve(Path::new("../outside-runtime"), &game).unwrap();
+        assert!(accepted.is_absolute());
+        assert_eq!(accepted, game.parent().unwrap().join("outside-runtime"));
+        assert!(!accepted.exists());
         assert!(check_separate_from(&game, Path::new("child"), &game).is_err());
         assert!(check_separate_from(&game, Path::new("missing/../child"), &game).is_err());
         assert!(!game.join("child").exists());
         assert!(check_separate_from(&game, Path::new("../outside"), &game).is_ok());
         fs::remove_dir_all(game).unwrap();
+    }
+
+    #[test]
+    fn extended_length_windows_paths_become_drive_and_unc_paths() {
+        assert_eq!(
+            simplify_extended_length(Path::new(r"\\?\C:\Games\CMR04")),
+            PathBuf::from(r"C:\Games\CMR04")
+        );
+        assert_eq!(
+            simplify_extended_length(Path::new(r"\\?\UNC\server\share\CMR04")),
+            PathBuf::from(r"\\server\share\CMR04")
+        );
+        let ordinary = Path::new(r"C:\Games\CMR04");
+        assert_eq!(simplify_extended_length(ordinary), ordinary);
     }
 
     #[cfg(unix)]

@@ -1,0 +1,9 @@
+#!/bin/sh
+# Bundled Wine first, then the CMR04 helper (settings, then game).
+HERE=$(dirname "$(readlink -f "$0")")
+export PATH="$HERE/usr/lib/wine/bin:$PATH"
+export CMR4_LAUNCHER="$HERE/usr/lib/cmr4/CMR4Launcher.exe"
+export CMR4_WAIT=1
+export WINEDLLOVERRIDES="mscoree,mshtml=d${WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}"
+export WINEDEBUG="${WINEDEBUG:--all}"
+exec "$HERE/usr/lib/cmr4/cmr4-play" "$@"

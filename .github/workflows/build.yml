@@ -1,0 +1,90 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Test and build CMR04 packages
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install packaging and 32-bit MinGW tools
+        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-i686 zip unzip
+
+      - name: Install Rust with the 32-bit Windows target
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup target add i686-pc-windows-gnu
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Host unit tests
+        run: cargo test --workspace
+
+      - name: Linux helper and package tests
+        run: |
+          sh linux/tests/gpu-env.sh
+          sh linux/tests/gamescope.sh
+          sh linux/tests/supervision.sh
+          sh packaging/tests/package.sh
+
+      - name: Lint the Windows target
+        run: cargo clippy --release --target i686-pc-windows-gnu --all-targets -- -D warnings
+
+      - name: Build CMR4Launcher.exe
+        run: cargo build --release --target i686-pc-windows-gnu
+
+      - name: Assemble and smoke-check the Windows package
+        env:
+          CMR4_CACHE: ${{ runner.temp }}/cmr4-components
+        run: |
+          packaging/build-windows.sh "${GITHUB_REF_NAME//\//-}" dist "$CMR4_CACHE"
+          name=CMR4Launcher-${GITHUB_REF_NAME//\//-}
+          echo "PACKAGE=dist/$name.zip" >> "$GITHUB_ENV"
+          echo "PACKAGE_DIR=dist/$name" >> "$GITHUB_ENV"
+          echo "APPIMAGE=dist/$name-x86_64.AppImage" >> "$GITHUB_ENV"
+
+      - name: Build and smoke-check the Linux AppImage
+        env:
+          CMR4_CACHE: ${{ runner.temp }}/cmr4-appimage
+        run: |
+          packaging/appimage/build.sh "$PACKAGE_DIR" dist/appimage
+          mv dist/appimage/CMR4Launcher-x86_64.AppImage "$APPIMAGE"
+          test -s "$APPIMAGE"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: CMR4Launcher-windows
+          path: ${{ env.PACKAGE }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: CMR4Launcher-linux
+          path: ${{ env.APPIMAGE }}
+
+  release:
+    name: Publish version-tag releases
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: CMR4Launcher-*
+          merge-multiple: true
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes ./*.zip ./*.AppImage

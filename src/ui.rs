@@ -30,15 +30,24 @@ pub enum Outcome {
 
 pub fn show(settings_path: &Path, text: &str, linux: bool) -> Result<Outcome, String> {
     let mut outcome = Outcome::Closed;
+    let wine = win32::is_wine();
+    // XWayland fractional scaling can lose a post-creation resize. Under Wine
+    // create the final surface now; the first frame only changes egui's zoom.
+    let zoom = if wine {
+        form::window_zoom(win32::screen_size(), 1.0)
+    } else {
+        1.0
+    };
+    let size = SIZE * zoom;
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Colin McRae Rally 04")
-            .with_inner_size(SIZE)
-            .with_min_inner_size(SIZE)
-            .with_max_inner_size(SIZE)
+            .with_inner_size(size)
+            .with_min_inner_size(size)
+            .with_max_inner_size(size)
             .with_resizable(false)
             .with_maximize_button(false),
-        centered: !win32::is_wine(),
+        centered: !wine,
         ..Default::default()
     };
     let path = settings_path.to_path_buf();
@@ -53,6 +62,7 @@ pub fn show(settings_path: &Path, text: &str, linux: bool) -> Result<Outcome, St
                 path,
                 text,
                 linux,
+                zoom,
                 &mut outcome,
             )))
         }),
@@ -176,6 +186,7 @@ struct Window<'a> {
     resolutions: Vec<(cmr4_launcher::config::Resolution, String)>,
     pads: usize,
     linux: bool,
+    zoom: f32,
     portrait: Option<TextureHandle>,
     path: PathBuf,
     error: Option<String>,
@@ -191,13 +202,17 @@ impl<'a> Window<'a> {
         path: PathBuf,
         text: String,
         linux: bool,
+        zoom: f32,
         outcome: &'a mut Outcome,
     ) -> Self {
         let screen = win32::screen_size();
         let form = if text.is_empty() {
-            Form::first_run()
+            Form::first_run(screen)
         } else {
-            Form::new(&cmr4_launcher::config::Settings::parse_file(&text).0)
+            Form::new(
+                &cmr4_launcher::config::Settings::parse_file(&text).0,
+                screen,
+            )
         };
         let check = check_game(&form.game, form.widescreen);
         Self {
@@ -210,6 +225,7 @@ impl<'a> Window<'a> {
             resolutions: form::resolutions(screen),
             pads: win32::xinput_pads().len(),
             linux,
+            zoom,
             portrait: load_portrait(ctx),
             path,
             error: None,
@@ -222,12 +238,19 @@ impl<'a> Window<'a> {
 
     fn fit_screen(&mut self, ctx: &egui::Context) {
         self.sized = true;
-        let native = ctx.native_pixels_per_point().unwrap_or(1.0);
-        let zoom = form::window_zoom(self.screen, native);
-        if zoom == 1.0 {
+        let wine = win32::is_wine();
+        let zoom = if wine {
+            self.zoom
+        } else {
+            form::window_zoom(self.screen, ctx.native_pixels_per_point().unwrap_or(1.0))
+        };
+        self.zoom = zoom;
+        if zoom != 1.0 {
+            ctx.set_zoom_factor(zoom);
+        }
+        if wine || zoom == 1.0 {
             return;
         }
-        ctx.set_zoom_factor(zoom);
         let size = SIZE * zoom;
         for command in [
             egui::ViewportCommand::MinInnerSize(size),
@@ -235,9 +258,6 @@ impl<'a> Window<'a> {
             egui::ViewportCommand::InnerSize(size),
         ] {
             ctx.send_viewport_cmd(command);
-        }
-        if win32::is_wine() {
-            return;
         }
         if let Some(monitor) = ctx.input(|input| input.viewport().monitor_size) {
             let at = ((monitor - size) / 2.0).max(Vec2::ZERO);
@@ -254,10 +274,16 @@ impl<'a> Window<'a> {
             self.tab = Tab::Play;
             return;
         }
+        let settings = self.form.settings();
+        if let Err(error) = cmr4_launcher::config::validate_picture(&settings) {
+            self.error = Some(error);
+            self.tab = Tab::Picture;
+            return;
+        }
         if let Some(dir) = self.path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        match std::fs::write(&self.path, self.form.save()) {
+        match std::fs::write(&self.path, settings.render()) {
             Ok(()) => {
                 *self.outcome = Outcome::Play;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -537,7 +563,7 @@ impl Window<'_> {
             "Widescreen: tested 16:9 Low aspect patch",
         );
         ui.label(
-            egui::RichText::new("Original resolution turns widescreen off. Custom sizes use dgVoodoo at 60 Hz enumeration.")
+            egui::RichText::new("Widescreen requires exact 16:9. Original or another aspect (4:3, 16:10, ultrawide) needs widescreen off; custom modes use 60 Hz enumeration.")
                 .font(font(13.0))
                 .color(MUTED),
         );

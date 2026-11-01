@@ -256,8 +256,68 @@ fn write_string(key: &Key, name: &str, value: &str) -> Result<(), String> {
     }
 }
 
-pub fn write_game_registry(resolution: Resolution) -> Result<(&'static str, (u32, u32)), String> {
+fn set_user_value_if_missing(path: &str, name: &str, data: &str) -> Result<bool, String> {
+    let key = create_key(HKEY_CURRENT_USER, path, false)
+        .map_err(|code| format!("cannot open HKCU\\{path} (error {code})"))?;
+    let wide_name = wide(name);
+    // SAFETY: existence query on an open key; no output buffer is requested.
+    let result = unsafe {
+        RegQueryValueExW(
+            key.0,
+            wide_name.as_ptr(),
+            null(),
+            null_mut(),
+            null_mut(),
+            null_mut(),
+        )
+    };
+    if result == ERROR_FILE_NOT_FOUND {
+        write_string(&key, name, data)?;
+        return Ok(true);
+    }
+    if result != ERROR_SUCCESS {
+        return Err(format!(
+            "cannot read registry value {name} (error {result})"
+        ));
+    }
+    Ok(false)
+}
+
+/// Keeps the settings window on the GPU through GLX under Wine, without
+/// replacing an existing user choice.
+pub fn prefer_gpu_opengl() -> Result<bool, String> {
+    set_user_value_if_missing(r"Software\Wine\X11 Driver", "UseEGL", "N")
+}
+
+fn has_value(key: &Key, name: &str) -> Result<bool, String> {
+    let name = wide(name);
+    // SAFETY: existence query on an open key; no output buffer is requested.
+    let result = unsafe {
+        RegQueryValueExW(
+            key.0,
+            name.as_ptr(),
+            null(),
+            null_mut(),
+            null_mut(),
+            null_mut(),
+        )
+    };
+    match result {
+        ERROR_SUCCESS => Ok(true),
+        ERROR_FILE_NOT_FOUND => Ok(false),
+        code => Err(format!("cannot read registry value (error {code})")),
+    }
+}
+
+pub fn write_game_registry(
+    resolution: Resolution,
+    runtime: &Path,
+) -> Result<(&'static str, (u32, u32)), String> {
     let (key, place) = game_key()?;
+    let root = registry::install_root(runtime);
+    for name in registry::INSTALL_PATH_VALUES {
+        write_string(&key, name, &root)?;
+    }
     let existing = match (read_dword(&key, "Width")?, read_dword(&key, "Height")?) {
         (Some(width), Some(height)) => Some((width, height)),
         _ => None,
@@ -265,6 +325,14 @@ pub fn write_game_registry(resolution: Resolution) -> Result<(&'static str, (u32
     let (width, height) = registry::dimensions(resolution, existing);
     write_dword(&key, "Width", width)?;
     write_dword(&key, "Height", height)?;
+    if !has_value(&key, "LANGUAGE")? {
+        write_string(&key, "LANGUAGE", "E")?;
+    }
+    for (name, value) in registry::DEFAULT_DWORDS {
+        if !has_value(&key, name)? {
+            write_dword(&key, name, value)?;
+        }
+    }
     Ok((place, (width, height)))
 }
 

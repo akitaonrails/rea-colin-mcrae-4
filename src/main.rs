@@ -94,11 +94,20 @@ mod app {
             win32::message("Colin McRae Rally 04", config::USAGE, false);
             return Ok(0);
         }
+        let wine = win32::is_wine();
+        let gamescope = std::env::var_os("GAMESCOPE_WAYLAND_DISPLAY").is_some();
         let settings_path = settings_path();
         let mut existing = fs::read_to_string(&settings_path).unwrap_or_default();
         let show_window =
             cli.settings_window || (!cli.no_window && raw.iter().all(|arg| arg == "--linux"));
         if show_window {
+            if wine {
+                match win32::prefer_gpu_opengl() {
+                    Ok(true) => log_line("Wine settings window: OpenGL through GLX (UseEGL=N)"),
+                    Ok(false) => {}
+                    Err(error) => log_line(&format!("warning: {error}")),
+                }
+            }
             log_line("settings window opened");
             match ui::show(&settings_path, &existing, cli.linux) {
                 Ok(ui::Outcome::Play) => {
@@ -130,11 +139,22 @@ mod app {
             log_line(&format!("warning: {warning}"));
         }
         let mut settings = saved.merged(cli.settings);
+        if settings.resolution.is_none() {
+            settings.resolution = Some(config::default_resolution(win32::screen_size()));
+        }
+        config::validate_picture(&settings)?;
+        log_line(&format!("resolution: {}", settings.resolution().value()));
         let game = find_game(&settings)?;
+        let game = fs::canonicalize(&game)
+            .map_err(|error| format!("game folder {}: {error}", game.display()))?;
+        let game = runtime::simplify_extended_length(&game);
         let runtime = settings
             .runtime
             .clone()
             .unwrap_or_else(|| home().join("CMR4"));
+        let cwd = std::env::current_dir().map_err(|error| format!("current directory: {error}"))?;
+        let runtime = runtime::resolve(&runtime, &cwd)?;
+        let runtime = runtime::simplify_extended_length(&runtime);
         settings.game = Some(game.clone());
         settings.runtime = Some(runtime.clone());
         log_line(&format!("game: {}", game.display()));
@@ -162,7 +182,7 @@ mod app {
             .ok()
             .and_then(|path| path.parent().map(|dir| dir.join("components")))
             .ok_or("cannot locate the launcher's components folder")?;
-        components::validate(&components_dir, settings.controller())?;
+        components::validate(&components_dir, settings.controller(), wine)?;
         runtime::check_separate(&game, &runtime)?;
         let copied = runtime::sync(&game, &runtime)
             .map_err(|error| format!("cannot prepare {}: {error}", runtime.display()))?;
@@ -177,12 +197,15 @@ mod app {
             fs::write(&runtime_exe, &bytes)
                 .map_err(|error| format!("cannot write {}: {error}", runtime_exe.display()))?;
         }
-        components::install(&game, &runtime, &components_dir, &settings)?;
+        components::install(&game, &runtime, &components_dir, &settings, wine, gamescope)?;
         persist(&settings_path, &settings)?;
         log_line("components and owned configuration installed");
+        log_line(&format!(
+            "display/render policy: Wine={wine}, gamescope={gamescope}, borderless={}",
+            wine && !gamescope
+        ));
 
-        let wine = win32::is_wine();
-        let (place, (width, height)) = win32::write_game_registry(settings.resolution())?;
+        let (place, (width, height)) = win32::write_game_registry(settings.resolution(), &runtime)?;
         if wine {
             if settings.controller() {
                 win32::map_wine_controllers()?;

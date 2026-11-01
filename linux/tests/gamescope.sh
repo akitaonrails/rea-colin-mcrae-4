@@ -38,12 +38,16 @@ start > /dev/null
 check "original uses a standard original mode" "gamescope -w 1024 -h 768 -W 1024 -H 768"
 check "private Wine prefix is passed" "WINEPREFIX=$CMR4_PREFIX"
 check "SDL background events default on" "SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS=1"
+check "SDL joystick background events default on" "SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1"
+SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS=0 SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=0 start > /dev/null
+check "both existing SDL background choices survive" "SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS=0 SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=0"
+unset SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS
 if [ ! -f "$LOCK" ]; then echo "ok   synchronous natural exit removes lock"; else echo "FAIL natural lock"; fails=$((fails + 1)); fi
 
 GAMESCOPE_WAYLAND_DISPLAY=fake start > /dev/null
-check "already in gamescope runs directly" "env WINEPREFIX=$CMR4_PREFIX SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS=1 sh $HOME/.config/cmr4-launcher/inner.sh"
+check "already in gamescope runs directly" "env WINEPREFIX=$CMR4_PREFIX SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS=1 SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1 sh $HOME/.config/cmr4-launcher/inner.sh"
 unset GAMESCOPE_WAYLAND_DISPLAY
 : > "$T/no-gamescope"
 start > /dev/null
-check "unavailable gamescope runs directly" "env WINEPREFIX=$CMR4_PREFIX SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS=1 sh $HOME/.config/cmr4-launcher/inner.sh"
+check "unavailable gamescope runs directly" "env WINEPREFIX=$CMR4_PREFIX SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS=1 SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1 sh $HOME/.config/cmr4-launcher/inner.sh"
 [ "$fails" = 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

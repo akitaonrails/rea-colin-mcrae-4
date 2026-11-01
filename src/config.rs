@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 pub const FILE_NAME: &str = "launcher.cfg";
-pub const DEFAULT_RESOLUTION: Resolution = Resolution::Custom(3840, 2160);
+pub const DEFAULT_RESOLUTION: Resolution = Resolution::Custom(1920, 1080);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Resolution {
@@ -18,6 +18,45 @@ impl Resolution {
             Resolution::Custom(w, h) => format!("{w}x{h}"),
         }
     }
+
+    pub fn is_exact_16_by_9(self) -> bool {
+        match self {
+            Resolution::Custom(width, height) => {
+                height > 0 && u64::from(width) * 9 == u64::from(height) * 16
+            }
+            Resolution::Original => false,
+        }
+    }
+}
+
+/// Largest exact 16:9 mode that fits the active screen in landscape, capped
+/// at 4K and with a 640x360 minimum. Unknown screens use 1920x1080.
+pub fn default_resolution(screen: Option<(u32, u32)>) -> Resolution {
+    let Some((a, b)) = screen else {
+        return DEFAULT_RESOLUTION;
+    };
+    let (screen_w, screen_h) = (a.max(b).min(3840), a.min(b).min(2160));
+    let mut height = screen_h.min(2160);
+    while height >= 360 {
+        if height % 9 == 0 {
+            let width = height / 9 * 16;
+            if width <= screen_w && width >= 640 {
+                return Resolution::Custom(width, height);
+            }
+        }
+        height -= 1;
+    }
+    Resolution::Custom(640, 360)
+}
+
+pub fn validate_picture(settings: &Settings) -> Result<(), String> {
+    if settings.widescreen() && !settings.resolution().is_exact_16_by_9() {
+        return Err(format!(
+            "the 16:9 Low widescreen patch requires an exact 16:9 custom resolution (current: {}); choose 16:9 or turn widescreen off",
+            settings.resolution().value()
+        ));
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -169,8 +208,8 @@ pub const USAGE: &str = concat!(
     "CMR4Launcher [options]\n\n",
     "  --game <folder>       folder containing the installed cmr4.exe\n",
     "  --runtime <folder>    private writable runtime folder\n",
-    "  --resolution WxH      picture size, or original (default 3840x2160)\n",
-    "  --widescreen on|off   tested 16:9 Low patch (default on)\n",
+    "  --resolution WxH      exact 16:9 for widescreen, or original (default: screen fit)\n",
+    "  --widescreen on|off   tested 16:9 Low patch (default on; off for other aspects)\n",
     "  --fps-limit N|off     dgVoodoo frame-rate cap\n",
     "  --vsync on|off        force vertical sync (default off)\n",
     "  --controller on|off   Xidi modern controller mapping (default on)\n",
@@ -268,11 +307,51 @@ mod tests {
     #[test]
     fn defaults_match_the_tested_modern_setup() {
         let settings = Settings::default();
-        assert_eq!(settings.resolution(), Resolution::Custom(3840, 2160));
+        assert_eq!(settings.resolution(), Resolution::Custom(1920, 1080));
         assert!(settings.widescreen());
         assert!(settings.controller());
         assert_eq!(settings.fps_limit(), None);
         assert!(!settings.vsync());
+    }
+
+    #[test]
+    fn default_resolution_fits_exact_16_by_9_to_the_screen() {
+        for (screen, expected) in [
+            (Some((3840, 2160)), (3840, 2160)),
+            (Some((1920, 1080)), (1920, 1080)),
+            (Some((2560, 1080)), (1920, 1080)),
+            (Some((1280, 800)), (1280, 720)),
+            (Some((2160, 3840)), (3840, 2160)),
+            (Some((1366, 768)), (1360, 765)),
+            (Some((640, 480)), (640, 360)),
+        ] {
+            assert_eq!(
+                default_resolution(screen),
+                Resolution::Custom(expected.0, expected.1),
+                "{screen:?}"
+            );
+        }
+        assert_eq!(default_resolution(None), Resolution::Custom(1920, 1080));
+    }
+
+    #[test]
+    fn widescreen_rejects_non_16_by_9_but_4_by_3_can_be_unpatched() {
+        let wide = Settings {
+            resolution: Some(Resolution::Custom(2560, 1080)),
+            ..Settings::default()
+        };
+        assert!(validate_picture(&wide).unwrap_err().contains("exact 16:9"));
+        let original = Settings {
+            resolution: Some(Resolution::Original),
+            ..Settings::default()
+        };
+        assert!(validate_picture(&original).is_err());
+        let four_three = Settings {
+            resolution: Some(Resolution::Custom(1600, 1200)),
+            widescreen: Some(false),
+            ..Settings::default()
+        };
+        assert_eq!(validate_picture(&four_three), Ok(()));
     }
 
     #[test]

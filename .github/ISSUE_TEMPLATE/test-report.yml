@@ -1,0 +1,67 @@
+name: Test report
+description: Report CMR04 launcher results on Windows, Steam Deck, or Linux, working or not.
+title: "CMR04 test report: "
+labels: ["test report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing. Do not attach cmr4.exe, DLLs, saves, media, or any other game files.
+        Remove usernames and personal game/runtime paths from settings and logs.
+  - type: dropdown
+    id: system
+    attributes:
+      label: System
+      options:
+        - Windows 11
+        - Windows 10
+        - Steam Deck (Game Mode)
+        - Steam Deck (Desktop Mode)
+        - Linux with Steam / Proton
+        - Linux with the AppImage
+        - Linux with Wine and cmr4-play
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Launcher version
+      description: The first line of launcher.log, for example "CMR4Launcher 0.1.0".
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Graphics card, controller, and screen
+      description: For example "RTX 3060, Xbox-style pad, 2560x1440 at 144 Hz".
+  - type: checkboxes
+    id: worked
+    attributes:
+      label: What worked?
+      options:
+        - label: The settings window opened
+        - label: The intro and menus displayed
+        - label: A stage could be driven
+        - label: Left stick / D-pad and RT/LT pedals
+        - label: A/Start, B/Back, X, and Y mappings
+        - label: Saves and settings survived another launch
+        - label: The game closed cleanly
+  - type: textarea
+    id: settings
+    attributes:
+      label: Settings used
+      description: Resolution, widescreen, FPS limit, VSync, and controller. Do not include game or runtime paths.
+  - type: textarea
+    id: problems
+    attributes:
+      label: What went wrong, if anything?
+      description: What you did, expected, and observed. If validation failed, include only the SHA-256, never the executable.
+  - type: textarea
+    id: log
+    attributes:
+      label: launcher.log
+      description: |
+        Windows: %LOCALAPPDATA%\CMR4Launcher\launcher.log. Wine/Proton: inside the prefix.
+        AppImage prefix: ~/.local/share/cmr4-launcher/prefix. Remove personal paths before posting.
+      render: text

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Colin McRae Rally 04 Launcher
+Comment=Play your own installed copy of Colin McRae Rally 04
+Exec=AppRun
+Icon=cmr4-launcher
+Categories=Game;
+Terminal=false
