@@ -1,7 +1,33 @@
 # Colin McRae Rally 04 Launcher
 
 Run your own installed PC copy of **Colin McRae Rally 04** on Windows 10/11,
-or on Linux through Wine, Steam/Proton, or the AppImage.
+or on Linux through Wine, Steam/Proton, or the AppImage. Point the launcher at
+the game folder and press **Play**: the modern display, renderer, and controller
+setup is done for you.
+
+![CMR04 running in 16:9 at 3840x2160](docs/images/game.png)
+
+## What the launcher solves
+
+- **Modern picture:** an exact 16:9 mode that fits your screen, up to 4K, with
+  the tested widescreen correction and no stretched 4:3 image.
+- **Difficult displays and GPUs:** borderless fullscreen under raw Wine avoids
+  portrait/wrong-monitor selection; gamescope and native Windows use normal
+  fullscreen. Hybrid graphics use the discrete GPU where the platform allows it.
+- **Old graphics dependencies:** dgVoodoo2 and, only under Wine/Proton, DXVK
+  are installed and configured for you. No separate wrapper downloads or
+  compatibility-mode instructions.
+- **Gamepad setup:** Xidi maps a modern Xbox-style controller to steering,
+  pedals, menu buttons, and D-pad navigation out of the box.
+- **Fragile first-run state:** the launcher creates the required registry paths
+  and display defaults, then reapplies its owned resolution each launch.
+- **Your installation and saves:** the installed folder is read-only. A private
+  runtime holds the widescreen patch, wrappers, configuration, and saves.
+
+The launcher never modifies the installed game folder. It makes a persistent
+private runtime containing the patched executable, compatibility wrappers,
+configuration, saves, and game settings. This repository and its packages
+contain **no game files**.
 
 > **Verification status:** the exact final Windows package and AppImage are
 > verified under Linux/Wine. A fresh prefix reached the 3840x2160 title and main
@@ -12,10 +38,10 @@ or on Linux through Wine, Steam/Proton, or the AppImage.
 > raw-desktop visual capture, and protected retail media remain unverified. See
 > [docs/RUNTIME_NOTES.md](docs/RUNTIME_NOTES.md).
 
-The launcher never modifies the installed game folder. It makes a persistent
-private runtime containing the patched executable, compatibility wrappers,
-configuration, saves, and game settings. This repository and its packages
-contain **no game files**.
+## Download
+
+- **Windows:** [CMR4Launcher-v0.1.0.zip](https://github.com/akitaonrails/rea-colin-mcrae-4/releases/latest/download/CMR4Launcher-v0.1.0.zip)
+- **Linux AppImage:** [CMR4Launcher-v0.1.0-x86_64.AppImage](https://github.com/akitaonrails/rea-colin-mcrae-4/releases/latest/download/CMR4Launcher-v0.1.0-x86_64.AppImage)
 
 ## What you need
 
@@ -93,6 +119,8 @@ linux/cmr4-play stop
 It requires Wine; gamescope is optional. No container or distrobox is assumed.
 
 ## Settings and defaults
+
+![The CMR04 settings window](docs/images/launcher.png)
 
 Only these CMR04 settings are exposed:
 

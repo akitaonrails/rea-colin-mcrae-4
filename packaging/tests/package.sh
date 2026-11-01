@@ -5,8 +5,8 @@ HERE=$(dirname "$(readlink -f "$0")")
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT HUP INT TERM
 PKG=$T/pkg
-mkdir -p "$PKG/components" "$PKG/linux" "$PKG/docs" "$PKG/licenses/dgVoodoo2" "$PKG/licenses/DXVK" "$PKG/licenses/Xidi/ThirdParty"
-for file in CMR4Launcher.exe README.md docs/RESEARCH.md docs/RUNTIME_NOTES.md THIRD_PARTY.md LICENSE-MIT LICENSE-APACHE \
+mkdir -p "$PKG/components" "$PKG/linux" "$PKG/docs/images" "$PKG/licenses/dgVoodoo2" "$PKG/licenses/DXVK" "$PKG/licenses/Xidi/ThirdParty"
+for file in CMR4Launcher.exe README.md docs/ENHANCEMENTS.md docs/RESEARCH.md docs/RUNTIME_NOTES.md docs/images/game.png docs/images/launcher.png THIRD_PARTY.md LICENSE-MIT LICENSE-APACHE \
   components/D3D9.dll \
   components/dinput8.dll components/d3d11.dll components/dxgi.dll linux/cmr4-play linux/README.md \
   licenses/DXVK/LICENSE \

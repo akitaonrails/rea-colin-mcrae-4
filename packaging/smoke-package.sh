@@ -6,8 +6,11 @@ PKG=$(readlink -f "$1")
 [ -d "$PKG" ]
 required='CMR4Launcher.exe
 README.md
+docs/ENHANCEMENTS.md
 docs/RESEARCH.md
 docs/RUNTIME_NOTES.md
+docs/images/game.png
+docs/images/launcher.png
 THIRD_PARTY.md
 LICENSE-MIT
 LICENSE-APACHE
