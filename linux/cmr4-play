@@ -1,0 +1,190 @@
+#!/bin/sh
+# Plays Colin McRae Rally 04 on Linux through Wine and gamescope.
+#
+#   cmr4-play           show settings through Wine, then start the game
+#   cmr4-play --play    start with saved settings (no window)
+#   cmr4-play stop      end the owned game session and its private Wine prefix
+#   cmr4-play status    running or idle
+#
+# Optional environment:
+#   CMR4_PREFIX    Wine prefix (default ~/.local/share/cmr4-launcher/prefix)
+#   CMR4_LAUNCHER  CMR4Launcher.exe (default next to this script or one folder up)
+#   CMR4_RUN       re-entrant wrapper for wine/gamescope commands
+#   CMR4_WAIT      accepted for AppImage compatibility; every launch waits
+set -u
+HERE=$(dirname "$(readlink -f "$0")")
+PREFIX=${CMR4_PREFIX:-$HOME/.local/share/cmr4-launcher/prefix}
+LAUNCHER=${CMR4_LAUNCHER:-}
+if [ -z "$LAUNCHER" ]; then
+  for p in "$HERE/CMR4Launcher.exe" "$HERE/../CMR4Launcher.exe"; do
+    [ -f "$p" ] && LAUNCHER=$(readlink -f "$p") && break
+  done
+fi
+RUN=${CMR4_RUN:-}
+STATE=$HOME/.config/cmr4-launcher
+mkdir -p "$STATE" "$PREFIX"
+
+CFG=
+for d in "$PREFIX"/drive_c/users/*/AppData/Local/CMR4Launcher; do
+  case "$d" in */users/Public/*|*'*'*) continue ;; esac
+  [ -d "$d" ] && CFG=$d/launcher.cfg
+done
+[ -z "$CFG" ] && CFG=$PREFIX/drive_c/users/$USER/AppData/Local/CMR4Launcher/launcher.cfg
+
+get_key() { [ -f "$CFG" ] && sed -n "s|^$1 *= *||p" "$CFG" | tail -1; }
+LOCK=$STATE/running.pid
+
+# Print session id and process start time from /proc. Text after the final
+# ") " avoids comm fields that contain spaces or parentheses.
+proc_stat() {
+  [ -r "/proc/$1/stat" ] || return 1
+  stat=$(cat "/proc/$1/stat") || return 1
+  rest=${stat##*) }
+  set -- $rest
+  [ "$#" -ge 20 ] || return 1
+  printf '%s %s\n' "$4" "${20}"
+}
+
+read_lock() {
+  [ -r "$LOCK" ] || return 1
+  IFS=' ' read -r LOCK_PID LOCK_START < "$LOCK" || return 1
+  case "$LOCK_PID" in ''|*[!0-9]*) return 1 ;; esac
+  case "$LOCK_START" in ''|*[!0-9]*) return 1 ;; esac
+}
+
+# A lock alone proves nothing: the pid must still be the same setsid session
+# leader with the same start identity recorded when we spawned it.
+session_valid() {
+  read_lock || return 1
+  stats=$(proc_stat "$LOCK_PID") || return 1
+  [ "$stats" = "$LOCK_PID $LOCK_START" ]
+}
+
+running() { session_valid; }
+
+# Pick a render GPU without overriding a player's existing choice. CMR4_SYSFS
+# replaces /sys in tests.
+gpu_env() {
+  [ -n "${DRI_PRIME:-}${__NV_PRIME_RENDER_OFFLOAD:-}" ] && return
+  sys=${CMR4_SYSFS:-/sys}
+  n=0 nvidia= boot= boot_vram=0 other_vram=0
+  for d in "$sys"/class/drm/card*; do
+    case "${d##*/}" in *-*) continue ;; esac
+    [ -r "$d/device/vendor" ] || continue
+    n=$((n + 1))
+    vram=$(cat "$d/device/mem_info_vram_total" 2>/dev/null || echo 0)
+    [ "$(basename "$(readlink "$d/device/driver")")" = nvidia ] && nvidia=1
+    if [ "$(cat "$d/device/boot_vga" 2>/dev/null)" = 1 ]; then
+      boot=$(cat "$d/device/vendor"); boot_vram=$vram
+    elif [ "$vram" -gt "$other_vram" ]; then
+      other_vram=$vram
+    fi
+  done
+  if [ -n "$nvidia" ] && $RUN sh -c 'ldconfig -p 2>/dev/null | grep -q libGLX_nvidia.so.0'; then
+    echo "__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia __VK_LAYER_NV_optimus=NVIDIA_only"
+  elif [ "$n" -ge 2 ] && { [ "$boot" = 0x8086 ] || [ "$other_vram" -gt "$boot_vram" ]; }; then
+    echo "DRI_PRIME=1"
+  fi
+}
+
+launch_interrupted() {
+  trap - EXIT HUP INT TERM
+  if session_valid; then
+    kill -TERM "-$LOCK_PID" 2>/dev/null || true
+  fi
+  rm -f "$LOCK"
+  exit 143
+}
+
+# Preserve the caller's environment and SDL preference. The child gets its own
+# session so stop can address only this launch. Every mode waits and cleans the
+# lock on natural exit or interruption.
+launch() {
+  SDL_BG=${SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS:-1}
+  setsid $RUN env WINEPREFIX="$PREFIX" SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS="$SDL_BG" $GPU "$@" > "$STATE/play.log" 2>&1 < /dev/null &
+  pid=$!
+  stats=$(proc_stat "$pid") || {
+    wait "$pid"
+    return "$?"
+  }
+  printf '%s %s\n' "$pid" "${stats#* }" > "$LOCK"
+  trap 'rm -f "$LOCK"' EXIT
+  trap 'launch_interrupted' HUP INT TERM
+  wait "$pid"
+  rc=$?
+  rm -f "$LOCK"
+  trap - EXIT HUP INT TERM
+  return "$rc"
+}
+
+stop_session() {
+  # Revalidate immediately before signaling. Stale/reused pids and unrelated
+  # cmr4.exe processes are never targets.
+  if session_valid; then
+    kill -TERM "-$LOCK_PID" 2>/dev/null || true
+  fi
+  rm -f "$LOCK"
+}
+
+start() {
+  if [ -z "$LAUNCHER" ] || [ ! -f "$LAUNCHER" ]; then
+    echo "CMR4Launcher.exe not found next to cmr4-play (or set CMR4_LAUNCHER)"; exit 1
+  fi
+  res=$(get_key resolution)
+  W=1024; H=768
+  case "$res" in
+    ''|original) ;;
+    *x*) W=${res%x*}; H=${res#*x} ;;
+  esac
+  inner=$STATE/inner.sh
+  # The launcher is positional parameter 1, never shell source. Wine remains
+  # blocked until both launcher and game exit, then only our prefix is cleaned.
+  cat > "$inner" <<'INNER'
+#!/bin/sh
+trap 'wineserver -k; exit' INT TERM HUP
+wine "$1" --no-window
+wineserver -k
+INNER
+  chmod +x "$inner"
+  # Never nest gamescope. Direct launch also works on headless/minimal systems.
+  if [ -n "${GAMESCOPE_WAYLAND_DISPLAY:-}" ] || ! $RUN sh -c "command -v gamescope" >/dev/null 2>&1; then
+    echo "starting without a gamescope of our own"
+    launch sh "$inner" "$LAUNCHER"
+  else
+    echo "starting at ${W}x${H}, filter nis"
+    launch gamescope -w "$W" -h "$H" -W "$W" -H "$H" -f -S fit -F nis -- "$inner" "$LAUNCHER"
+  fi
+}
+
+settings() {
+  $RUN env WINEPREFIX="$PREFIX" SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS="${SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS:-1}" $GPU wine "$LAUNCHER" --settings --linux 2>/dev/null
+  rc=$?
+  # Do not let the desktop settings wineserver capture the subsequent game.
+  $RUN env WINEPREFIX="$PREFIX" wineserver -w 2>/dev/null
+  case $rc in
+    0|4) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Tests source functions without executing Wine, gamescope, or the game.
+[ -n "${CMR4_PLAY_FUNCTIONS_ONLY:-}" ] && return 0
+GPU=$(gpu_env)
+[ -n "$GPU" ] && echo "GPU: $GPU"
+
+case "${1:-}" in
+  "")
+    if running; then echo "already running"; exit 0; fi
+    if [ -z "$LAUNCHER" ] || [ ! -f "$LAUNCHER" ]; then
+      echo "CMR4Launcher.exe not found next to cmr4-play (or set CMR4_LAUNCHER)"; exit 1
+    fi
+    settings || exit 0
+    start ;;
+  --play|start)
+    if running; then echo "already running"; else start; fi ;;
+  status) if running; then echo running; else echo idle; fi ;;
+  stop)
+    stop_session
+    echo stopped ;;
+  *) echo "usage: $0 [--play|stop|status]"; exit 2 ;;
+esac

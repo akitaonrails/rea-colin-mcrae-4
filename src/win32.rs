@@ -38,6 +38,112 @@ pub fn is_wine() -> bool {
     }
 }
 
+pub fn message(title: &str, text: &str, error: bool) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        MB_ICONERROR, MB_ICONINFORMATION, MB_OK, MessageBoxW,
+    };
+    let icon = if error {
+        MB_ICONERROR
+    } else {
+        MB_ICONINFORMATION
+    };
+    // SAFETY: NUL-terminated strings and no owner window.
+    unsafe {
+        MessageBoxW(
+            null_mut(),
+            wide(text).as_ptr(),
+            wide(title).as_ptr(),
+            MB_OK | icon,
+        );
+    }
+}
+
+/// The newest available XInput function, or None when XInput is unavailable.
+fn xinput_proc(name: &std::ffi::CStr) -> Option<unsafe extern "system" fn() -> isize> {
+    use windows_sys::Win32::System::LibraryLoader::LoadLibraryW;
+    for dll in ["xinput1_4.dll", "xinput1_3.dll", "xinput9_1_0.dll"] {
+        // SAFETY: plain loader calls with NUL-terminated names.
+        unsafe {
+            let module = LoadLibraryW(wide(dll).as_ptr());
+            if !module.is_null()
+                && let Some(proc) = GetProcAddress(module, name.as_ptr().cast())
+            {
+                return Some(proc);
+            }
+        }
+    }
+    None
+}
+
+fn xinput_states() -> Vec<(u32, [u8; 16])> {
+    type GetState = unsafe extern "system" fn(u32, *mut [u8; 16]) -> u32;
+    let Some(get) = xinput_proc(c"XInputGetState") else {
+        return Vec::new();
+    };
+    // SAFETY: XInputGetState's signature; its output state is exactly 16 bytes.
+    let get: GetState = unsafe { std::mem::transmute(get) };
+    (0..4)
+        .filter_map(|slot| {
+            let mut state = [0u8; 16];
+            (unsafe { get(slot, &mut state) } == 0).then_some((slot, state))
+        })
+        .collect()
+}
+
+pub fn xinput_pads() -> Vec<u32> {
+    xinput_states().into_iter().map(|(slot, _)| slot).collect()
+}
+
+pub fn xinput_buttons() -> u16 {
+    xinput_states().into_iter().fold(0, |all, (_, state)| {
+        all | u16::from_le_bytes([state[4], state[5]])
+    })
+}
+
+pub fn screen_size() -> Option<(u32, u32)> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+    // SAFETY: plain metric queries.
+    let (width, height) = unsafe { (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)) };
+    (width > 0 && height > 0).then_some((width as u32, height as u32))
+}
+
+pub fn pick_folder(title: &str) -> Option<std::path::PathBuf> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::System::Com::{
+        COINIT_APARTMENTTHREADED, CoInitializeEx, CoTaskMemFree,
+    };
+    use windows_sys::Win32::UI::Shell::{
+        BIF_NEWDIALOGSTYLE, BIF_RETURNONLYFSDIRS, BROWSEINFOW, SHBrowseForFolderW,
+        SHGetPathFromIDListW,
+    };
+    let mut title = wide(title);
+    let mut name = [0u16; 260];
+    // SAFETY: buffers live across the modal call; the returned item list is
+    // released with the COM allocator.
+    unsafe {
+        CoInitializeEx(std::ptr::null(), COINIT_APARTMENTTHREADED as u32);
+        let info = BROWSEINFOW {
+            hwndOwner: std::ptr::null_mut(),
+            pidlRoot: std::ptr::null_mut(),
+            pszDisplayName: name.as_mut_ptr(),
+            lpszTitle: title.as_mut_ptr(),
+            ulFlags: BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE,
+            lpfn: None,
+            lParam: 0,
+            iImage: 0,
+        };
+        let list = SHBrowseForFolderW(&info);
+        if list.is_null() {
+            return None;
+        }
+        let mut path = [0u16; 1024];
+        let ok = SHGetPathFromIDListW(list, path.as_mut_ptr()) != 0;
+        CoTaskMemFree(list as *const _);
+        let len = path.iter().position(|&char| char == 0).unwrap_or(0);
+        (ok && len > 0).then(|| std::ffi::OsString::from_wide(&path[..len]).into())
+    }
+}
+
 struct Key(HKEY);
 
 impl Drop for Key {

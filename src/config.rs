@@ -158,6 +158,8 @@ pub struct Cli {
     pub check: bool,
     pub no_window: bool,
     pub help: bool,
+    pub settings_window: bool,
+    pub linux: bool,
 }
 
 pub const USAGE: &str = concat!(
@@ -236,6 +238,8 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Cli, String
             }
             "--check" => cli.check = true,
             "--no-window" => cli.no_window = true,
+            "--settings" => cli.settings_window = true,
+            "--linux" => cli.linux = true,
             "--help" | "-h" | "/?" => cli.help = true,
             flag @ ("--widescreen" | "--vsync" | "--controller") => {
                 let raw = value(flag)?;

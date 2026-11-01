@@ -1,22 +1,42 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
+#[cfg(windows)]
+mod ui;
 #[cfg(windows)]
 mod win32;
 
 #[cfg(windows)]
 mod app {
     use std::fs;
+    use std::io::Write as _;
     use std::path::{Path, PathBuf};
 
     use cmr4_launcher::config::{self, Settings};
     use cmr4_launcher::patch::{self, Outcome};
     use cmr4_launcher::{GAME_EXE, components, pe, runtime};
 
-    use crate::win32;
+    use crate::{ui, win32};
+
+    const WINDOW_CLOSED: u32 = 3;
+    const WINDOW_UNAVAILABLE: u32 = 4;
 
     fn home() -> PathBuf {
         std::env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir)
             .join("CMR4Launcher")
+    }
+
+    pub fn log_line(line: &str) {
+        let dir = home();
+        let _ = fs::create_dir_all(&dir);
+        if let Ok(mut file) = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(dir.join("launcher.log"))
+        {
+            let _ = writeln!(file, "{line}");
+        }
     }
 
     fn settings_path() -> PathBuf {
@@ -66,16 +86,48 @@ mod app {
     }
 
     pub fn run() -> Result<u32, String> {
-        let cli = config::parse_args(std::env::args().skip(1))?;
+        log_line(concat!("CMR4Launcher ", env!("CARGO_PKG_VERSION")));
+        let raw: Vec<String> = std::env::args().skip(1).collect();
+        let cli = config::parse_args(raw.clone())?;
         if cli.help {
-            print!("{}", config::USAGE);
+            log_line("help requested");
+            win32::message("Colin McRae Rally 04", config::USAGE, false);
             return Ok(0);
         }
         let settings_path = settings_path();
-        let existing = fs::read_to_string(&settings_path).unwrap_or_default();
+        let mut existing = fs::read_to_string(&settings_path).unwrap_or_default();
+        let show_window =
+            cli.settings_window || (!cli.no_window && raw.iter().all(|arg| arg == "--linux"));
+        if show_window {
+            log_line("settings window opened");
+            match ui::show(&settings_path, &existing, cli.linux) {
+                Ok(ui::Outcome::Play) => {
+                    log_line("settings window: Play");
+                    if cli.settings_window {
+                        return Ok(0);
+                    }
+                    existing = fs::read_to_string(&settings_path).unwrap_or_default();
+                }
+                Ok(ui::Outcome::Closed) => {
+                    log_line("settings window: closed");
+                    return Ok(if cli.settings_window {
+                        WINDOW_CLOSED
+                    } else {
+                        0
+                    });
+                }
+                Err(error) => {
+                    log_line(&format!("settings window unavailable: {error}"));
+                    if cli.settings_window {
+                        return Ok(WINDOW_UNAVAILABLE);
+                    }
+                }
+            }
+        }
+
         let (saved, warnings) = Settings::parse_file(&existing);
         for warning in warnings {
-            eprintln!("warning: {warning}");
+            log_line(&format!("warning: {warning}"));
         }
         let mut settings = saved.merged(cli.settings);
         let game = find_game(&settings)?;
@@ -85,13 +137,24 @@ mod app {
             .unwrap_or_else(|| home().join("CMR4"));
         settings.game = Some(game.clone());
         settings.runtime = Some(runtime.clone());
+        log_line(&format!("game: {}", game.display()));
+        log_line(&format!("runtime: {}", runtime.display()));
+        log_line(&format!("settings: {settings:?}"));
 
         let (digest, patch_outcome) = validate_game(&game, settings.widescreen())?;
+        log_line(&format!(
+            "cmr4.exe SHA-256: {digest}; patch: {patch_outcome:?}"
+        ));
         if cli.check {
             persist(&settings_path, &settings)?;
-            println!("Ready: {}", game.display());
-            println!("cmr4.exe SHA-256: {digest}");
-            println!("Widescreen check: {patch_outcome:?}");
+            let text = format!(
+                "Ready to play.\n\nGame folder: {}\ncmr4.exe SHA-256: {}\nWidescreen check: {:?}",
+                game.display(),
+                digest,
+                patch_outcome
+            );
+            log_line("check passed");
+            win32::message("Colin McRae Rally 04", &text, false);
             return Ok(0);
         }
 
@@ -103,6 +166,7 @@ mod app {
         runtime::check_separate(&game, &runtime)?;
         let copied = runtime::sync(&game, &runtime)
             .map_err(|error| format!("cannot prepare {}: {error}", runtime.display()))?;
+        log_line(&format!("runtime synchronized: {copied} files copied"));
 
         let runtime_exe = runtime.join(GAME_EXE);
         let mut bytes = fs::read(&runtime_exe)
@@ -115,6 +179,7 @@ mod app {
         }
         components::install(&game, &runtime, &components_dir, &settings)?;
         persist(&settings_path, &settings)?;
+        log_line("components and owned configuration installed");
 
         let wine = win32::is_wine();
         let (place, (width, height)) = win32::write_game_registry(settings.resolution())?;
@@ -123,13 +188,15 @@ mod app {
                 win32::map_wine_controllers()?;
             }
         } else if let Err(error) = win32::prefer_fast_gpu(&runtime_exe) {
-            eprintln!("warning: {error}");
+            log_line(&format!("warning: {error}"));
         }
-        println!(
-            "Runtime: {runtime_display} ({copied} files copied); registry: {place}, {width}x{height}",
-            runtime_display = runtime.display()
-        );
-        win32::run_game(&runtime_exe, &runtime, wine, settings.controller())
+        log_line(&format!(
+            "registry: {place}, {width}x{height}; Wine: {wine}"
+        ));
+        log_line("starting game");
+        let code = win32::run_game(&runtime_exe, &runtime, wine, settings.controller())?;
+        log_line(&format!("game exited with {code}"));
+        Ok(code)
     }
 }
 
@@ -138,7 +205,8 @@ fn main() {
     match app::run() {
         Ok(code) => std::process::exit(code as i32),
         Err(error) => {
-            eprintln!("error: {error}");
+            app::log_line(&format!("error: {error}"));
+            win32::message("Colin McRae Rally 04", &error, true);
             std::process::exit(1);
         }
     }

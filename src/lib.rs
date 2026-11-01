@@ -2,6 +2,7 @@
 
 pub mod components;
 pub mod config;
+pub mod form;
 pub mod patch;
 pub mod pe;
 pub mod registry;
