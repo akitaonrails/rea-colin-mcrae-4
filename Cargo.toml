@@ -1,0 +1,30 @@
+[package]
+name = "cmr4-launcher"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+description = "Runs the user's own copy of Colin McRae Rally 04 on modern Windows and under Proton/Wine"
+
+[[bin]]
+name = "CMR4Launcher"
+path = "src/main.rs"
+
+[dependencies]
+sha2 = "0.11.1"
+
+[target.'cfg(windows)'.dependencies.windows-sys]
+version = "0.61"
+features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+]
+
+[profile.release]
+panic = "abort"
+opt-level = "s"
+lto = true
+strip = true
