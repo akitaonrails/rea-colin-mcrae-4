@@ -29,6 +29,10 @@ All notable changes to this project. The format follows
 
 ### Changed
 
+- Updated rea-launcher-sdk to v0.3.0 (crates, vendored `sdk/` with the
+  SDK's standards and playbooks in `sdk/docs/`, CI workflows). Screen
+  readers now name the two folder fields by their headings ("Game
+  folder", "Private copy folder").
 - Docs: README rewritten for this release (download links that don't
   name an old version, where saves live and how to uninstall, the
   generated `--help`, developer checks including `wine-test` and

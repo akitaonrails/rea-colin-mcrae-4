@@ -349,7 +349,7 @@ impl Window {
             "The folder with your installed cmr4.exe"
         };
         let pick = self.host.pick_folder;
-        if widgets::folder_field(ui, &mut self.form.game, hint, || {
+        if widgets::folder_field(ui, &mut self.form.game, option("game").label, hint, || {
             pick("Choose the folder with your cmr4.exe")
         }) {
             self.error = None;
@@ -373,6 +373,7 @@ impl Window {
         widgets::folder_field(
             ui,
             &mut self.form.runtime,
+            option("runtime").label,
             "Leave empty for the launcher's default",
             || pick("Choose the folder for the launcher's private copy"),
         );
@@ -431,6 +432,7 @@ impl Window {
                     selected: self.form.look == look,
                     badge: (look == best).then_some("Recommended"),
                     title_size: 0.0,
+                    disabled: None,
                 };
                 if widgets::look_card(ui, egui::vec2(width, 100.0), &card).clicked() {
                     self.form.set_look(look, screen);

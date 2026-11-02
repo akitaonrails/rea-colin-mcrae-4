@@ -347,10 +347,10 @@ fn game_and_runtime_folders_typed_in_the_window_are_saved_and_used() {
     let (dir, _clean) = scratch("folders");
     let (mut ui, path) = open(&dir, "");
     let runtime = dir.join("Cópia privada");
-    let field = ui.get_by_role_and_label(Role::TextInput, "Leave empty for the launcher's default");
+    let field = ui.get_by_role_and_label(Role::TextInput, "Private copy folder");
     field.click();
     ui.run();
-    ui.get_by_role_and_label(Role::TextInput, "Leave empty for the launcher's default")
+    ui.get_by_role_and_label(Role::TextInput, "Private copy folder")
         .type_text(&runtime.display().to_string());
     ui.run();
     let saved = play(&mut ui, &path);
@@ -424,7 +424,7 @@ fn every_tab_renders_and_its_controls_are_reachable_and_named() {
         );
     }
     assert!(
-        ui.query_by_role_and_label(Role::TextInput, "The folder with your installed cmr4.exe")
+        ui.query_by_role_and_label(Role::TextInput, "Game folder")
             .is_some()
     );
     assert_eq!(
