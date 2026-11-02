@@ -346,10 +346,17 @@ pub fn wine_overrides(existing: Option<&str>, controller: bool) -> String {
             .split(',')
             .map(str::trim)
             .filter(|name| {
-                !name.is_empty()
+                // Wine accepts `d3d9` and `d3d9.dll` alike, in any case.
+                let len = name.len();
+                let base = if len > 4 && name[len - 4..].eq_ignore_ascii_case(".dll") {
+                    &name[..len - 4]
+                } else {
+                    name
+                };
+                !base.is_empty()
                     && !replaced
                         .iter()
-                        .any(|replaced| name.eq_ignore_ascii_case(replaced))
+                        .any(|replaced| base.eq_ignore_ascii_case(replaced))
             })
             .collect();
         if !kept.is_empty() {
@@ -860,6 +867,15 @@ mod tests {
         assert_eq!(
             wine_overrides(Some("d3d8,d3d9=b;dsound=n"), true),
             format!("{WINE_OVERRIDES};d3d8=b")
+        );
+        // Rules spelled with `.dll`, in any case, are ours to replace too.
+        assert_eq!(
+            wine_overrides(Some("d3d9.dll=b;DXGI.DLL,ddraw.dll=n;dinput8.Dll=b"), true),
+            format!("{WINE_OVERRIDES};ddraw.dll=n")
+        );
+        assert_eq!(
+            wine_overrides(Some("dinput8.dll=b;d3d11.dll=b"), false),
+            "dsound,d3d9,d3d11,dxgi=n,b;mscoree=d;dinput8.dll=b"
         );
     }
 

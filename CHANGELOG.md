@@ -8,6 +8,9 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- Wine DLL overrides: a player's rule spelled with `.dll` (`d3d9.dll=b`, any
+  case) for a DLL the launcher manages is replaced like `d3d9=b` instead of
+  being kept next to the launcher's own.
 - Game and runtime folders on drives that can't be canonicalized (Windows
   RAM disks, `subst` drives, some FUSE/network filesystems: "Incorrect
   function") are normalised lexically instead of refusing to launch; a
