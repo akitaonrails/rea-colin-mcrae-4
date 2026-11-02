@@ -278,6 +278,7 @@ dependencies = [
  "rea-launcher-close-hook",
  "rea-launcher-ui",
  "rea-launcher-win32",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

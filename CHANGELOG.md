@@ -155,6 +155,11 @@ All notable changes to this project. The format follows
   and is printed to the log too. `--help` and `--check` still print to the
   terminal, with a dialog only when nobody sees it (SDK
   `rea_launcher_win32::report`).
+- A second start looked for the open launcher by its window title only, so
+  an Explorer window on a folder named "Colin McRae Rally 04", or the
+  game's own window, counted as the launcher: the second start exited
+  without a word. It now accepts only a window of the launcher's own
+  program (`CMR4Launcher.exe`), and otherwise says the game is running.
 - The Windows build is linked with LLD (`.cargo/config.toml`, i686 and
   x86_64). GNU ld 2.47 left some kernel32 imports of `CMR4Launcher.exe`
   outside every import descriptor, so the launcher could crash on its

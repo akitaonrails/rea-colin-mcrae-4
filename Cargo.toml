@@ -24,6 +24,13 @@ rea-launcher-close-hook = { git = "https://github.com/akitaonrails/rea-launcher-
 
 [target.'cfg(windows)'.dependencies]
 rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.2" }
+# The second-start window search (src/win32.rs): the SDK finds a window
+# by title or class only, and eframe windows share winit's class.
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 [dev-dependencies]
 rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.2", features = ["testing"] }

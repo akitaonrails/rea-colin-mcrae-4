@@ -143,8 +143,9 @@ mod app {
         // window forward, or refuses to play while the game runs.
         let _instance = match win32::single_instance(instance::NAME) {
             Ok(guard) => guard,
-            Err(window_found) => {
-                let second = SecondStart::new(window_found);
+            Err(_) => {
+                let second =
+                    SecondStart::new(win32::bring_launcher_forward(&win32::launcher_exe_name()));
                 log_line(second.log_line());
                 return second.outcome().map_err(str::to_owned);
             }
