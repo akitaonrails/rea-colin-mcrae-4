@@ -12,8 +12,10 @@ WINE_URL=https://github.com/Kron4ek/Wine-Builds/releases/download/$WINE_VERSION/
 WINE_SHA=482a493c755dcea776199b86560e0fb0f969bb0275c67d88120b0b35b0df34b9
 TOOL_URL=https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
 TOOL_SHA=ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
-RUNTIME_URL=https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64
-RUNTIME_SHA=617aa77314d57c8b8e4fae9c3f0b35af7b30d5529cb69e98f64f92510ed98a46
+# A dated release: the `continuous` tag is rebuilt in place, which breaks a checksum pin.
+RUNTIME_VERSION=20251108
+RUNTIME_URL=https://github.com/AppImage/type2-runtime/releases/download/$RUNTIME_VERSION/runtime-x86_64
+RUNTIME_SHA=2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
 
 fetch() { # url sha256 filename
   mkdir -p "$CACHE"
@@ -27,7 +29,7 @@ fetch() { # url sha256 filename
 }
 fetch "$WINE_URL" "$WINE_SHA" wine-11.20.tar.xz
 fetch "$TOOL_URL" "$TOOL_SHA" appimagetool-1.9.1
-fetch "$RUNTIME_URL" "$RUNTIME_SHA" runtime-x86_64
+fetch "$RUNTIME_URL" "$RUNTIME_SHA" runtime-x86_64-$RUNTIME_VERSION
 chmod +x "$CACHE/appimagetool-1.9.1"
 
 APPDIR=$(mktemp -d)/CMR4Launcher.AppDir
@@ -51,6 +53,6 @@ cp "$HERE/AppRun" "$APPDIR/AppRun"
 cp "$HERE/cmr4-launcher.desktop" "$HERE/cmr4-launcher.png" "$APPDIR/"
 chmod +x "$APPDIR/AppRun" "$APPDIR/usr/lib/cmr4/cmr4-play"
 ARCH=x86_64 "$CACHE/appimagetool-1.9.1" --appimage-extract-and-run --no-appstream \
-  --runtime-file "$CACHE/runtime-x86_64" "$APPDIR" "$OUT/CMR4Launcher-x86_64.AppImage"
+  --runtime-file "$CACHE/runtime-x86_64-$RUNTIME_VERSION" "$APPDIR" "$OUT/CMR4Launcher-x86_64.AppImage"
 [ -s "$OUT/CMR4Launcher-x86_64.AppImage" ]
 echo "built $OUT/CMR4Launcher-x86_64.AppImage (Wine $WINE_VERSION)"

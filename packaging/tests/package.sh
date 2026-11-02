@@ -37,4 +37,10 @@ if "$HERE/../smoke-package.sh" "$PKG" >/dev/null 2>&1; then
   echo "missing component passed" >&2; exit 1
 fi
 echo "ok   missing required component fails"
+# Every checksum-pinned download must name a fixed release, never a moving tag.
+sh -n "$HERE/../appimage/build.sh"
+if grep -n 'releases/download/continuous/' "$HERE/../appimage/build.sh" >&2; then
+  echo "AppImage build pins a moving release tag" >&2; exit 1
+fi
+echo "ok   AppImage downloads pin fixed releases"
 echo "all passed"

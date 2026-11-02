@@ -8,6 +8,9 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- AppImage build: the runtime is pinned to the dated type2-runtime release
+  `20251108` instead of the `continuous` tag, which is rebuilt in place and
+  would break the checksum pin.
 - `THIRD_PARTY.md` lists Xidi under its real licence, BSD-3-Clause (the
   upstream `LICENSE` was already shipped in `licenses/Xidi/`).
 

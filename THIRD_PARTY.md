@@ -44,7 +44,7 @@ and protected retail media remain unknown.
 | Component | License | Source |
 | --- | --- | --- |
 | Wine 11.20 (amd64, WoW64), Kron4ek build of unmodified WineHQ sources; source and license notices under `usr/share/doc/wine` | LGPL-2.1-or-later | https://dl.winehq.org/wine/source/11.x/wine-11.20.tar.xz and https://github.com/Kron4ek/Wine-Builds |
-| AppImage runtime added by appimagetool 1.9.1 | MIT | https://github.com/AppImage/type2-runtime |
+| AppImage type2 runtime, release `20251108`, SHA-256 `2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d`, added by appimagetool 1.9.1 | MIT | https://github.com/AppImage/type2-runtime/releases/tag/20251108 |
 
 ## Not supplied
 
