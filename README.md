@@ -6,7 +6,11 @@ the game folder, pick a look, and press **Play**: the widescreen picture, the
 graphics wrappers, the gamepad and the game's first-run state are set up for
 you.
 
-![CMR04 in a stage at 16:9, driven with a gamepad](docs/images/game.png)
+[![A USA stage in the Lancer Evo with v0.2.0: the launcher's look presets, then 16:9 widescreen on the landscape monitor, driven with a gamepad's stick and analogue triggers](https://new-uploads-akitaonrails.s3.us-east-2.amazonaws.com/2026/11/02/colin-mcrae-rally-04/showcase-poster.jpg)](https://new-uploads-akitaonrails.s3.us-east-2.amazonaws.com/2026/11/02/colin-mcrae-rally-04/showcase-h264.mp4)
+
+*Version 0.2.0 from the settings window to a full USA stage: correct 16:9
+proportions on the landscape monitor, driven with a pad's stick and analogue
+triggers. Click to watch (2⅓ minutes, with sound).*
 
 This repository and its packages contain **no game files**. The launcher never
 modifies the installed game folder; everything it changes lives in a private
@@ -23,6 +27,8 @@ copy (the *runtime*).
 | D3D9-era rendering and Wine don't mix well. | Installs the tested dgVoodoo2 2.80 `D3D9.dll`; under Wine/Proton it adds DXVK 3.1.1 so the game draws through Vulkan. |
 | A fresh install needs registry paths and first-run defaults, or it crashes. | Writes the install paths every launch and seeds the game's graphics defaults only when they are missing. |
 | Your installation and saves are at risk from patches and wrappers. | The installed folder is only read. The runtime keeps the patched executable, wrappers, settings and saves, and later launches never overwrite your saves, settings or your own DLL mods. |
+
+![CMR04 in a stage at 16:9, driven with a gamepad](docs/images/game.png)
 
 ## Verification status
 
