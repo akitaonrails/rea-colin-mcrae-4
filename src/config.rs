@@ -162,7 +162,7 @@ impl Settings {
         let mut out = if text.trim().is_empty() {
             TEMPLATE.to_string()
         } else {
-            text.to_string()
+            refresh_header(text)
         };
         for (key, value) in [
             ("game", path(&self.game)),
@@ -234,7 +234,7 @@ pub fn remember(
     let mut out = if text.trim().is_empty() {
         TEMPLATE.to_string()
     } else {
-        text.to_string()
+        refresh_header(text)
     };
     if game_changed {
         out = set_key(&out, "game", &game.display().to_string());
@@ -276,6 +276,16 @@ vsync =
 # Xidi gamepad: stick steers, RT/LT drive the pedal (Y) axis (on/off).
 controller =
 ";
+
+/// v0.1.0 and v0.2.0 wrote this header line; it is no longer true.
+const STALE_HEADER: &str = "# Command-line options override these values and are saved.";
+const HEADER: &str =
+    "# Command-line options override these values for one run; only --game is remembered.";
+
+/// Replaces the stale v0.2.0 header claim, if present; nothing else changes.
+fn refresh_header(text: &str) -> String {
+    text.replacen(STALE_HEADER, HEADER, 1)
+}
 
 /// The newline `text` uses: CRLF when it has any (Notepad), else LF.
 fn newline(text: &str) -> &'static str {
@@ -817,6 +827,30 @@ mod tests {
         // Not a file: a real error, so the caller won't overwrite it.
         assert!(read_file(&dir).is_err());
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn saving_a_v0_2_0_file_drops_its_stale_header_claim() {
+        let old = "# Colin McRae Rally 04 launcher settings.\r\n# One setting per line as key = value; # starts a comment.\r\n# Command-line options override these values and are saved.\r\n\r\ngame = C:\\CMR4\r\nvsync = on\r\n";
+        let window = Settings {
+            vsync: Some(false),
+            ..Settings::default()
+        }
+        .save_into(old);
+        assert_eq!(
+            window,
+            "# Colin McRae Rally 04 launcher settings.\r\n# One setting per line as key = value; # starts a comment.\r\n# Command-line options override these values for one run; only --game is remembered.\r\n\r\n#game =\r\nvsync = off\r\n"
+        );
+        let (saved, _) = Settings::parse_file(old);
+        let cli = Settings {
+            game: Some(PathBuf::from(r"D:\CMR4")),
+            ..Settings::default()
+        };
+        let remembered = remember(old, &saved, &cli, Path::new(r"D:\CMR4"), None).unwrap();
+        assert!(!remembered.contains(STALE_HEADER));
+        assert!(remembered.contains(HEADER));
+        // A file without the old line is left alone.
+        assert_eq!(refresh_header("# mine\n"), "# mine\n");
     }
 
     #[test]

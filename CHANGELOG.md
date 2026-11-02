@@ -8,6 +8,9 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- Saving a `launcher.cfg` written by v0.1.0/v0.2.0 replaces its header line
+  "Command-line options override these values and are saved.", which is no
+  longer true, with the current rule.
 - `cmr4-play`: an interrupted launch (Ctrl+C, the AppImage closed) now waits
   for the game session to end after signalling it, so a start right after
   never finds the old session still running.
