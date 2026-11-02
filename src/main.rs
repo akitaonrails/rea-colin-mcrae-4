@@ -13,7 +13,7 @@ mod app {
 
     use cmr4_launcher::config::{self, Settings};
     use cmr4_launcher::patch::{self, Outcome};
-    use cmr4_launcher::{GAME_EXE, components, pe, runtime};
+    use cmr4_launcher::{GAME_EXE, components, pe, profile, registry, runtime};
 
     use crate::{ui, win32};
 
@@ -85,6 +85,21 @@ mod app {
             .map_err(|error| format!("cannot write {}: {error}", path.display()))
     }
 
+    /// Points an untouched game profile at the connected pad (see `profile`).
+    fn choose_gamepad(path: &Path) {
+        let Some((vendor, product)) = win32::gamepad_ids() else {
+            log_line("gamepad setup: no XInput pad in slot 0; profile left as is");
+            return;
+        };
+        match profile::choose_gamepad_in(path, vendor, product) {
+            Ok(true) => log_line(&format!(
+                "gamepad setup: profile now uses pad {vendor:04x}:{product:04x} with analogue pedals"
+            )),
+            Ok(false) => log_line("gamepad setup: profile already configured or not created yet"),
+            Err(error) => log_line(&format!("warning: gamepad setup: {error}")),
+        }
+    }
+
     pub fn run() -> Result<u32, String> {
         log_line(concat!("CMR4Launcher ", env!("CARGO_PKG_VERSION")));
         let raw: Vec<String> = std::env::args().skip(1).collect();
@@ -139,8 +154,9 @@ mod app {
             log_line(&format!("warning: {warning}"));
         }
         let mut settings = saved.merged(cli.settings);
+        let target = win32::display_target();
         if settings.resolution.is_none() {
-            settings.resolution = Some(config::default_resolution(win32::screen_size()));
+            settings.resolution = Some(config::default_resolution(target.map(|t| t.size)));
         }
         config::validate_picture(&settings)?;
         log_line(&format!("resolution: {}", settings.resolution().value()));
@@ -197,15 +213,29 @@ mod app {
             fs::write(&runtime_exe, &bytes)
                 .map_err(|error| format!("cannot write {}: {error}", runtime_exe.display()))?;
         }
-        components::install(&game, &runtime, &components_dir, &settings, wine, gamescope)?;
+        // gamescope exposes one output; elsewhere avoid a portrait primary monitor.
+        let game_mode = registry::game_mode(settings.resolution(), settings.widescreen());
+        let output = target.and_then(|t| t.output).filter(|_| !gamescope);
+        components::install(
+            &game,
+            &runtime,
+            &components_dir,
+            &settings,
+            wine,
+            gamescope,
+            output,
+        )?;
         persist(&settings_path, &settings)?;
         log_line("components and owned configuration installed");
         log_line(&format!(
-            "display/render policy: Wine={wine}, gamescope={gamescope}, borderless={}",
-            wine && !gamescope
+            "display/render policy: Wine={wine}, gamescope={gamescope}, borderless={}, monitor={:?}, dgVoodoo output={}, game renders {}",
+            wine && !gamescope,
+            target.map(|t| t.size),
+            output.map_or("default".into(), |n| n.to_string()),
+            game_mode.value(),
         ));
 
-        let (place, (width, height)) = win32::write_game_registry(settings.resolution(), &runtime)?;
+        let (place, (width, height)) = win32::write_game_registry(game_mode, &runtime)?;
         if wine {
             if settings.controller() {
                 win32::map_wine_controllers()?;
@@ -216,9 +246,24 @@ mod app {
         log_line(&format!(
             "registry: {place}, {width}x{height}; Wine: {wine}"
         ));
+        let options_file = runtime.join("OPTIONS");
+        if settings.controller() {
+            choose_gamepad(&options_file);
+        }
         log_line("starting game");
-        let code = win32::run_game(&runtime_exe, &runtime, wine, settings.controller())?;
+        let code = win32::run_game(
+            &runtime_exe,
+            &runtime,
+            wine,
+            settings.controller(),
+            &components_dir.join(components::CLOSE_HOOK_DLL),
+            log_line,
+        )?;
         log_line(&format!("game exited with {code}"));
+        if settings.controller() {
+            // A first run creates OPTIONS while playing; set it up for the next.
+            choose_gamepad(&options_file);
+        }
         Ok(code)
     }
 }

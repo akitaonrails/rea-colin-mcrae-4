@@ -10,11 +10,13 @@ docs/ENHANCEMENTS.md
 docs/RESEARCH.md
 docs/RUNTIME_NOTES.md
 docs/images/game.png
+docs/images/launcher-picture.png
 docs/images/launcher.png
 THIRD_PARTY.md
 LICENSE-MIT
 LICENSE-APACHE
 components/D3D9.dll
+components/cmr4close.dll
 components/dinput8.dll
 components/d3d11.dll
 components/dxgi.dll

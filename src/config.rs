@@ -181,7 +181,7 @@ impl Settings {
              fps_limit = {fps}\n\n\
              # Force vertical sync in dgVoodoo.\n\
              vsync = {}\n\n\
-             # Xidi modern controller to keyboard mapping.\n\
+             # Xidi gamepad: stick steers, RT/LT drive the pedal (Y) axis.\n\
              controller = {}\n",
             self.resolution().value(),
             on_off(self.widescreen()),
@@ -212,8 +212,8 @@ pub const USAGE: &str = concat!(
     "  --widescreen on|off   tested 16:9 Low patch (default on; off for other aspects)\n",
     "  --fps-limit N|off     dgVoodoo frame-rate cap\n",
     "  --vsync on|off        force vertical sync (default off)\n",
-    "  --controller on|off   Xidi modern controller mapping (default on)\n",
-    "  --check               validate game and patch only; copy nothing\n",
+    "  --controller on|off   Xidi gamepad: stick steers, RT/LT are the pedals (default on)\n",
+    "  --check               validate the game and patch and save settings; copy nothing\n",
     "  --no-window           run without a settings window\n",
     "  --help                show this help\n\n",
     "The original game folder is never modified. Settings are saved in launcher.cfg."
@@ -425,6 +425,135 @@ mod tests {
         assert_eq!(read.resolution(), DEFAULT_RESOLUTION);
         assert!(read.widescreen());
         assert!(read.controller());
+    }
+
+    #[test]
+    fn hidden_helper_flags_and_help_aliases_parse() {
+        let cli = args(&["--settings", "--linux"]).unwrap();
+        assert!(cli.settings_window && cli.linux && !cli.no_window && !cli.check);
+        assert_eq!(cli.settings, Settings::default());
+        for help in ["--help", "-h", "/?"] {
+            assert!(args(&[help]).unwrap().help, "{help}");
+        }
+        for flag in [
+            "--game",
+            "--runtime",
+            "--resolution",
+            "--widescreen",
+            "--fps-limit",
+            "--vsync",
+            "--controller",
+            "--check",
+            "--no-window",
+            "--help",
+        ] {
+            assert!(USAGE.contains(flag), "{flag} missing from USAGE");
+        }
+    }
+
+    #[test]
+    fn cli_off_values_override_saved_on_values() {
+        let (saved, warnings) =
+            Settings::parse_file("fps_limit = 60\nvsync = on\ncontroller = on\nwidescreen = on\n");
+        assert!(warnings.is_empty());
+        let over = args(&[
+            "--fps-limit",
+            "off",
+            "--vsync",
+            "off",
+            "--controller",
+            "off",
+            "--widescreen",
+            "off",
+        ])
+        .unwrap()
+        .settings;
+        let merged = saved.clone().merged(over);
+        assert_eq!(merged.fps_limit(), None);
+        assert!(!merged.vsync() && !merged.controller() && !merged.widescreen());
+        // Absent CLI values keep the saved ones.
+        let kept = saved.clone().merged(Settings::default());
+        assert_eq!(kept, saved);
+    }
+
+    #[test]
+    fn file_and_cli_accept_the_same_value_spellings() {
+        for (raw, expected) in [
+            ("on", true),
+            ("TRUE", true),
+            ("yes", true),
+            ("1", true),
+            ("off", false),
+            ("False", false),
+            ("no", false),
+            ("0", false),
+        ] {
+            let (file, warnings) = Settings::parse_file(&format!("vsync = {raw}\n"));
+            assert!(warnings.is_empty(), "{raw}");
+            assert_eq!(file.vsync, Some(expected), "{raw}");
+            assert_eq!(args(&["--vsync", raw]).unwrap().settings.vsync, file.vsync);
+        }
+        for (raw, expected) in [("off", Some(0)), ("0", Some(0)), ("1000", Some(1000))] {
+            let (file, _) = Settings::parse_file(&format!("fps_limit = {raw}\n"));
+            assert_eq!(file.fps_limit, expected, "{raw}");
+            assert_eq!(
+                args(&["--fps-limit", raw]).unwrap().settings.fps_limit,
+                expected
+            );
+        }
+        for raw in ["1001", "-5", "fast"] {
+            assert!(
+                Settings::parse_file(&format!("fps_limit = {raw}\n"))
+                    .1
+                    .len()
+                    == 1
+            );
+            assert!(args(&["--fps-limit", raw]).is_err(), "{raw}");
+        }
+        for raw in ["319x240", "320x239", "7681x4320", "1920*1080", "x1080"] {
+            assert!(
+                Settings::parse_file(&format!("resolution = {raw}\n"))
+                    .1
+                    .len()
+                    == 1
+            );
+            assert!(args(&["--resolution", raw]).is_err(), "{raw}");
+        }
+        let (file, _) = Settings::parse_file("resolution = 1920X1080\n");
+        assert_eq!(file.resolution, Some(Resolution::Custom(1920, 1080)));
+    }
+
+    #[test]
+    fn file_ignores_comments_blank_values_and_keeps_the_last_value() {
+        let (settings, warnings) = Settings::parse_file(
+            "# vsync = on\n  # resolution = huge\nvsync =\nfps_limit = 30\nfps_limit = 120\n",
+        );
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(settings.vsync, None);
+        assert_eq!(settings.fps_limit, Some(120));
+    }
+
+    #[test]
+    fn every_non_default_value_renders_and_reads_back() {
+        let settings = Settings {
+            game: Some(PathBuf::from(r"C:\Games\CMR 04")),
+            runtime: Some(PathBuf::from(r"D:\Runtime")),
+            resolution: Some(Resolution::Original),
+            widescreen: Some(false),
+            fps_limit: Some(144),
+            vsync: Some(true),
+            controller: Some(false),
+        };
+        let (read, warnings) = Settings::parse_file(&settings.render());
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(read, settings);
+        let uncapped = Settings {
+            fps_limit: Some(0),
+            ..Settings::default()
+        };
+        let text = uncapped.render();
+        assert!(text.contains("fps_limit = off\n"));
+        assert_eq!(Settings::parse_file(&text).0.fps_limit(), None);
     }
 
     #[test]

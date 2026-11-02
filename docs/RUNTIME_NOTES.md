@@ -4,7 +4,44 @@ This page distinguishes controlled runtime evidence from coverage that is
 still unknown. Portable tests and package inspection support the implementation
 but are not treated as gameplay evidence.
 
-## Verified with the exact final Windows package and AppImage
+## 2026-11-02: picture, closing, gamepad (development package, gaming box)
+
+Wine 11.21 in the `gaming` distrobox, Hyprland at scale 1.5 with a portrait
+4K primary (DP-2) and a landscape 4K monitor (DP-1), RTX 5090, 8BitDo
+Ultimate 2 (`2dc8:310b`). Builds linked with lld (see the binutils note in
+the README).
+
+- **Portrait primary:** before the fix the game showed a 3829x682 strip
+  (aspect (16/9)³) on DP-1. A probe showed Wine reporting DP-2 as primary
+  `DISPLAY1` 2160x3840. With dgVoodoo `FullScreenOutput = 2` the game filled
+  DP-1 (window 2560x1440 logical, fullscreen) in menus and stages.
+- **Widescreen proportions:** native 16:9 render with the patch made cars too
+  narrow. Rendering 2880x2160 with dgVoodoo forcing 3840x2160 `stretched`
+  restored proportions (car rear 0.88 → 1.21 width/height); the user confirmed
+  cars and scenery look right. The HUD stays 640x480-based and slightly wide.
+- **Closing:** the hook logged `close hook installed`; the user closed the
+  game with Super+W (exit 0). The first hook version also ended the game when
+  the intro movie closed; it now only reacts to `SC_CLOSE`/Alt+F4 for the
+  `PC_CMR4` window. Alt+F4 itself was not separately exercised.
+- **Gamepad:** with the old keyboard-only Xidi mapping, menus worked but
+  nothing drove. With Xidi off, buttons/hat worked and axes did not. With the
+  `CMR04Gamepad` mapping and the pedals bound by pulling RT/LT, the user drove
+  stages with stick steering and analogue pedals. A factory profile written by
+  the launcher (log: `gamepad setup: profile now uses pad 2dc8:310b with
+  analogue pedals`) drove a stage without opening Options, once the input
+  device byte (0xA71AC) was included. Choosing the controller in the game's
+  own menu froze the game twice; the choice was saved anyway.
+- **Launcher fixes found in the field:** turning Xidi off twice failed when the
+  game folder itself ships Xidi's `dinput8.dll` (now accepted as an untouched
+  game file); a dgVoodoo/registry trial confirmed `OPTIONS` and saves survive
+  re-syncs.
+- **Settings window:** presets and the graphite/red-orange palette rendered
+  under Wine; the Play/Picture screenshots in `docs/images` are from this build.
+
+Not exercised: native Windows, Alt+F4, other pad models, Steam Deck, two pads
+connected at once (Xidi reads XInput slot 0 only).
+
+## Verified with the exact final Windows package and AppImage (v0.1.0)
 
 ### Fresh Windows-package Wine runtime
 
@@ -62,7 +99,9 @@ is excluded from evidence.
   screen, capped at 3840x2160; unknown screens use 1920x1080. Explicit custom
   values persist. Other aspect ratios require widescreen off.
 - Raw Wine uses borderless dgVoodoo fullscreen. Native Windows and gamescope
-  use normal fullscreen. Aspect is preserved with `stretched_ar`.
+  use normal fullscreen. A portrait primary monitor is avoided with dgVoodoo
+  `FullScreenOutput`. Widescreen renders 4:3 and is stretched to 16:9;
+  other modes keep their aspect with `stretched_ar`.
 - Wine creates settings windows at final scaled size and seeds `UseEGL=N` only
   if missing. Native Windows keeps high-performance GPU preference.
 - Linux exports both SDL background-event variables independently and keeps
@@ -72,8 +111,9 @@ is excluded from evidence.
 
 - **Native Windows:** startup, dgVoodoo-to-system-D3D11 behavior, native GPU
   preference, and clean exit are untested.
-- **Driving coverage:** analog steering, RT/LT pedals, and a full stage have
-  not been tested. A and D-pad menu navigation is not analog-driving evidence.
+- **Driving coverage:** stick steering and analogue RT/LT pedals were driven
+  in stages on 2026-11-02 with one 8BitDo pad; other pads and two-pad setups
+  are untested.
 - **Steam Deck / Proton:** no separate result beyond the verified Wine and
   AppImage paths.
 - **Raw desktop visuals:** capture was interrupted; only no-crash and valid

@@ -7,9 +7,13 @@ If gamescope is installed and not already active, the helper uses the configured
 resolution for both nested and output size, fullscreen fit, and the fixed `nis`
 filter. There is no scaler setting. Without gamescope it launches directly.
 
+Gamescope's size comes from `resolution` in the prefix's `launcher.cfg`. When
+that is `original`, missing or invalid it uses 1024x768, so a `--play` before
+any settings were saved starts small; open the settings window once first.
+
 ```sh
 linux/cmr4-play          # settings window through Wine, then game
-linux/cmr4-play --play   # saved settings, no window
+linux/cmr4-play --play   # saved settings, no window (alias: start)
 linux/cmr4-play status   # owned session only
 linux/cmr4-play stop     # stop only the validated owned session
 ```
@@ -51,10 +55,9 @@ disabling unneeded .NET/HTML prompts, and executes `cmr4-play`.
 
 Its default prefix is `~/.local/share/cmr4-launcher/prefix`. The launcher's
 configuration and log are under the prefix user's
-`AppData/Local/CMR4Launcher`. The exact AppImage has reached the 3840x2160
-title/options, gearbox, and car-class screens with a virtual Xbox pad (A and
-D-pad). Analog steering/pedals, a full stage, separate Proton/Deck testing,
-raw-desktop visual capture, and protected retail media remain unverified.
+`AppData/Local/CMR4Launcher`. Stages with stick steering and analogue
+RT/LT pedals were driven through `cmr4-play` (gamescope) with an 8BitDo pad;
+separate Proton/Deck testing and protected retail media remain unverified.
 
 Build from an allowlisted unpacked Windows package:
 

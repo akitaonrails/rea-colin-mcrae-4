@@ -36,9 +36,70 @@ pub fn dimensions(resolution: Resolution, existing: Option<(u32, u32)>) -> (u32,
     }
 }
 
+/// The mode CMR04 itself renders. The 16:9 Low patch narrows the camera by
+/// 0.75, which is only correct when the game renders 4:3 and dgVoodoo
+/// stretches that frame to 16:9. Rendering 16:9 natively applies the
+/// correction twice and squeezes the 3D view horizontally.
+pub fn game_mode(resolution: Resolution, widescreen: bool) -> Resolution {
+    match resolution {
+        Resolution::Custom(width, height)
+            if widescreen && u64::from(width) * 9 == u64::from(height) * 16 =>
+        {
+            Resolution::Custom(height / 3 * 4, height)
+        }
+        other => other,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn widescreen_renders_4_by_3_for_the_anamorphic_patch() {
+        assert_eq!(
+            game_mode(Resolution::Custom(3840, 2160), true),
+            Resolution::Custom(2880, 2160)
+        );
+        assert_eq!(
+            game_mode(Resolution::Custom(1920, 1080), true),
+            Resolution::Custom(1440, 1080)
+        );
+        assert_eq!(
+            game_mode(Resolution::Custom(3840, 2160), false),
+            Resolution::Custom(3840, 2160)
+        );
+        assert_eq!(game_mode(Resolution::Original, true), Resolution::Original);
+    }
+
+    #[test]
+    fn only_exact_16_by_9_with_widescreen_is_narrowed() {
+        for (resolution, widescreen) in [
+            (Resolution::Custom(2560, 1080), true),
+            (Resolution::Custom(1280, 800), true),
+            (Resolution::Custom(1280, 800), false),
+            (Resolution::Custom(1600, 1200), false),
+        ] {
+            assert_eq!(game_mode(resolution, widescreen), resolution);
+        }
+        // Every exact 16:9 height is a multiple of 9, so the 4:3 width is exact.
+        assert_eq!(
+            game_mode(Resolution::Custom(1360, 765), true),
+            Resolution::Custom(1020, 765)
+        );
+        assert_eq!(
+            game_mode(Resolution::Custom(1280, 720), true),
+            Resolution::Custom(960, 720)
+        );
+    }
+
+    #[test]
+    fn registry_receives_the_game_mode_not_the_output_mode() {
+        let game = game_mode(Resolution::Custom(3840, 2160), true);
+        assert_eq!(dimensions(game, Some((1024, 768))), (2880, 2160));
+        let game = game_mode(Resolution::Original, false);
+        assert_eq!(dimensions(game, Some((800, 600))), (800, 600));
+    }
 
     #[test]
     fn custom_resolution_always_wins() {

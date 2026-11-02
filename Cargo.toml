@@ -6,6 +6,10 @@ rust-version = "1.95"
 license = "MIT OR Apache-2.0"
 description = "Runs the user's own copy of Colin McRae Rally 04 on modern Windows and under Proton/Wine"
 
+[workspace]
+members = ["close-hook"]
+default-members = [".", "close-hook"]
+
 [[bin]]
 name = "CMR4Launcher"
 path = "src/main.rs"
@@ -21,6 +25,7 @@ jpeg-decoder = { version = "0.3", default-features = false }
 version = "0.61"
 features = [
     "Win32_Foundation",
+    "Win32_Graphics_Gdi",
     "Win32_Media_Multimedia",
     "Win32_Security",
     "Win32_System_Com",

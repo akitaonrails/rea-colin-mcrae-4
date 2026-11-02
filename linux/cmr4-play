@@ -2,7 +2,7 @@
 # Plays Colin McRae Rally 04 on Linux through Wine and gamescope.
 #
 #   cmr4-play           show settings through Wine, then start the game
-#   cmr4-play --play    start with saved settings (no window)
+#   cmr4-play --play    start with saved settings (no window); "start" is an alias
 #   cmr4-play stop      end the owned game session and its private Wine prefix
 #   cmr4-play status    running or idle
 #
@@ -31,7 +31,7 @@ for d in "$PREFIX"/drive_c/users/*/AppData/Local/CMR4Launcher; do
 done
 [ -z "$CFG" ] && CFG=$PREFIX/drive_c/users/$USER/AppData/Local/CMR4Launcher/launcher.cfg
 
-get_key() { [ -f "$CFG" ] && sed -n "s|^$1 *= *||p" "$CFG" | tail -1; }
+get_key() { [ -f "$CFG" ] && sed -n "s|^[[:space:]]*$1[[:space:]]*=[[:space:]]*||p" "$CFG" | tail -1; }
 LOCK=$STATE/running.pid
 
 # Print session id and process start time from /proc. Text after the final
@@ -131,11 +131,17 @@ start() {
   if [ -z "$LAUNCHER" ] || [ ! -f "$LAUNCHER" ]; then
     echo "CMR4Launcher.exe not found next to cmr4-play (or set CMR4_LAUNCHER)"; exit 1
   fi
-  res=$(get_key resolution)
+  # Same spellings the launcher accepts (1920X1080, spaces, CRLF); anything
+  # else keeps the standard original mode.
+  res=$(get_key resolution | tr -d ' \r' | tr X x)
   W=1024; H=768
   case "$res" in
-    ''|original) ;;
-    *x*) W=${res%x*}; H=${res#*x} ;;
+    *x*)
+      w=${res%x*} h=${res#*x}
+      case "$w:$h" in
+        :*|*:|*[!0-9:]*) ;;
+        *) W=$w H=$h ;;
+      esac ;;
   esac
   inner=$STATE/inner.sh
   # The launcher is positional parameter 1, never shell source. Wine remains

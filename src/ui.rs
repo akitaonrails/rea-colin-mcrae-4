@@ -2,7 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
-use cmr4_launcher::form::{self, Form, PadAction, Tab};
+use cmr4_launcher::config::Resolution;
+use cmr4_launcher::form::{self, Form, Look, PadAction, Tab};
 use cmr4_launcher::{GAME_EXE, patch, pe};
 use eframe::egui::{
     self, Align2, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Key, Mesh,
@@ -11,14 +12,20 @@ use eframe::egui::{
 
 use crate::win32;
 
-const BLUE: Color32 = Color32::from_rgb(0x0f, 0x2e, 0x6e);
-const PANEL: Color32 = Color32::from_rgb(0x16, 0x3a, 0x85);
-const LINE: Color32 = Color32::from_rgb(0x2b, 0x4f, 0x9e);
-const GOLD: Color32 = Color32::from_rgb(0xf5, 0xc4, 0x00);
-const INK: Color32 = Color32::from_rgb(0xee, 0xf2, 0xfb);
-const MUTED: Color32 = Color32::from_rgb(0xa7, 0xb6, 0xd9);
-const ON_GOLD: Color32 = Color32::from_rgb(0x10, 0x24, 0x4f);
-const ERROR: Color32 = Color32::from_rgb(0xff, 0x8a, 0x80);
+// CMR04-style palette: graphite and white type with a red-orange racing
+// accent. WCAG contrast: INK on GRAPHITE 16.5:1, on PANEL 14.1:1; MUTED on
+// GRAPHITE 7.7:1, on PANEL 6.6:1; ON_ACCENT on ACCENT 5.8:1 (on
+// ACCENT_HOVER 6.9:1); ACCENT text on GRAPHITE 5.8:1; ERROR (amber, kept
+// apart from the accent's hue) on GRAPHITE 12.3:1.
+const GRAPHITE: Color32 = Color32::from_rgb(0x15, 0x17, 0x1b);
+const PANEL: Color32 = Color32::from_rgb(0x22, 0x25, 0x2b);
+const LINE: Color32 = Color32::from_rgb(0x3a, 0x3f, 0x48);
+const ACCENT: Color32 = Color32::from_rgb(0xff, 0x5a, 0x1f);
+const ACCENT_HOVER: Color32 = Color32::from_rgb(0xff, 0x7a, 0x45);
+const INK: Color32 = Color32::from_rgb(0xf4, 0xf5, 0xf7);
+const MUTED: Color32 = Color32::from_rgb(0xa4, 0xaa, 0xb4);
+const ON_ACCENT: Color32 = Color32::from_rgb(0x15, 0x17, 0x1b);
+const ERROR: Color32 = Color32::from_rgb(0xff, 0xd0, 0x4a);
 const SIZE: Vec2 = vec2(form::WINDOW.0, form::WINDOW.1);
 const PHOTO_W: f32 = 300.0;
 
@@ -108,13 +115,13 @@ fn set_style(ctx: &egui::Context) {
     ctx.all_styles_mut(|style| {
         let visuals = &mut style.visuals;
         *visuals = egui::Visuals::dark();
-        visuals.panel_fill = BLUE;
+        visuals.panel_fill = GRAPHITE;
         visuals.extreme_bg_color = PANEL;
         visuals.text_edit_bg_color = Some(PANEL);
         visuals.override_text_color = Some(INK);
-        visuals.selection.bg_fill = GOLD.gamma_multiply(0.5);
-        visuals.selection.stroke = Stroke::new(1.0, GOLD);
-        visuals.text_cursor.stroke = Stroke::new(2.0, GOLD);
+        visuals.selection.bg_fill = ACCENT.gamma_multiply(0.5);
+        visuals.selection.stroke = Stroke::new(1.0, ACCENT);
+        visuals.text_cursor.stroke = Stroke::new(2.0, ACCENT);
         for widget in [
             &mut visuals.widgets.inactive,
             &mut visuals.widgets.hovered,
@@ -125,7 +132,7 @@ fn set_style(ctx: &egui::Context) {
             widget.corner_radius = CornerRadius::same(6);
         }
         visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, MUTED);
-        visuals.widgets.active.bg_stroke = Stroke::new(1.0, GOLD);
+        visuals.widgets.active.bg_stroke = Stroke::new(1.0, ACCENT);
         style.spacing.item_spacing = vec2(8.0, 8.0);
     });
 }
@@ -183,7 +190,7 @@ struct Window<'a> {
     checked: String,
     checked_widescreen: bool,
     screen: Option<(u32, u32)>,
-    resolutions: Vec<(cmr4_launcher::config::Resolution, String)>,
+    resolutions: Vec<(Resolution, String)>,
     pads: usize,
     linux: bool,
     zoom: f32,
@@ -337,7 +344,7 @@ impl eframe::App for Window<'_> {
             self.fit_screen(&ctx);
         }
         let full = ui.max_rect();
-        ui.painter().rect_filled(full, 0.0, BLUE);
+        ui.painter().rect_filled(full, 0.0, GRAPHITE);
         self.draw_photo(ui, full);
         draw_decal(ui, full);
         let content = Rect::from_min_max(
@@ -479,7 +486,7 @@ impl Window<'_> {
                         pos2(rect.left(), rect.bottom() - 3.0),
                         vec2(rect.width(), 3.0),
                     );
-                    ui.painter().rect_filled(bar, 0.0, GOLD);
+                    ui.painter().rect_filled(bar, 0.0, ACCENT);
                 }
                 if response
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -515,11 +522,13 @@ impl Window<'_> {
                 "The installed game folder is only read, never changed.".to_string(),
                 MUTED,
             ),
-            Check::Found(name) => (name.clone(), GOLD),
+            Check::Found(name) => (name.clone(), INK),
             Check::Problem(problem) => (problem.clone(), ERROR),
         };
         ui.label(egui::RichText::new(note).font(font(13.0)).color(color));
-        ui.add_space(16.0);
+        ui.add_space(10.0);
+        self.look_cards(ui);
+        ui.add_space(12.0);
         heading(ui, "Private runtime folder");
         folder_field(
             ui,
@@ -536,8 +545,82 @@ impl Window<'_> {
         );
     }
 
+    fn look_cards(&mut self, ui: &mut egui::Ui) {
+        heading(ui, "Look");
+        ui.add_space(12.0);
+        let fit = match cmr4_launcher::config::default_resolution(self.screen) {
+            Resolution::Custom(w, h) => format!("{w}×{h}"),
+            Resolution::Original => "the game's own size".to_string(),
+        };
+        let (deck_w, deck_h) = form::STEAM_DECK_SCREEN;
+        let cards = [
+            (
+                Look::Original,
+                "Original",
+                "The game's own resolution and view.".to_string(),
+                "Original resolution, widescreen off.".to_string(),
+            ),
+            (
+                Look::FourK,
+                "4K",
+                "Screen-fit 16:9 up to 4K, widescreen view.".to_string(),
+                format!("{fit}, 16:9 widescreen patch on."),
+            ),
+            (
+                Look::SteamDeck,
+                "Steam Deck",
+                format!("{deck_w}×{deck_h} at 60 fps, fills the 16:10 screen."),
+                "Native 16:10, widescreen off (the patch needs exact 16:9), 60 fps cap."
+                    .to_string(),
+            ),
+            (
+                Look::Custom,
+                "Custom",
+                "Pick each setting in Picture.".to_string(),
+                "Keeps the current values and opens the Picture tab.".to_string(),
+            ),
+        ];
+        let best = form::recommended(self.screen);
+        let gap = 10.0;
+        let width = (ui.available_width() - 3.0 * gap) / 4.0;
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = gap;
+            for (look, title, note, detail) in cards {
+                if look_card(
+                    ui,
+                    vec2(width, 100.0),
+                    self.form.look == look,
+                    title,
+                    &note,
+                    &detail,
+                    look == best,
+                ) {
+                    self.form.set_look(look, self.screen);
+                    self.error = None;
+                    if look == Look::Custom {
+                        self.tab = Tab::Picture;
+                    }
+                }
+            }
+        });
+    }
+
     fn picture_tab(&mut self, ui: &mut egui::Ui) {
-        let resolutions = &self.resolutions;
+        let before = (
+            self.form.resolution,
+            self.form.widescreen,
+            self.form.fps_limit,
+        );
+        // A preset (e.g. Steam Deck's 1280x800) may not be a listed size.
+        let mut listed = self.resolutions.clone();
+        if let Resolution::Custom(w, h) = self.form.resolution
+            && !listed
+                .iter()
+                .any(|(value, _)| *value == self.form.resolution)
+        {
+            listed.push((self.form.resolution, format!("{w}×{h}")));
+        }
+        let resolutions = &listed;
         let row = |ui: &mut egui::Ui, name: &str, add: &mut dyn FnMut(&mut egui::Ui)| {
             ui.horizontal_top(|ui| {
                 field(ui, name);
@@ -547,7 +630,7 @@ impl Window<'_> {
         row(ui, "Resolution", &mut |ui| {
             chips(ui, resolutions, &mut self.form.resolution)
         });
-        if self.form.resolution == cmr4_launcher::config::Resolution::Original {
+        if self.form.resolution == Resolution::Original {
             self.form.widescreen = false;
         }
         row(ui, "Frame-rate cap", &mut |ui| {
@@ -567,13 +650,21 @@ impl Window<'_> {
                 .font(font(13.0))
                 .color(MUTED),
         );
+        if (
+            self.form.resolution,
+            self.form.widescreen,
+            self.form.fps_limit,
+        ) != before
+        {
+            self.form.look = self.form.look_of(self.screen);
+        }
     }
 
     fn controls_tab(&mut self, ui: &mut egui::Ui) {
         toggle(
             ui,
             &mut self.form.controller,
-            "Modern controller through Xidi",
+            "Gamepad through Xidi (recommended)",
         );
         let pads = match self.pads {
             0 => "No XInput pad connected now; mouse and keyboard still work.".to_string(),
@@ -582,14 +673,12 @@ impl Window<'_> {
         };
         ui.label(egui::RichText::new(pads).font(font(13.0)).color(MUTED));
         ui.add_space(12.0);
-        heading(ui, "Fixed CMR04 mapping");
+        heading(ui, "What the game sees");
         for (control, action) in [
-            ("Left stick / D-pad", "Arrow keys"),
-            ("RT / LT", "Accelerate / brake (Up / Down)"),
-            ("A / Start", "Confirm (Enter)"),
-            ("B / Back", "Cancel (Esc)"),
-            ("X", "Space"),
-            ("Y", "C"),
+            ("Left stick", "Steering (X axis)"),
+            ("RT / LT", "Accelerate / brake (Y axis, analogue)"),
+            ("D-pad, A, B", "Menus (hat, buttons 1 and 2)"),
+            ("Other buttons", "Their standard gamepad numbers"),
         ] {
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(control).font(font(15.0)).color(INK));
@@ -599,7 +688,7 @@ impl Window<'_> {
         ui.add_space(8.0);
         ui.label(
             egui::RichText::new(
-                "In this window: D-pad moves, A activates, LB/RB change tabs, Start plays.",
+                "In the game: Options \u{2192} Controllers, choose the controller and set Accel/brake to Analogue (Y axis). In this window: D-pad moves, A activates, LB/RB change tabs, Start plays.",
             )
             .font(font(13.0))
             .color(MUTED),
@@ -623,8 +712,8 @@ impl Window<'_> {
         let ready = self.ready();
         let fill = match (ready, response.hovered()) {
             (false, _) => LINE,
-            (true, true) => Color32::from_rgb(0xff, 0xd3, 0x2a),
-            (true, false) => GOLD,
+            (true, true) => ACCENT_HOVER,
+            (true, false) => ACCENT,
         };
         let slant = 10.0;
         let plate = vec![
@@ -640,7 +729,7 @@ impl Window<'_> {
             Align2::CENTER_CENTER,
             "Play",
             named("decal", 30.0),
-            if ready { ON_GOLD } else { MUTED },
+            if ready { ON_ACCENT } else { MUTED },
         );
         if response
             .on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -653,11 +742,11 @@ impl Window<'_> {
 
 fn gradient(painter: &egui::Painter, rect: Rect, horizontal: bool) {
     let mut mesh = Mesh::default();
-    let clear = Color32::from_rgba_unmultiplied(BLUE.r(), BLUE.g(), BLUE.b(), 0);
+    let clear = Color32::from_rgba_unmultiplied(GRAPHITE.r(), GRAPHITE.g(), GRAPHITE.b(), 0);
     let (a, b, c, d) = if horizontal {
-        (clear, BLUE, BLUE, clear)
+        (clear, GRAPHITE, GRAPHITE, clear)
     } else {
-        (clear, clear, BLUE, BLUE)
+        (clear, clear, GRAPHITE, GRAPHITE)
     };
     mesh.colored_vertex(rect.left_top(), a);
     mesh.colored_vertex(rect.right_top(), b);
@@ -670,7 +759,10 @@ fn gradient(painter: &egui::Painter, rect: Rect, horizontal: bool) {
 
 fn draw_decal(ui: &mut egui::Ui, full: Rect) {
     let painter = ui.painter().with_clip_rect(full);
-    for (index, (width, alpha)) in [(30.0, 1.0), (16.0, 0.65)].into_iter().enumerate() {
+    for (index, (width, color)) in [(30.0, ACCENT), (16.0, INK.gamma_multiply(0.8))]
+        .into_iter()
+        .enumerate()
+    {
         let x = full.right() - 120.0 + index as f32 * 40.0;
         let slant = 60.0;
         let points = vec![
@@ -679,11 +771,7 @@ fn draw_decal(ui: &mut egui::Ui, full: Rect) {
             pos2(x + width - slant, full.top() + 112.0),
             pos2(x - slant, full.top() + 112.0),
         ];
-        painter.add(Shape::convex_polygon(
-            points,
-            GOLD.gamma_multiply(alpha),
-            Stroke::NONE,
-        ));
+        painter.add(Shape::convex_polygon(points, color, Stroke::NONE));
     }
 }
 
@@ -733,7 +821,7 @@ fn outline_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
         rect,
         CornerRadius::same(6),
         if hover { LINE } else { Color32::TRANSPARENT },
-        Stroke::new(1.5, GOLD),
+        Stroke::new(1.5, ACCENT),
         StrokeKind::Inside,
     );
     ui.painter().text(
@@ -741,7 +829,7 @@ fn outline_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
         Align2::CENTER_CENTER,
         text,
         named("barlow-semibold", 15.0),
-        GOLD,
+        ACCENT,
     );
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
@@ -762,12 +850,12 @@ fn chips<T: PartialEq + Copy, S: AsRef<str>>(
                 } else {
                     font(14.0)
                 },
-                if on { ON_GOLD } else { INK },
+                if on { ON_ACCENT } else { INK },
             );
             let size = vec2(galley.size().x + 24.0, 30.0);
             let (rect, response) = ui.allocate_exact_size(size, Sense::click());
             let fill = if on {
-                GOLD
+                ACCENT
             } else if response.hovered() {
                 LINE
             } else {
@@ -777,7 +865,7 @@ fn chips<T: PartialEq + Copy, S: AsRef<str>>(
                 rect,
                 CornerRadius::same(6),
                 fill,
-                Stroke::new(1.0, if on { GOLD } else { LINE }),
+                Stroke::new(1.0, if on { ACCENT } else { LINE }),
                 StrokeKind::Inside,
             );
             let at = rect.center() - galley.size() / 2.0;
@@ -807,15 +895,15 @@ fn toggle(ui: &mut egui::Ui, on: &mut bool, text: &str) {
     painter.rect(
         track,
         CornerRadius::same(13),
-        if *on { GOLD } else { Color32::TRANSPARENT },
-        Stroke::new(1.5, if *on { GOLD } else { MUTED }),
+        if *on { ACCENT } else { Color32::TRANSPARENT },
+        Stroke::new(1.5, if *on { ACCENT } else { MUTED }),
         StrokeKind::Inside,
     );
     let x = egui::lerp(track.left() + 13.0..=track.right() - 13.0, amount);
     painter.circle_filled(
         pos2(x, track.center().y),
         9.0,
-        if *on { ON_GOLD } else { MUTED },
+        if *on { ON_ACCENT } else { MUTED },
     );
     painter.galley(
         pos2(
@@ -826,4 +914,79 @@ fn toggle(ui: &mut egui::Ui, on: &mut bool, text: &str) {
         INK,
     );
     response.on_hover_cursor(egui::CursorIcon::PointingHand);
+}
+
+/// One look preset card; true when clicked (or activated with Space/A while
+/// focused, which is how the gamepad reaches it).
+fn look_card(
+    ui: &mut egui::Ui,
+    size: Vec2,
+    on: bool,
+    title: &str,
+    note: &str,
+    detail: &str,
+    recommended: bool,
+) -> bool {
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    let focused = response.has_focus();
+    let painter = ui.painter();
+    let fill = if on {
+        PANEL
+    } else if response.hovered() || focused {
+        PANEL.gamma_multiply(0.6)
+    } else {
+        Color32::TRANSPARENT
+    };
+    let stroke = if on {
+        Stroke::new(2.0, ACCENT)
+    } else if focused {
+        Stroke::new(2.0, INK)
+    } else {
+        Stroke::new(1.0, LINE)
+    };
+    painter.rect(
+        rect,
+        CornerRadius::same(8),
+        fill,
+        stroke,
+        StrokeKind::Inside,
+    );
+    if on && focused {
+        painter.rect_stroke(
+            rect.expand(3.0),
+            CornerRadius::same(10),
+            Stroke::new(1.5, INK),
+            StrokeKind::Inside,
+        );
+    }
+    let pad = 12.0;
+    painter.text(
+        rect.left_top() + vec2(pad, pad - 2.0),
+        Align2::LEFT_TOP,
+        title,
+        named("condensed", 22.0),
+        if on { ACCENT } else { INK },
+    );
+    if recommended {
+        let galley = painter.layout_no_wrap(
+            "Recommended".into(),
+            named("barlow-semibold", 12.0),
+            ON_ACCENT,
+        );
+        let tab = Rect::from_min_size(
+            pos2(
+                rect.right() - pad - galley.size().x - 12.0,
+                rect.top() - 9.0,
+            ),
+            galley.size() + vec2(12.0, 2.0),
+        );
+        painter.rect_filled(tab, CornerRadius::same(4), ACCENT);
+        painter.galley(tab.min + vec2(6.0, 1.0), galley, ON_ACCENT);
+    }
+    let galley = painter.layout(note.to_string(), font(13.0), MUTED, size.x - 2.0 * pad);
+    painter.galley(rect.left_top() + vec2(pad, pad + 30.0), galley, MUTED);
+    response
+        .on_hover_text(detail)
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .clicked()
 }

@@ -7,32 +7,34 @@ use std::path::PathBuf;
 
 use crate::config::{Resolution, Settings};
 use crate::patch::sha256;
+use crate::registry;
 
 pub const DGVOODOO_DLLS: [&str; 1] = ["D3D9.dll"];
 pub const DXVK_DLLS: [&str; 2] = ["d3d11.dll", "dxgi.dll"];
 pub const XIDI_DLL: &str = "dinput8.dll";
+/// Launcher-built hook that lets Alt+F4 and window close end the game.
+/// It is loaded from the package and never copied into the runtime.
+pub const CLOSE_HOOK_DLL: &str = "cmr4close.dll";
 const OWNERSHIP_FILE: &str = ".cmr4-launcher-components";
 type Ownership = std::collections::BTreeMap<String, String>;
 
+/// Xidi's view of the pad, following the CMR3 launcher's rally mapper.
+///
+/// CMR04 reads a DirectInput joystick and stores its bindings by that
+/// controller's layout, so the layout stays Xidi's StandardGamepad (stick on
+/// X/Y, hat, buttons 1-12) and nothing becomes a keyboard key. Only the
+/// pedals move: in Analogue mode the game drives accelerate and brake from
+/// the Y axis, so RT and LT feed that axis and the physical left-stick Y is
+/// ignored, so a resting thumb cannot open the throttle.
 pub const XIDI_CONF: &str = r"[Mapper]
 Type = CMR04Gamepad
 
 [CustomMapper:CMR04Gamepad]
 Template = StandardGamepad
-StickLeftX = Split( Keyboard(RightArrow), Keyboard(LeftArrow) )
-StickLeftY = Split( Keyboard(DownArrow), Keyboard(UpArrow) )
-TriggerRT = Keyboard(UpArrow)
-TriggerLT = Keyboard(DownArrow)
-DpadUp = Keyboard(UpArrow)
-DpadDown = Keyboard(DownArrow)
-DpadLeft = Keyboard(LeftArrow)
-DpadRight = Keyboard(RightArrow)
-ButtonA = Keyboard(Enter)
-ButtonB = Keyboard(Esc)
-ButtonX = Keyboard(Space)
-ButtonY = Keyboard(C)
-ButtonStart = Keyboard(Enter)
-ButtonBack = Keyboard(Esc)
+StickLeftX = Axis(X)
+StickLeftY = Null
+TriggerRT = Axis(Y, -)
+TriggerLT = Axis(Y, +)
 
 [Properties]
 UseBuiltInProperties = yes
@@ -81,19 +83,33 @@ pub fn validate(components: &Path, controller: bool, wine: bool) -> Result<(), S
     }
 }
 
-pub fn dgvoodoo_conf(settings: &Settings, wine: bool, gamescope: bool) -> String {
-    let (resolution, enumerated) = match settings.resolution() {
-        Resolution::Original => ("unforced".into(), String::new()),
-        Resolution::Custom(width, height) => (
+pub fn dgvoodoo_conf(
+    settings: &Settings,
+    wine: bool,
+    gamescope: bool,
+    output: Option<u32>,
+) -> String {
+    let game = registry::game_mode(settings.resolution(), settings.widescreen());
+    let (resolution, enumerated) = match (settings.resolution(), game) {
+        (Resolution::Custom(width, height), Resolution::Custom(game_w, game_h)) => (
             format!("h:{width}, v:{height}"),
-            format!("{width}x{height}@60"),
+            format!("{game_w}x{game_h}@60"),
         ),
+        _ => ("unforced".into(), String::new()),
     };
+    // The anamorphic 4:3 frame must fill 16:9; everything else keeps its shape.
+    let scaling = if game != settings.resolution() {
+        "stretched"
+    } else {
+        "stretched_ar"
+    };
+    let output = output.map_or("default".into(), |n| n.to_string());
     let fullscreen_attributes = if wine && !gamescope { "fake" } else { "" };
     format!(
         "[General]\n\
+         FullScreenOutput                    = {output}\n\
          FullScreenMode                      = true\n\
-         ScalingMode                         = stretched_ar\n\n\
+         ScalingMode                         = {scaling}\n\n\
          [GeneralExt]\n\
          FullscreenAttributes                = {fullscreen_attributes}\n\
          FPSLimit                            = {}\n\n\
@@ -206,6 +222,15 @@ fn install_wrapper(
 
 fn disable_xidi(game: &Path, runtime: &Path, ownership: &mut Ownership) -> Result<(), String> {
     let destination = runtime.join(XIDI_DLL);
+    // The game folder may ship its own dinput8.dll (even Xidi itself); an
+    // untouched copy of it is already the "off" state.
+    if destination.exists()
+        && !is_owned(runtime, XIDI_DLL, ownership)?
+        && is_unmodified_source_copy(game, runtime, XIDI_DLL)?
+    {
+        ownership.remove(XIDI_DLL);
+        return write_ownership(runtime, ownership);
+    }
     if destination.exists() && !is_owned(runtime, XIDI_DLL, ownership)? {
         return Err(format!(
             "runtime {XIDI_DLL} is not the launcher-installed Xidi; refusing to replace or remove a modified DLL"
@@ -227,6 +252,13 @@ fn disable_xidi(game: &Path, runtime: &Path, ownership: &mut Ownership) -> Resul
 fn disable_dxvk(game: &Path, runtime: &Path, ownership: &mut Ownership) -> Result<(), String> {
     for name in DXVK_DLLS {
         let destination = runtime.join(name);
+        if destination.exists()
+            && !is_owned(runtime, name, ownership)?
+            && is_unmodified_source_copy(game, runtime, name)?
+        {
+            ownership.remove(name);
+            continue;
+        }
         if destination.exists() && !is_owned(runtime, name, ownership)? {
             return Err(format!(
                 "runtime {name} is not launcher-owned; refusing to remove a modified DLL"
@@ -255,6 +287,7 @@ pub fn install(
     settings: &Settings,
     wine: bool,
     gamescope: bool,
+    output: Option<u32>,
 ) -> Result<(), String> {
     validate(components, settings.controller(), wine)?;
     let mut ownership = read_ownership(runtime);
@@ -270,7 +303,7 @@ pub fn install(
     }
     fs::write(
         runtime.join("dgVoodoo.conf"),
-        dgvoodoo_conf(settings, wine, gamescope),
+        dgvoodoo_conf(settings, wine, gamescope, output),
     )
     .map_err(|error| format!("cannot write dgVoodoo.conf: {error}"))?;
 
@@ -373,7 +406,7 @@ mod tests {
             vsync: Some(true),
             ..Settings::default()
         };
-        let text = dgvoodoo_conf(&settings, false, false);
+        let text = dgvoodoo_conf(&settings, false, false, None);
         let general = ini_section(&text, "GeneralExt");
         let directx = ini_section(&text, "DirectX");
         let extended = ini_section(&text, "DirectXExt");
@@ -383,7 +416,9 @@ mod tests {
         assert_eq!(directx["Filtering"], "appdriven");
         assert_eq!(directx["ForceVerticalSync"], "true");
         assert_eq!(directx["dgVoodooWatermark"], "false");
-        assert_eq!(extended["ExtraEnumeratedResolutions"], "3840x2160@60");
+        // Widescreen is on by default: the game renders 4:3 and dgVoodoo stretches it.
+        assert_eq!(extended["ExtraEnumeratedResolutions"], "2880x2160@60");
+        assert_eq!(ini_section(&text, "General")["ScalingMode"], "stretched");
         assert!(!directx.contains_key("FPSLimit"));
         assert!(!directx.contains_key("ExtraEnumeratedResolutions"));
     }
@@ -394,14 +429,36 @@ mod tests {
         for (wine, gamescope, attributes) in
             [(false, false, ""), (true, true, ""), (true, false, "fake")]
         {
-            let text = dgvoodoo_conf(&settings, wine, gamescope);
+            let text = dgvoodoo_conf(&settings, wine, gamescope, None);
             let general = ini_section(&text, "General");
             let extended = ini_section(&text, "GeneralExt");
             assert_eq!(general["FullScreenMode"], "true");
-            assert_eq!(general["ScalingMode"], "stretched_ar");
+            assert_eq!(general["ScalingMode"], "stretched");
+            assert_eq!(general["FullScreenOutput"], "default");
             assert_eq!(extended["FullscreenAttributes"], attributes);
             assert_eq!(extended["FPSLimit"], "0");
         }
+    }
+
+    #[test]
+    fn widescreen_off_keeps_native_mode_and_aspect() {
+        let settings = Settings {
+            resolution: Some(Resolution::Custom(2560, 1600)),
+            widescreen: Some(false),
+            ..Settings::default()
+        };
+        let text = dgvoodoo_conf(&settings, true, false, Some(2));
+        let general = ini_section(&text, "General");
+        assert_eq!(general["ScalingMode"], "stretched_ar");
+        assert_eq!(general["FullScreenOutput"], "2");
+        assert_eq!(
+            ini_section(&text, "DirectX")["Resolution"],
+            "h:2560, v:1600"
+        );
+        assert_eq!(
+            ini_section(&text, "DirectXExt")["ExtraEnumeratedResolutions"],
+            "2560x1600@60"
+        );
     }
 
     #[test]
@@ -410,7 +467,7 @@ mod tests {
             resolution: Some(Resolution::Original),
             ..Settings::default()
         };
-        let text = dgvoodoo_conf(&settings, false, false);
+        let text = dgvoodoo_conf(&settings, false, false, None);
         assert_eq!(ini_section(&text, "DirectX")["Resolution"], "unforced");
         assert_eq!(
             ini_section(&text, "DirectXExt")["ExtraEnumeratedResolutions"],
@@ -420,22 +477,79 @@ mod tests {
     }
 
     #[test]
-    fn exact_xidi_mapper_is_embedded() {
+    fn cli_over_cfg_reaches_dgvoodoo_and_the_registry_mode() {
+        let (saved, warnings) = Settings::parse_file(
+            "resolution = 1920x1080\nwidescreen = on\nfps_limit = 60\nvsync = on\n",
+        );
+        assert!(warnings.is_empty());
+        let cli = crate::config::parse_args(
+            [
+                "--resolution",
+                "2560x1440",
+                "--fps-limit",
+                "144",
+                "--vsync",
+                "off",
+            ]
+            .map(String::from),
+        )
+        .unwrap();
+        let settings = saved.merged(cli.settings);
+        let text = dgvoodoo_conf(&settings, false, false, None);
+        assert_eq!(
+            ini_section(&text, "DirectX")["Resolution"],
+            "h:2560, v:1440"
+        );
+        assert_eq!(ini_section(&text, "DirectX")["ForceVerticalSync"], "false");
+        assert_eq!(ini_section(&text, "GeneralExt")["FPSLimit"], "144");
+        assert_eq!(
+            ini_section(&text, "DirectXExt")["ExtraEnumeratedResolutions"],
+            "1920x1440@60"
+        );
+        assert_eq!(
+            registry::game_mode(settings.resolution(), settings.widescreen()),
+            Resolution::Custom(1920, 1440)
+        );
+    }
+
+    #[test]
+    fn steam_deck_preset_keeps_its_native_16_by_10_mode() {
+        let settings = Settings {
+            resolution: Some(Resolution::Custom(1280, 800)),
+            widescreen: Some(false),
+            fps_limit: Some(60),
+            ..Settings::default()
+        };
+        // gamescope on the Deck: real fullscreen, one output.
+        let text = dgvoodoo_conf(&settings, true, true, None);
+        assert_eq!(ini_section(&text, "General")["ScalingMode"], "stretched_ar");
+        assert_eq!(ini_section(&text, "GeneralExt")["FullscreenAttributes"], "");
+        assert_eq!(ini_section(&text, "GeneralExt")["FPSLimit"], "60");
+        assert_eq!(ini_section(&text, "DirectX")["Resolution"], "h:1280, v:800");
+        assert_eq!(
+            ini_section(&text, "DirectXExt")["ExtraEnumeratedResolutions"],
+            "1280x800@60"
+        );
+    }
+
+    #[test]
+    fn xidi_keeps_a_gamepad_layout_and_puts_the_triggers_on_the_pedal_axis() {
         for line in [
-            "StickLeftX = Split( Keyboard(RightArrow), Keyboard(LeftArrow) )",
-            "TriggerRT = Keyboard(UpArrow)",
-            "TriggerLT = Keyboard(DownArrow)",
-            "ButtonA = Keyboard(Enter)",
-            "ButtonStart = Keyboard(Enter)",
-            "ButtonB = Keyboard(Esc)",
-            "ButtonBack = Keyboard(Esc)",
-            "ButtonX = Keyboard(Space)",
-            "ButtonY = Keyboard(C)",
+            "Template = StandardGamepad",
+            "StickLeftX = Axis(X)",
+            "StickLeftY = Null",
+            "TriggerRT = Axis(Y, -)",
+            "TriggerLT = Axis(Y, +)",
             "dinput8.dll = C:\\Windows\\system32\\dinput8.dll",
             "ActiveVirtualControllerMask = 0x01",
         ] {
             assert!(XIDI_CONF.contains(line), "{line}");
         }
+        // Keys on top of the pad would change nothing CMR04 needs and, as the
+        // keyboard-only mapping showed, hide the pad's axes from the game.
+        assert!(!XIDI_CONF.contains("Keyboard("));
+        // Xidi 4.3.1 rejects unknown [Log] keys (seen in the CMR3 launcher).
+        assert!(!XIDI_CONF.contains("Append"));
     }
 
     #[test]
@@ -478,6 +592,7 @@ mod tests {
                 &Settings::default(),
                 false,
                 false,
+                None,
             )
             .unwrap_err();
             assert!(error.contains("not launcher-owned"), "{error}");
@@ -508,6 +623,7 @@ mod tests {
             &Settings::default(),
             true,
             false,
+            None,
         )
         .unwrap();
         let ownership = read_ownership(&runtime);
@@ -526,6 +642,7 @@ mod tests {
             &Settings::default(),
             true,
             false,
+            None,
         )
         .unwrap();
         assert_eq!(
@@ -556,6 +673,7 @@ mod tests {
                 &Settings::default(),
                 false,
                 false,
+                None,
             )
             .unwrap_err();
             assert!(error.contains("not launcher-owned"), "{error}");
@@ -578,7 +696,7 @@ mod tests {
         fs::create_dir_all(&runtime).unwrap();
         write_components(&components);
         let settings = Settings::default();
-        install(&game, &runtime, &components, &settings, true, false).unwrap();
+        install(&game, &runtime, &components, &settings, true, false, None).unwrap();
         for name in DXVK_DLLS {
             assert_eq!(
                 fs::read(runtime.join(name)).unwrap(),
@@ -592,7 +710,7 @@ mod tests {
             )["FullscreenAttributes"],
             "fake"
         );
-        install(&game, &runtime, &components, &settings, false, false).unwrap();
+        install(&game, &runtime, &components, &settings, false, false, None).unwrap();
         for name in DXVK_DLLS {
             assert!(!runtime.join(name).exists());
         }
@@ -611,7 +729,7 @@ mod tests {
         write_components(&components);
         fs::write(runtime.join("dsound.dll"), b"user DSOAL").unwrap();
         let on = Settings::default();
-        install(&game, &runtime, &components, &on, false, false).unwrap();
+        install(&game, &runtime, &components, &on, false, false, None).unwrap();
         assert_eq!(
             fs::read(runtime.join(XIDI_DLL)).unwrap(),
             b"bundle dinput8.dll"
@@ -622,7 +740,7 @@ mod tests {
             controller: Some(false),
             ..Settings::default()
         };
-        install(&game, &runtime, &components, &off, false, false).unwrap();
+        install(&game, &runtime, &components, &off, false, false, None).unwrap();
         assert!(!runtime.join(XIDI_DLL).exists());
         assert!(!runtime.join("Xidi.ini").exists());
         assert_eq!(fs::read(runtime.join("dsound.dll")).unwrap(), b"user DSOAL");
@@ -647,6 +765,7 @@ mod tests {
             &Settings::default(),
             false,
             false,
+            None,
         )
         .unwrap();
         fs::write(game.join(XIDI_DLL), b"source proxy").unwrap();
@@ -654,7 +773,11 @@ mod tests {
             controller: Some(false),
             ..Settings::default()
         };
-        install(&game, &runtime, &components, &off, false, false).unwrap();
+        install(&game, &runtime, &components, &off, false, false, None).unwrap();
+        assert_eq!(fs::read(runtime.join(XIDI_DLL)).unwrap(), b"source proxy");
+        // A second launch with the controller still off must accept the
+        // game's own DLL (seen in the field: the game folder shipped Xidi).
+        install(&game, &runtime, &components, &off, false, false, None).unwrap();
         assert_eq!(fs::read(runtime.join(XIDI_DLL)).unwrap(), b"source proxy");
         for path in [game, runtime, components] {
             fs::remove_dir_all(path).unwrap();
@@ -676,6 +799,7 @@ mod tests {
             &Settings::default(),
             false,
             false,
+            None,
         )
         .unwrap();
         fs::write(runtime.join(XIDI_DLL), b"user changed").unwrap();
@@ -684,7 +808,7 @@ mod tests {
             controller: Some(false),
             ..Settings::default()
         };
-        let error = install(&game, &runtime, &components, &off, false, false).unwrap_err();
+        let error = install(&game, &runtime, &components, &off, false, false, None).unwrap_err();
         assert!(error.contains("refusing to replace or remove"), "{error}");
         assert_eq!(fs::read(runtime.join(XIDI_DLL)).unwrap(), b"user changed");
         assert_eq!(fs::read(game.join(XIDI_DLL)).unwrap(), b"source proxy");

@@ -36,6 +36,21 @@ check "configured 1080p nested and output" "gamescope -w 1920 -h 1080 -W 1920 -H
 printf 'resolution = original\n' > "$CFGDIR/launcher.cfg"
 start > /dev/null
 check "original uses a standard original mode" "gamescope -w 1024 -h 768 -W 1024 -H 768"
+printf '  resolution = 2560X1440 \r\n' > "$CFGDIR/launcher.cfg"
+start > /dev/null
+check "launcher spellings: uppercase X, spaces, CRLF" "gamescope -w 2560 -h 1440 -W 2560 -H 1440"
+printf 'resolution = 1280x800\n# resolution = 640x480\n' > "$CFGDIR/launcher.cfg"
+start > /dev/null
+check "commented resolution is ignored" "gamescope -w 1280 -h 800 -W 1280 -H 800"
+for bad in huge 4kx x1080 1920x1080x2; do
+  printf 'resolution = %s\n' "$bad" > "$CFGDIR/launcher.cfg"
+  start > /dev/null
+  check "invalid resolution $bad falls back to original mode" "gamescope -w 1024 -h 768 -W 1024 -H 768"
+done
+rm "$CFGDIR/launcher.cfg"
+start > /dev/null
+check "missing launcher.cfg uses original mode" "gamescope -w 1024 -h 768 -W 1024 -H 768"
+printf 'resolution = original\n' > "$CFGDIR/launcher.cfg"
 check "private Wine prefix is passed" "WINEPREFIX=$CMR4_PREFIX"
 check "SDL background events default on" "SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS=1"
 check "SDL joystick background events default on" "SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1"

@@ -72,4 +72,21 @@ case "$(cat "$STATE/inner.sh")" in
   *) ok "launcher path absent from generated source" ;;
 esac
 
+# The settings window: Play (0) and unavailable window (4) continue to the
+# game; closing it (3) or any other failure does not.
+cat > "$T/fake-run" <<'FAKE'
+#!/bin/sh
+case "$*" in *"--settings --linux"*) echo "$*" > "$T/settings"; exit "$(cat "$T/rc")" ;; esac
+exit 0
+FAKE
+for case in 0:0 4:0 3:1 1:1; do
+  echo "${case%:*}" > "$T/rc"
+  if settings; then got=0; else got=1; fi
+  if [ "$got" = "${case#*:}" ]; then ok "settings exit ${case%:*} -> $got"; else fail "settings exit ${case%:*} gave $got"; fi
+done
+case "$(cat "$T/settings")" in
+  *"WINEPREFIX=$CMR4_PREFIX"*"wine $LAUNCHER --settings --linux") ok "settings window uses the private prefix and helper flags" ;;
+  *) fail "settings command: $(cat "$T/settings")" ;;
+esac
+
 [ "$fails" = 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

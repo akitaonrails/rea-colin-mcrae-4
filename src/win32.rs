@@ -7,11 +7,12 @@ use std::ptr::{null, null_mut};
 
 use cmr4_launcher::components;
 use cmr4_launcher::config::Resolution;
+use cmr4_launcher::display;
 use cmr4_launcher::registry::{self, KEY, VIRTUAL_STORE_KEY, WINEBUS_KEY};
 use windows_sys::Win32::Foundation::{
     CloseHandle, ERROR_ACCESS_DENIED, ERROR_FILE_NOT_FOUND, ERROR_SUCCESS,
 };
-use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
+use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress, LoadLibraryW};
 use windows_sys::Win32::System::Registry::{
     HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_QUERY_VALUE, KEY_SET_VALUE, KEY_WOW64_32KEY,
     REG_DWORD, REG_OPTION_NON_VOLATILE, REG_SZ, RegCloseKey, RegCreateKeyExW, RegQueryValueExW,
@@ -31,11 +32,17 @@ fn last_error() -> std::io::Error {
 }
 
 pub fn is_wine() -> bool {
+    // Some Wine builds hide `wine_get_version`, so also accept the
+    // environment our Linux launcher and Proton always set.
     // SAFETY: read-only loader queries with NUL-terminated names.
-    unsafe {
+    let exported = unsafe {
         let ntdll = GetModuleHandleW(wide("ntdll.dll").as_ptr());
         !ntdll.is_null() && GetProcAddress(ntdll, c"wine_get_version".as_ptr().cast()).is_some()
-    }
+    };
+    exported
+        || ["WINEPREFIX", "WINELOADER", "STEAM_COMPAT_DATA_PATH"]
+            .into_iter()
+            .any(|name| std::env::var_os(name).is_some())
 }
 
 pub fn message(title: &str, text: &str, error: bool) {
@@ -60,7 +67,6 @@ pub fn message(title: &str, text: &str, error: bool) {
 
 /// The newest available XInput function, or None when XInput is unavailable.
 fn xinput_proc(name: &std::ffi::CStr) -> Option<unsafe extern "system" fn() -> isize> {
-    use windows_sys::Win32::System::LibraryLoader::LoadLibraryW;
     for dll in ["xinput1_4.dll", "xinput1_3.dll", "xinput9_1_0.dll"] {
         // SAFETY: plain loader calls with NUL-terminated names.
         unsafe {
@@ -90,6 +96,30 @@ fn xinput_states() -> Vec<(u32, [u8; 16])> {
         .collect()
 }
 
+/// USB vendor and product IDs of the pad in XInput slot 0, the one Xidi
+/// presents as controller 1. Uses XInputGetCapabilitiesEx (xinput1_4
+/// ordinal 108), which Windows 10+ and Wine provide.
+pub fn gamepad_ids() -> Option<(u16, u16)> {
+    type CapabilitiesEx = unsafe extern "system" fn(u32, u32, u32, *mut [u8; 32]) -> u32;
+    // SAFETY: loader calls; ordinal 108's signature fills a 32-byte
+    // XINPUT_CAPABILITIES_EX whose VendorId/ProductId sit at bytes 20 and 22.
+    unsafe {
+        let module = LoadLibraryW(wide("xinput1_4.dll").as_ptr());
+        if module.is_null() {
+            return None;
+        }
+        let proc = GetProcAddress(module, 108 as *const u8)?;
+        let get: CapabilitiesEx = std::mem::transmute(proc);
+        let mut caps = [0u8; 32];
+        if get(1, 0, 0, &mut caps) != 0 {
+            return None;
+        }
+        let vendor = u16::from_le_bytes([caps[20], caps[21]]);
+        let product = u16::from_le_bytes([caps[22], caps[23]]);
+        (vendor != 0 && product != 0).then_some((vendor, product))
+    }
+}
+
 pub fn xinput_pads() -> Vec<u32> {
     xinput_states().into_iter().map(|(slot, _)| slot).collect()
 }
@@ -100,11 +130,77 @@ pub fn xinput_buttons() -> u16 {
     })
 }
 
+/// Monitors in enumeration order, sized by their current physical mode so
+/// desktop scaling does not shrink them.
+pub fn monitors() -> Vec<display::Monitor> {
+    use windows_sys::Win32::Foundation::{LPARAM, RECT};
+    use windows_sys::Win32::Graphics::Gdi::{
+        DEVMODEW, ENUM_CURRENT_SETTINGS, EnumDisplayMonitors, EnumDisplaySettingsW,
+        GetMonitorInfoW, HDC, HMONITOR, MONITORINFOEXW,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::MONITORINFOF_PRIMARY;
+
+    unsafe extern "system" fn visit(monitor: HMONITOR, _: HDC, _: *mut RECT, data: LPARAM) -> i32 {
+        // SAFETY: `data` is the Vec passed below and outlives the enumeration;
+        // the info and mode structs are sized before the calls fill them.
+        unsafe {
+            let found = &mut *(data as *mut Vec<display::Monitor>);
+            let mut info: MONITORINFOEXW = std::mem::zeroed();
+            info.monitorInfo.cbSize = size_of::<MONITORINFOEXW>() as u32;
+            if GetMonitorInfoW(monitor, (&raw mut info).cast()) == 0 {
+                return 1;
+            }
+            let rect = info.monitorInfo.rcMonitor;
+            let mut mode: DEVMODEW = std::mem::zeroed();
+            mode.dmSize = size_of::<DEVMODEW>() as u16;
+            let (width, height) =
+                if EnumDisplaySettingsW(info.szDevice.as_ptr(), ENUM_CURRENT_SETTINGS, &mut mode)
+                    != 0
+                {
+                    (mode.dmPelsWidth, mode.dmPelsHeight)
+                } else {
+                    (
+                        (rect.right - rect.left) as u32,
+                        (rect.bottom - rect.top) as u32,
+                    )
+                };
+            if width > 0 && height > 0 {
+                found.push(display::Monitor {
+                    width,
+                    height,
+                    primary: info.monitorInfo.dwFlags & MONITORINFOF_PRIMARY != 0,
+                });
+            }
+            1
+        }
+    }
+
+    let mut found = Vec::new();
+    // SAFETY: the callback only writes into `found` during this call.
+    unsafe {
+        EnumDisplayMonitors(null_mut(), null(), Some(visit), (&raw mut found) as LPARAM);
+    }
+    found
+}
+
+/// The monitor the game will fill and its dgVoodoo output number.
+pub fn display_target() -> Option<display::Target> {
+    display::choose(&monitors()).or_else(|| {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN,
+        };
+        // SAFETY: plain metric queries.
+        let (width, height) =
+            unsafe { (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)) };
+        (width > 0 && height > 0).then_some(display::Target {
+            size: (width as u32, height as u32),
+            output: None,
+        })
+    })
+}
+
 pub fn screen_size() -> Option<(u32, u32)> {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
-    // SAFETY: plain metric queries.
-    let (width, height) = unsafe { (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)) };
-    (width > 0 && height > 0).then_some((width as u32, height as u32))
+    display_target().map(|target| target.size)
 }
 
 pub fn pick_folder(title: &str) -> Option<std::path::PathBuf> {
@@ -410,7 +506,57 @@ impl Drop for Child {
     }
 }
 
-pub fn run_game(exe: &Path, workdir: &Path, wine: bool, controller: bool) -> Result<u32, String> {
+/// Keeps the close hook installed for as long as the game runs.
+struct CloseHook(windows_sys::Win32::UI::WindowsAndMessaging::HHOOK);
+
+impl Drop for CloseHook {
+    fn drop(&mut self) {
+        // SAFETY: the handle came from SetWindowsHookExW and is released once.
+        unsafe {
+            windows_sys::Win32::UI::WindowsAndMessaging::UnhookWindowsHookEx(self.0);
+        }
+    }
+}
+
+/// CMR04 ignores WM_CLOSE and has no OS-level quit path, so Alt+F4 and the
+/// compositor's close action do nothing. This hook DLL, loaded into the game's
+/// main thread, ends the process on those requests.
+fn install_close_hook(dll: &Path, thread: u32) -> Result<CloseHook, String> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SetWindowsHookExW, WH_GETMESSAGE};
+    // SAFETY: NUL-terminated path and export name; the module stays loaded
+    // for the launcher's lifetime, which outlives the hook.
+    unsafe {
+        let module = LoadLibraryW(wide(dll).as_ptr());
+        if module.is_null() {
+            return Err(format!("cannot load {}: {}", dll.display(), last_error()));
+        }
+        let Some(proc) = GetProcAddress(module, c"close_hook".as_ptr().cast()) else {
+            return Err(format!("{} has no close_hook export", dll.display()));
+        };
+        let hook = SetWindowsHookExW(
+            WH_GETMESSAGE,
+            Some(std::mem::transmute::<
+                unsafe extern "system" fn() -> isize,
+                unsafe extern "system" fn(i32, usize, isize) -> isize,
+            >(proc)),
+            module,
+            thread,
+        );
+        if hook.is_null() {
+            return Err(format!("cannot install close hook: {}", last_error()));
+        }
+        Ok(CloseHook(hook))
+    }
+}
+
+pub fn run_game(
+    exe: &Path,
+    workdir: &Path,
+    wine: bool,
+    controller: bool,
+    close_hook: &Path,
+    log: impl Fn(&str),
+) -> Result<u32, String> {
     let application = wide(exe);
     let mut command = wide(format!("\"{}\"", exe.display()));
     let directory = wide(workdir);
@@ -441,6 +587,16 @@ pub fn run_game(exe: &Path, workdir: &Path, wine: bool, controller: bool) -> Res
         return Err(format!("cannot start {}: {}", exe.display(), last_error()));
     }
     let child = Child(info);
+    let _hook = match install_close_hook(close_hook, child.0.dwThreadId) {
+        Ok(hook) => {
+            log("close hook installed (Alt+F4 and window close end the game)");
+            Some(hook)
+        }
+        Err(error) => {
+            log(&format!("warning: {error}"));
+            None
+        }
+    };
     // SAFETY: the process handle remains valid until `child` is dropped.
     unsafe {
         WaitForSingleObject(child.0.hProcess, INFINITE);
