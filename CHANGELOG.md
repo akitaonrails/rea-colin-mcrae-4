@@ -111,6 +111,11 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- The Windows build is linked with LLD (`.cargo/config.toml`, i686 and
+  x86_64). GNU ld 2.47 left some kernel32 imports of `CMR4Launcher.exe`
+  outside every import descriptor, so the launcher could crash on its
+  first call to one of them; `sdk/packaging/check-imports.sh` now finds
+  none.
 - An unknown `cmr4.exe` no longer stops the launch. Builds are identified
   by SHA-256 (`src/edition.rs`); the widescreen fix is a patch table
   applied only to the known 1.0.0.0 build (also when it already carries
