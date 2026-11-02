@@ -9,7 +9,7 @@ use cmr4_launcher::config::Resolution;
 use cmr4_launcher::display;
 use cmr4_launcher::registry::{self, KEY};
 use rea_launcher_win32::process::Launch;
-use rea_launcher_win32::reg::{Key, Place};
+use rea_launcher_win32::reg::Key;
 use rea_launcher_win32::{display as screens, wine};
 
 pub use rea_launcher_win32::display::wine_dpi_scale;
@@ -37,10 +37,7 @@ pub fn write_game_registry(
     runtime: &Path,
 ) -> Result<(&'static str, (u32, u32)), String> {
     let (key, place) = Key::machine_or_virtual_store(KEY)?;
-    let place = match place {
-        Place::Machine => "HKLM 32-bit view",
-        Place::VirtualStore => "HKCU VirtualStore",
-    };
+    let place = place.describe();
     let root = registry::install_root(runtime);
     for name in registry::INSTALL_PATH_VALUES {
         key.set_string(name, &root)?;

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Tests cmr4-play's GPU choice (the library's offload rules, not pinned)
 # against fake sysfs trees.
-. "$(dirname "$(readlink -f "${CMR4_TEST:-$0}")")/helpers"
+. "$(dirname "$(readlink -f "$0")")/helpers"
 gpu() { # tree card vendor driver boot_vga [vram]
   d=$T/$1/class/drm/$2/device
   mkdir -p "$d" "$T/$1/drivers/$4" "$T/$1/class/drm/$2-DP-1"

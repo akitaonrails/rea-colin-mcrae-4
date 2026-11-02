@@ -1,7 +1,7 @@
 #!/bin/sh
 # cmr4-play's session configuration on the shared library: stop, the lock,
 # the settings window and the commands. Only harmless sleeps run.
-. "$(dirname "$(readlink -f "${CMR4_TEST:-$0}")")/helpers"
+. "$(dirname "$(readlink -f "$0")")/helpers"
 REA_GPU=
 OTHER_PID=
 trap '[ -n "$OTHER_PID" ] && kill "$OTHER_PID" 2>/dev/null; rm -rf "$T"' EXIT
@@ -52,14 +52,14 @@ contains "settings window uses the private prefix and helper flags" "$(cat "$T/s
   "WINEPREFIX=$CMR4_PREFIX wine $T/CMR4Launcher.exe --settings --linux"
 
 # The commands players use, in a fresh helper run.
-play() { CMR4_PLAY_FUNCTIONS_ONLY= sh "$TESTS/../cmr4-play" "$@"; }
+play() { sh "$TESTS/../cmr4-play" "$@"; }
 contains "status says idle" "$(play status)" "idle"
 contains "stop says stopped" "$(play stop)" "stopped"
 play bogus > /dev/null 2>&1
 if [ "$?" = 2 ]; then ok "an unknown command is a usage error"; else fail "unknown command exit"; fi
 # The player's CMR4_* names reach the library; inherited REA_* never do.
-REA_PREFIX=$T/elsewhere CMR4_PLAY_FUNCTIONS_ONLY=1 sh -c \
-  '. "$0"; echo "$REA_PREFIX $REA_EXE $REA_RUN $REA_STATE"' "$TESTS/../cmr4-play" > "$T/mapped"
+REA_PREFIX=$T/elsewhere REA_FUNCTIONS_ONLY=1 REA_PLAY_HERE=$TESTS/.. sh -c \
+  '. "$1"; echo "$REA_PREFIX $REA_EXE $REA_RUN $REA_STATE"' sh "$TESTS/../cmr4-play" > "$T/mapped"
 contains "CMR4_PREFIX, CMR4_LAUNCHER and CMR4_RUN map" "$(cat "$T/mapped")" \
   "$CMR4_PREFIX $T/CMR4Launcher.exe $T/fake-run $HOME/.config/cmr4-launcher"
 finish

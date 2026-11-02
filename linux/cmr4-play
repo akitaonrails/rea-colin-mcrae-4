@@ -17,7 +17,9 @@
 # (rea-play.sh from rea-launcher-sdk): next to this script in a package, else
 # the vendored ../sdk copy.
 set -u
+_fonly=${REA_FUNCTIONS_ONLY:-}
 _here=$(dirname "$(readlink -f "$0")")
+[ "$_fonly" = 1 ] && [ -n "${REA_PLAY_HERE:-}" ] && _here=$REA_PLAY_HERE
 if [ -f "$_here/rea-play.sh" ]; then
   . "$_here/rea-play.sh"
 elif [ -f "$_here/../sdk/rea-play.sh" ]; then
@@ -26,6 +28,7 @@ else
   echo "rea-play.sh not found next to $0 or in ../sdk (run scripts/sdk-sync)" >&2
   exit 1
 fi
+REA_HERE=$_here REA_NAME=cmr4-play
 
 REA_APP=cmr4-launcher                 # ~/.config/cmr4-launcher, the prefix name
 REA_EXE_NAME=CMR4Launcher.exe
@@ -41,6 +44,6 @@ REA_DEFAULT_SCALER=nis
 REA_LEGACY_LOCK=off                   # cmr4-play never wrote a pid-only lock
 
 rea_init || exit 1
-# Tests load the configuration without running anything.
-[ -n "${CMR4_PLAY_FUNCTIONS_ONLY:-}" ] && return 0
+# Tests load the configuration without running anything (REA_FUNCTIONS_ONLY=1).
+[ "$_fonly" = 1 ] && return 0
 rea_main "$@"

@@ -56,10 +56,7 @@ pub fn remove_legacy_temps(runtime: &Path) -> io::Result<Vec<PathBuf>> {
 
 /// The game folder, absolute and resolved; an error when it does not exist.
 pub fn game_folder(game: &Path, cwd: &Path) -> Result<PathBuf, String> {
-    let absolute = cwd.join(game);
-    std::fs::metadata(&absolute)
-        .map_err(|error| format!("game folder {}: {error}", game.display()))?;
-    paths::resolve(&absolute, cwd).map_err(|error| format!("game folder {error}"))
+    paths::canonical_existing(game, cwd).map_err(|error| format!("game folder {error}"))
 }
 
 #[cfg(test)]

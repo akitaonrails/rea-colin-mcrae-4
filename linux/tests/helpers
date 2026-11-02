@@ -2,14 +2,10 @@
 # environment, fakes for Wine and gamescope, and cmr4-play loaded through
 # the shared play library (sdk/rea-play.sh) with its test seams on.
 set -u
-# cmr4-play finds the library from $0, as when a player runs it, so the
-# test runs again in a shell whose $0 is linux/cmr4-play.
-if [ -z "${CMR4_TEST:-}" ]; then
-  CMR4_TEST=$(readlink -f "$0")
-  export CMR4_TEST
-  exec sh -c '. "$CMR4_TEST"' "$(dirname "$CMR4_TEST")/../cmr4-play"
-fi
-TESTS=$(dirname "$CMR4_TEST")
+# Tests load cmr4-play with the SDK's convention: REA_FUNCTIONS_ONLY=1
+# stops it before rea_main, REA_PLAY_HERE tells it where linux/ is ($0 is
+# the test here).
+TESTS=$(dirname "$(readlink -f "$0")")
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
 unset GAMESCOPE_WAYLAND_DISPLAY DRI_PRIME __NV_PRIME_RENDER_OFFLOAD __GLX_VENDOR_LIBRARY_NAME \
@@ -32,7 +28,7 @@ echo "$*" > "$T/ran"
 printf '<%s>\n' "$@" > "$T/args"
 FAKE
 chmod +x "$T/fake-run"
-CMR4_PLAY_FUNCTIONS_ONLY=1 . "$TESTS/../cmr4-play"
+REA_FUNCTIONS_ONLY=1 REA_PLAY_HERE=$TESTS/.. . "$TESTS/../cmr4-play"
 REA_TEST=1 REA_SYSFS=$T/nosys
 fails=0
 ok() { echo "ok   $1"; }

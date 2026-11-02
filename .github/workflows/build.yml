@@ -18,11 +18,13 @@ jobs:
   ci:
     # fmt, host tests, cargo audit/deny, shell syntax and tests (linux/tests,
     # packaging/tests), the sdk/ drift check, Windows clippy and release
-    # build, then the zip and the AppImage checked against the allowlist.
-    uses: akitaonrails/rea-launcher-sdk/.github/workflows/launcher-ci.yml@v0.1.0
+    # build, the Windows-target tests under Wine (headless), then the zip
+    # and the AppImage checked against the allowlist.
+    uses: akitaonrails/rea-launcher-sdk/.github/workflows/launcher-ci.yml@v0.2.0
     with:
       apt-packages: gcc-mingw-w64-i686 lld zip unzip
       shell-tests: linux/tests/*.sh packaging/tests/*.sh
+      wine-tests: true
       package-command: |
         packaging/build-windows.sh "$REA_VERSION_NAME" dist "$REA_CACHE"
         "$REA_SDK/packaging/appimage-wine.sh" --app cmr4 --exe CMR4Launcher.exe \
@@ -47,7 +49,7 @@ jobs:
       contents: write
       id-token: write
       attestations: write
-    uses: akitaonrails/rea-launcher-sdk/.github/workflows/launcher-release.yml@v0.1.0
+    uses: akitaonrails/rea-launcher-sdk/.github/workflows/launcher-release.yml@v0.2.0
     with:
       package: cmr4-launcher
       artifact-pattern: CMR4Launcher-*

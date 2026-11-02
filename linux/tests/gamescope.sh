@@ -1,6 +1,6 @@
 #!/bin/sh
 # Tests CMR04's gamescope size/filter and direct-launch policy with fakes.
-. "$(dirname "$(readlink -f "${CMR4_TEST:-$0}")")/helpers"
+. "$(dirname "$(readlink -f "$0")")/helpers"
 REA_GPU=
 CFG=$CFGDIR/launcher.cfg
 run() { rea_start > /dev/null; cat "$T/ran"; }

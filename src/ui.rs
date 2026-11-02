@@ -6,10 +6,11 @@ use std::path::{Path, PathBuf};
 use cmr4_launcher::config::Resolution;
 use cmr4_launcher::form::{self, Form, Look, Tab};
 use cmr4_launcher::{GAME_EXE, patch};
-use eframe::egui::{self, Align2, Color32, Key, TextureHandle};
 use rea_launcher::identify::validate_pe32;
+use rea_launcher_ui::eframe;
+use rea_launcher_ui::egui::{self, Align2, Color32, Key, TextureHandle};
 use rea_launcher_ui::pad::{self, Nav, PadNav};
-use rea_launcher_ui::theme::{self, Palette, body, semibold};
+use rea_launcher_ui::theme::{self, Metrics, Palette, body, semibold, tint};
 use rea_launcher_ui::widgets::{self, Crop, LookCard};
 use rea_launcher_ui::window::{Layout, SIZE, WindowFit};
 use rea_launcher_win32::{dialog, xinput};
@@ -23,7 +24,8 @@ use crate::win32;
 // apart from the accent's hue) on GRAPHITE 12.3:1.
 const GRAPHITE: Color32 = Color32::from_rgb(0x15, 0x17, 0x1b);
 const PANEL: Color32 = Color32::from_rgb(0x22, 0x25, 0x2b);
-const LINE: Color32 = Color32::from_rgb(0x3a, 0x3f, 0x48);
+// Control borders: 3:1 against GRAPHITE and PANEL (WCAG non-text contrast).
+const LINE: Color32 = Color32::from_rgb(0x6b, 0x6e, 0x75);
 const ACCENT: Color32 = Color32::from_rgb(0xff, 0x5a, 0x1f);
 const ACCENT_HOVER: Color32 = Color32::from_rgb(0xff, 0x7a, 0x45);
 const INK: Color32 = Color32::from_rgb(0xf4, 0xf5, 0xf7);
@@ -47,6 +49,12 @@ const PALETTE: Palette = Palette {
     disabled_ink: Color32::from_rgb(0x4f, 0x55, 0x60),
     disabled_line: Color32::from_rgb(0x2a, 0x2d, 0x33),
     focus: INK,
+    selection: tint(ACCENT, 128),
+};
+/// CMR04's widget sizes: the SDK defaults, toggle labels on one line.
+const METRICS: Metrics = Metrics {
+    toggle_wrap: false,
+    ..Metrics::DEFAULT
 };
 const PHOTO_W: f32 = 300.0;
 const TITLE: &str = "Colin McRae Rally 04";
@@ -68,7 +76,7 @@ pub fn show(settings_path: &Path, text: Option<&str>, linux: bool) -> Result<Out
     // size below is in pixels.
     let wine_scale = win32::wine_dpi_scale();
     let screen = win32::screen_size();
-    let fit = WindowFit::new(SIZE, wine, screen, wine_scale);
+    let fit = WindowFit::new(SIZE, wine, screen, wine_scale).with_native_fit(true);
     let options = fit.native_options(TITLE);
     let path = settings_path.to_path_buf();
     let text = text.map(str::to_string);
@@ -76,7 +84,7 @@ pub fn show(settings_path: &Path, text: Option<&str>, linux: bool) -> Result<Out
         TITLE,
         options,
         Box::new(|cc| {
-            theme::install(&cc.egui_ctx, &PALETTE);
+            theme::install_with(&cc.egui_ctx, &PALETTE, &METRICS);
             Ok(Box::new(Window::new(
                 &cc.egui_ctx,
                 path,
@@ -518,7 +526,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_palette_keeps_its_documented_contrast() {
-        assert_eq!(PALETTE.contrast_problems(), Vec::<String>::new());
+    fn the_palette_and_text_sizes_pass_the_sdk_checks() {
+        assert_eq!(
+            theme::contrast_problems(&PALETTE, &METRICS),
+            Vec::<String>::new()
+        );
+        assert_eq!(theme::text_size_problems(&METRICS), Vec::<String>::new());
     }
 }

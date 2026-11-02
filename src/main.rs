@@ -34,7 +34,7 @@ mod app {
     /// `launcher.log`, never truncated (as before the shared SDK).
     pub fn log_line(line: &str) {
         Log::new(home().join("launcher.log"))
-            .with_limit(u64::MAX)
+            .without_limit()
             .line(line);
     }
 

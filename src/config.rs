@@ -311,7 +311,7 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Cli, String
                 }
             }
         }
-        Err(ArgError::Help) => cli.help = true,
+        Err(ArgError::Help(_)) => cli.help = true,
         Err(error) => return Err(format!("{error}\n\n{USAGE}")),
     }
     cli.settings = settings;

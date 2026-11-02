@@ -8,6 +8,13 @@ All notable changes to this project. The format follows
 
 ### Changed
 
+- Updated rea-launcher-sdk to v0.2.0 (crates, vendored `sdk/`, CI
+  workflows, which now also run the Windows-target tests under Wine).
+  Control borders in the settings window are lighter (`#6b6e75`) so they
+  reach 3:1 contrast; the window fits the screen's DPI on native Windows
+  as before (now opted in explicitly). `cmr4-play`'s tests load it with
+  the SDK's `REA_FUNCTIONS_ONLY`/`REA_PLAY_HERE` convention; the old
+  `CMR4_PLAY_FUNCTIONS_ONLY` hook is gone.
 - Built on the shared [rea-launcher-sdk](https://github.com/akitaonrails/rea-launcher-sdk)
   v0.1.0: the runtime copy, component ledger, `launcher.cfg` editing, patch
   and registry helpers, game start, settings-window kit and `cmr4-play`'s
