@@ -135,6 +135,14 @@ fn dgvoodoo(plan: &Plan, key: &str) -> String {
         .unwrap_or_default()
 }
 
+/// The game's environment value `name` in the plan.
+fn env<'a>(plan: &'a Plan, name: &str) -> Option<&'a str> {
+    plan.env
+        .iter()
+        .find(|(key, _)| *key == name)
+        .map(|(_, value)| value.as_str())
+}
+
 fn reg(plan: &Plan, name: &str) -> RegValue {
     plan.registry
         .iter()
@@ -299,13 +307,19 @@ fn gamepad_switch_and_flag_reach_xidi_the_environment_and_winebus() {
     assert!(off.files.contains(&("Xidi.ini", None)));
     assert!(off.winebus.is_empty());
     assert!(!off.gamepad_profile);
-    assert_eq!(off.env[0].1, "dsound,d3d9,d3d11,dxgi=n,b;mscoree=d");
+    assert_eq!(
+        env(&off, "WINEDLLOVERRIDES"),
+        Some("dsound,d3d9,d3d11,dxgi=n,b;mscoree=d")
+    );
 
     let on = launch("", &["--controller", "on"]);
     assert!(on.wrappers.contains(&"dinput8.dll"));
     assert!(file(&on, "Xidi.ini").contains("TriggerRT = Axis(Y, -)"));
     assert_eq!(on.winebus, [("Map Controllers", 1)]);
-    assert_eq!(on.env[0].1, "dinput8,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d");
+    assert_eq!(
+        env(&on, "WINEDLLOVERRIDES"),
+        Some("dinput8,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d")
+    );
 }
 
 #[test]
@@ -535,7 +549,15 @@ fn hostile_game_and_runtime_paths_sync_and_resolve() {
         reg(&plan, "INSTALL_PATH"),
         RegValue::String(runtime.display().to_string())
     );
-    assert!(plan.prefer_fast_gpu && plan.env.is_empty());
+    // On Windows the only environment change is the close hook's setup.
+    assert!(plan.prefer_fast_gpu);
+    assert_eq!(
+        plan.env,
+        [(
+            "REA_CLOSE_HOOK",
+            "class=PC_CMR4;strategy=terminate".to_string()
+        )]
+    );
     assert_eq!(plan.taken_out, ["d3d11.dll", "dxgi.dll"]);
 }
 
@@ -559,10 +581,16 @@ fn the_plan_keeps_first_run_defaults_and_the_players_overrides() {
     assert_eq!(seeded.len(), 10, "LANGUAGE and the nine graphics defaults");
     assert_eq!(
         plan.env,
-        [(
-            "WINEDLLOVERRIDES",
-            "dinput8,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d;xinput1_3=n".to_string()
-        )]
+        [
+            (
+                "REA_CLOSE_HOOK",
+                "class=PC_CMR4;strategy=terminate".to_string()
+            ),
+            (
+                "WINEDLLOVERRIDES",
+                "dinput8,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d;xinput1_3=n".to_string()
+            )
+        ]
     );
     assert!(plan.args.is_empty());
     let text = plan.render();

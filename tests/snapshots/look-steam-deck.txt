@@ -33,6 +33,7 @@ MOVIE_QUALITY = dword:0 (if missing)
 Map Controllers = dword:1
 
 [environment]
+REA_CLOSE_HOOK=class=PC_CMR4;strategy=terminate
 WINEDLLOVERRIDES=dinput8,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d
 
 [file dgVoodoo.conf]

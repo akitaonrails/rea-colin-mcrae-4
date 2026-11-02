@@ -7,7 +7,9 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
-use crate::components::{self, DGVOODOO_DLLS, DXVK_DLLS, Platform, XIDI_CONF, XIDI_DLL};
+use crate::components::{
+    self, CLOSE_HOOK_CONFIG, DGVOODOO_DLLS, DXVK_DLLS, Platform, XIDI_CONF, XIDI_DLL,
+};
 use crate::config::{Resolution, Settings};
 use crate::registry::{self, RegWrite};
 
@@ -71,7 +73,9 @@ pub fn plan(
         taken_out.push(XIDI_DLL);
         files.push(("Xidi.ini", None));
     }
-    let mut env = Vec::new();
+    // The close hook (components::CLOSE_HOOK_DLL) reads its setup from
+    // the game's environment, on Windows and under Wine alike.
+    let mut env = vec![(rea_close_hook::ENV, CLOSE_HOOK_CONFIG.to_owned())];
     let mut winebus = Vec::new();
     if platform.wine {
         env.push((

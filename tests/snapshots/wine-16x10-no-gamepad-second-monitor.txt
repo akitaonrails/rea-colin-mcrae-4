@@ -32,6 +32,7 @@ MOVIE_QUALITY = dword:0 (if missing)
 [winebus, seeded when absent]
 
 [environment]
+REA_CLOSE_HOOK=class=PC_CMR4;strategy=terminate
 WINEDLLOVERRIDES=dsound,d3d9,d3d11,dxgi=n,b;mscoree=d;xinput1_3=n
 
 [file dgVoodoo.conf]

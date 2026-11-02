@@ -263,8 +263,8 @@ under `HKCU\Software\Classes\VirtualStore`).
 
 `launcher.log` records what the launcher did and why: the game version and
 its SHA-256, the look and settings, each bundled DLL with its SHA-256, the
-DLL overrides given to the game, the monitor and dgVoodoo output it chose,
-and the `gamepad setup:` step. It starts afresh past 1 MiB. Remove personal
+DLL overrides and close-hook setup (`REA_CLOSE_HOOK`) given to the game,
+the monitor and dgVoodoo output it chose, and the `gamepad setup:` step. It starts afresh past 1 MiB. Remove personal
 paths before posting it.
 
 ## Troubleshooting

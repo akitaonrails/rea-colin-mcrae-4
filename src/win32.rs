@@ -4,7 +4,6 @@
 
 use std::path::Path;
 
-use cmr4_launcher::components::CLOSE_HOOK_CONFIG;
 use cmr4_launcher::display;
 use cmr4_launcher::instance::is_launcher_window;
 use cmr4_launcher::registry::{self, KEY, RegValue, RegWrite};
@@ -192,8 +191,8 @@ fn launcher_window(launcher_exe: &str) -> Option<windows_sys::Win32::Foundation:
 /// carries the DLL overrides, so it works without the Linux helper. CMR04
 /// ignores WM_CLOSE and has no OS-level quit path, so Alt+F4 and the
 /// compositor's close action do nothing: the SDK's close-hook DLL, hooked
-/// into the game's main thread and configured by `REA_CLOSE_HOOK`
-/// ([`CLOSE_HOOK_CONFIG`]), ends the process on those requests.
+/// into the game's main thread and configured by `REA_CLOSE_HOOK` (in
+/// `env`, from the plan), ends the process on those requests.
 pub fn run_game(
     exe: &Path,
     workdir: &Path,
@@ -209,8 +208,10 @@ pub fn run_game(
     for (name, value) in env {
         launch = launch.env(name, value);
     }
-    let game = launch.env(rea_close_hook::ENV, CLOSE_HOOK_CONFIG).spawn()?;
-    let _hook = match game.message_hook(close_hook, c"close_hook") {
+    let game = launch.spawn()?;
+    let export = std::ffi::CString::new(rea_close_hook::EXPORT)
+        .map_err(|error| format!("close hook export name: {error}"))?;
+    let _hook = match game.message_hook(close_hook, &export) {
         Ok(hook) => {
             log("close hook installed (Alt+F4 and window close end the game)");
             Some(hook)

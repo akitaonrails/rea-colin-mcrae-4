@@ -117,8 +117,6 @@ impl Platform {
     }
 }
 
-/// `dgVoodoo.conf`. `widescreen`: whether the runtime's `cmr4.exe` carries
-/// the widescreen fix (a 16:9 resolution on a known build).
 /// `name: SHA-256 (version)` of each bundled DLL, for `launcher.log`.
 pub fn describe(components: &Path) -> Vec<String> {
     let version = |name: &str| match name {
@@ -145,6 +143,8 @@ pub fn describe(components: &Path) -> Vec<String> {
         .collect()
 }
 
+/// `dgVoodoo.conf`. `widescreen`: whether the runtime's `cmr4.exe` carries
+/// the widescreen fix (a 16:9 resolution on a known build).
 pub fn dgvoodoo_conf(settings: &Settings, widescreen: bool, platform: &Platform) -> String {
     let Platform {
         wine,
