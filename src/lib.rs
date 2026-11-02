@@ -2,6 +2,7 @@
 //! `rea_launcher` crate. Win32 calls go through the binary's `win32` module
 //! to `rea_launcher_win32`.
 
+pub mod audience;
 pub mod components;
 pub mod config;
 pub mod display;

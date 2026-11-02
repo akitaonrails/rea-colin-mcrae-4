@@ -10,15 +10,17 @@ mod app {
     use std::fs;
     use std::path::{Path, PathBuf};
 
+    use cmr4_launcher::audience;
     use cmr4_launcher::config::{self, Settings};
     use cmr4_launcher::edition::{self, Prepared};
     use cmr4_launcher::instance::{self, SecondStart};
+    use cmr4_launcher::window::TITLE;
     use cmr4_launcher::{GAME_EXE, components, plan, profile, runtime};
     use rea_launcher::identify::validate_pe32;
     use rea_launcher::log::Log;
     use rea_launcher::{fsx, paths};
-    use rea_launcher_win32::dialog::{self, Icon};
     use rea_launcher_win32::gpu;
+    use rea_launcher_win32::report::{self, Mode};
 
     use crate::{ui, win32};
 
@@ -38,20 +40,27 @@ mod app {
         Log::new(home().join("launcher.log")).line(line);
     }
 
-    /// Shows `text` where the player will see it: the terminal that
-    /// started the launcher (or a redirected stdout), else a dialog.
-    pub fn message(text: &str, error: bool) {
-        use rea_launcher_win32::console::{self, Output};
-        let terminal = console::attach_parent();
-        match console::output(terminal, console::stdout_usable(), true) {
-            Output::Terminal if error => eprintln!("{text}"),
-            Output::Terminal => println!("{text}"),
-            Output::Dialog => {
-                let icon = if error { Icon::Error } else { Icon::Info };
-                dialog::message("Colin McRae Rally 04", text, icon);
-            }
-            Output::Nowhere => {}
+    /// How a message reaches the player in this run (see
+    /// `cmr4_launcher::audience`).
+    pub fn mode() -> Mode {
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        let audience = audience::audience(&args, win32::is_wine());
+        let interactive = audience.interactive;
+        if audience.command {
+            Mode::Command { interactive }
+        } else {
+            Mode::Play { interactive }
         }
+    }
+
+    /// Information for the player (`--help`, `--check`).
+    pub fn note(text: &str) {
+        report::note(TITLE, text, mode(), false);
+    }
+
+    /// An error the launcher stops on.
+    pub fn fatal(text: &str) {
+        report::fatal(TITLE, text, mode());
     }
 
     fn settings_path() -> PathBuf {
@@ -127,7 +136,7 @@ mod app {
         let cli = config::parse_args(raw.clone())?;
         if cli.help {
             log_line("help requested");
-            message(&config::usage(), false);
+            note(&config::usage());
             return Ok(0);
         }
         // Held until the game has exited: a second start brings this
@@ -242,7 +251,7 @@ mod app {
                 text = format!("{text}\n\n{}", edition::unknown_message(&exe.sha256));
             }
             log_line("check passed");
-            message(&text, false);
+            note(&text);
             return Ok(0);
         }
 
@@ -365,7 +374,7 @@ fn main() {
         Ok(code) => std::process::exit(code as i32),
         Err(error) => {
             app::log_line(&format!("error: {error}"));
-            app::message(&error, true);
+            app::fatal(&error);
             std::process::exit(1);
         }
     }

@@ -146,6 +146,15 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- Errors reach the player again under `cmr4-play`, the AppImage and
+  Proton. Since the SDK v0.3.0 update an error such as a wrong game
+  folder went only to the helper's log, because the launcher took the
+  redirected output for a terminal, so the game just never started. Now
+  any error that stops a launch shows a dialog whenever a person may be
+  watching (under Wine always, on Windows unless `--no-window` was given)
+  and is printed to the log too. `--help` and `--check` still print to the
+  terminal, with a dialog only when nobody sees it (SDK
+  `rea_launcher_win32::report`).
 - The Windows build is linked with LLD (`.cargo/config.toml`, i686 and
   x86_64). GNU ld 2.47 left some kernel32 imports of `CMR4Launcher.exe`
   outside every import descriptor, so the launcher could crash on its
