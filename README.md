@@ -16,17 +16,64 @@ This repository and its packages contain **no game files**. The launcher never
 modifies the installed game folder; everything it changes lives in a private
 copy (the *runtime*).
 
-## What the launcher fixes
+## Problems it solves
 
-| Problem on a modern PC | What the launcher does |
-| --- | --- |
-| The game is 4:3, and its widescreen patch is easy to get wrong: rendered natively at 16:9 the 3D view comes out 25% too narrow (cars look squeezed). | Applies the tested "16:9 Low" patch to the private `cmr4.exe` only, lets the game render 4:3 (2880x2160 for a 4K screen) and has dgVoodoo stretch that frame to 16:9. That is the arrangement the patch was made for, so cars and scenery keep their real proportions with the wider widescreen view. |
-| With a portrait monitor set as primary, the game and its wrapper fit the picture to the portrait screen; the compositor then stretches it into a thin, squashed strip on the landscape screen. | Picks the largest landscape monitor and hands it to dgVoodoo as its fullscreen output. Under Wine the game runs borderless; gamescope and native Windows use normal fullscreen. |
-| The game ignores window-close requests: Alt+F4 and a compositor's close (Super+W in Hyprland) do nothing, so it had to be killed. | Loads a small hook (`cmr4close.dll`, built from this repository) into the game; Alt+F4 or closing the window ends it. Other windows' close messages (such as the intro movie's) are ignored. |
-| Modern pads either don't drive at all or need a fiddly in-game setup; the game's own menu for choosing the pad can freeze under Wine. | Xidi presents the pad as a classic gamepad: stick steers, RT/LT are analogue pedals. For a profile whose controls were never set up, the launcher selects that pad, analogue pedals and their axis tuning in the game's `OPTIONS`, so a new player can drive straight away. Profiles set up by hand are left alone. |
-| D3D9-era rendering and Wine don't mix well. | Installs the tested dgVoodoo2 2.80 `D3D9.dll`; under Wine/Proton it adds DXVK 3.1.1 so the game draws through Vulkan. |
-| A fresh install needs registry paths and first-run defaults, or it crashes. | Writes the install paths every launch and seeds the game's graphics defaults only when they are missing. |
-| Your installation and saves are at risk from patches and wrappers. | The installed folder is only read. The runtime keeps the patched executable, wrappers, settings and saves, and later launches never overwrite your saves, settings or your own DLL mods. |
+Each item below is a problem the game has on a modern PC, followed by what
+the launcher does about it.
+
+**Runs on today's computers**
+
+- **Crashes on a fresh install.** CMR04 needs install paths and first-run
+  graphics defaults in the registry. The launcher writes the paths on every
+  launch and adds the defaults only when they are missing.
+- **Old Direct3D 9 renderer.** The launcher installs the tested dgVoodoo2
+  2.80 wrapper. Under Wine or Proton it also adds DXVK, so the game draws
+  through Vulkan on your graphics card.
+- **Closing the game does nothing.** CMR04 ignores Alt+F4 and window-close
+  requests (Super+W in Hyprland), so it had to be killed. A small hook
+  built from this repository (`cmr4close.dll`) now ends it when you press
+  Alt+F4 or close its window.
+
+**Picture**
+
+- **Widescreen that squeezes the cars.** The known 16:9 patch is easy to
+  get wrong. Rendered directly at 16:9, cars and scenery come out 25% too
+  narrow. The patch was made for a 4:3 picture stretched to 16:9, so the
+  launcher has the game render 4:3 (2880x2160 for a 4K screen) and dgVoodoo
+  stretch it. You get correct proportions and the wider view.
+- **A thin, squashed strip with two monitors.** With a portrait monitor
+  set as primary, the picture was fitted to that portrait screen and then
+  stretched onto the landscape one. The launcher now sends the game to
+  your largest landscape monitor.
+- **Picking settings.** Choose a look in one click: Original, 4K (the
+  largest exact 16:9 that fits your screen), Steam Deck or Custom. There
+  is also an optional frame-rate cap and forced vsync.
+- **Still to do:** the HUD (speedometer, timer) is drawn for 4:3 and stays
+  slightly wide at 16:9. Fixing it would need another patch to the game.
+
+**Gamepads**
+
+- **The pad works in menus but not in a race.** In our tests with Wine
+  alone, the pad's buttons reached the game but its stick and triggers
+  didn't, and the old mapping turned the pad into keyboard keys, which also
+  hid the axes. Bundled Xidi now presents a classic gamepad: the
+  left stick steers, RT and LT are analogue pedals, and a resting thumb on
+  the stick can't open the throttle.
+- **Every new player had to set up the pad.** New profiles start on the
+  keyboard, and choosing the controller in the game's own menu can freeze
+  it under Wine. For a profile whose controls were never set up, the
+  launcher selects your pad, analogue pedals and the game's axis tuning,
+  so you can drive straight away. A profile you set up yourself is left as
+  it is.
+
+**Your files**
+
+- **Patches and wrappers could damage your install.** The installed game
+  folder is only read, never changed. A private copy (the runtime) holds
+  the patched `cmr4.exe`, the wrappers, settings and saves.
+- **Updates could overwrite your saves.** Later launches update the
+  runtime without overwriting your saves, settings or DLL mods you added
+  yourself.
 
 ![CMR04 in a stage at 16:9, driven with a gamepad](docs/images/game.png)
 
