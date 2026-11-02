@@ -21,6 +21,7 @@ components/dinput8.dll
 components/d3d11.dll
 components/dxgi.dll
 linux/cmr4-play
+linux/rea-play.sh
 linux/README.md
 licenses/dgVoodoo2/README.md
 licenses/DXVK/LICENSE

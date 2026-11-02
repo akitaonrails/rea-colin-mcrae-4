@@ -39,7 +39,14 @@ Optional environment:
 | `SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS` | Existing value is preserved independently | `1` |
 
 Launcher paths containing spaces or apostrophes are passed as arguments, not
-interpolated into shell source. Tests use fake commands and harmless helper
+interpolated into shell source. The settings window's error output goes to
+`~/.config/cmr4-launcher/settings.log`.
+
+`cmr4-play` holds only CMR04's choices; the session, GPU, gamescope and
+prefix handling is the shared play library `rea-play.sh` from
+[rea-launcher-sdk](https://github.com/akitaonrails/rea-launcher-sdk). The zip
+and the AppImage ship it beside `cmr4-play`; in this repository it is the
+vendored `sdk/rea-play.sh`. Tests use fake commands and harmless helper
 processes only:
 
 ```sh

@@ -22,6 +22,8 @@ cp "$EXE" "$PKG/CMR4Launcher.exe"
 cp "$ROOT/README.md" "$ROOT/THIRD_PARTY.md" "$ROOT/LICENSE-MIT" "$ROOT/LICENSE-APACHE" "$PKG/"
 cp -r "$ROOT/docs" "$PKG/docs"
 cp "$ROOT/linux/cmr4-play" "$ROOT/linux/README.md" "$PKG/linux/"
+# The shared play library cmr4-play sources, beside it.
+cp "$ROOT/sdk/rea-play.sh" "$PKG/linux/rea-play.sh"
 chmod +x "$PKG/linux/cmr4-play"
 "$HERE/install-components.sh" "$PKG" "$CACHE"
 cp "$HOOK" "$PKG/components/cmr4close.dll"

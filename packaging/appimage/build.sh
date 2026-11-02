@@ -42,7 +42,7 @@ for tool in function_grep.pl widl winebuild winecpp winedump wineg++ winegcc win
 done
 cp "$PKG/CMR4Launcher.exe" "$APPDIR/usr/lib/cmr4/"
 cp -r "$PKG/components" "$APPDIR/usr/lib/cmr4/components"
-cp "$PKG/linux/cmr4-play" "$APPDIR/usr/lib/cmr4/"
+cp "$PKG/linux/cmr4-play" "$PKG/linux/rea-play.sh" "$APPDIR/usr/lib/cmr4/"
 mkdir -p "$APPDIR/usr/share/doc/wine" "$APPDIR/usr/share/doc/cmr4"
 cp "$HERE"/wine/* "$APPDIR/usr/share/doc/wine/"
 cp "$PKG/README.md" "$PKG/THIRD_PARTY.md" "$PKG/LICENSE-MIT" "$PKG/LICENSE-APACHE" \

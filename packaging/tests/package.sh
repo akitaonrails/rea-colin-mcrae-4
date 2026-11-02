@@ -8,7 +8,7 @@ PKG=$T/pkg
 mkdir -p "$PKG/components" "$PKG/linux" "$PKG/docs/images" "$PKG/licenses/dgVoodoo2" "$PKG/licenses/DXVK" "$PKG/licenses/Xidi/ThirdParty"
 for file in CMR4Launcher.exe README.md docs/ENHANCEMENTS.md docs/RESEARCH.md docs/RUNTIME_NOTES.md docs/images/game.png docs/images/launcher.png docs/images/launcher-picture.png THIRD_PARTY.md LICENSE-MIT LICENSE-APACHE \
   components/D3D9.dll components/cmr4close.dll \
-  components/dinput8.dll components/d3d11.dll components/dxgi.dll linux/cmr4-play linux/README.md \
+  components/dinput8.dll components/d3d11.dll components/dxgi.dll linux/cmr4-play linux/rea-play.sh linux/README.md \
   licenses/DXVK/LICENSE \
   licenses/dgVoodoo2/README.md \
   licenses/Xidi/LICENSE licenses/Xidi/README.md \
