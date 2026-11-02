@@ -32,6 +32,13 @@ MOVIE_QUALITY = dword:0 (if missing)
 [winebus, seeded when absent]
 Map Controllers = dword:1
 
+[Wine per-program DLL overrides for cmr4.exe, set when absent]
+dinput8 = native,builtin
+dsound = native,builtin
+d3d9 = native,builtin
+d3d11 = native,builtin
+dxgi = native,builtin
+
 [environment]
 REA_CLOSE_HOOK=class=PC_CMR4;strategy=terminate
 WINEDLLOVERRIDES=dinput8,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d

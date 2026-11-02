@@ -38,7 +38,7 @@ All notable changes to this project. The format follows
   standard: no patching by guesswork). The game still runs with its own
   view, and the message now says so and asks for the code so we can add
   that build.
-- Updated rea-launcher-sdk to v0.3.2 (crates, vendored `sdk/` with the
+- Updated rea-launcher-sdk to v0.3.3 (crates, vendored `sdk/` with the
   SDK's standards and playbooks in `sdk/docs/`, CI workflows). The Linux
   helper now reads `display_mode`, the resolution and the scaler in any
   case, and `--flag=value` works like `--flag value`. Screen
@@ -152,6 +152,17 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- Under plain Wine or Proton (the launcher started without `cmr4-play`,
+  e.g. as a Steam non-Steam game) the game loaded Wine's own `dinput8`
+  and `dsound` instead of Xidi and a player's DSOAL: Wine ignores
+  `WINEDLLOVERRIDES` in the game's environment block. The launcher now
+  also writes `cmr4.exe`'s per-program overrides
+  (`HKCU\Software\Wine\AppDefaults\cmr4.exe\DllOverrides`:
+  `dinput8` with the gamepad on, `dsound`, `d3d9`, `d3d11`, `dxgi` as
+  `native,builtin`), only where no value exists, and takes Xidi's back
+  when the gamepad is turned off (rea-launcher-sdk v0.3.3). Checked in
+  the game with `WINEDEBUG=+loaddll`: all five load from the private copy
+  as native, under plain `wine` and through `cmr4-play`.
 - With a `cmr4.exe` the launcher doesn't know, the Play tab ran under the
   footer: the long report text pushed the private-copy folder and its
   note below the Play button (seen in the real-game run of 2026-11-02).

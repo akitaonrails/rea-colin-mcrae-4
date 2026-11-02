@@ -336,6 +336,13 @@ mod app {
         if !plan.winebus.is_empty() && win32::map_wine_controllers()? {
             log_line("Wine: winebus Map Controllers seeded (absent before)");
         }
+        for line in win32::app_dll_overrides(
+            GAME_EXE,
+            &plan.app_dll_overrides,
+            &plan.app_dll_overrides_removed,
+        )? {
+            log_line(&line);
+        }
         if plan.prefer_fast_gpu
             && let Err(error) = gpu::prefer_fast_gpu(&runtime_exe)
         {

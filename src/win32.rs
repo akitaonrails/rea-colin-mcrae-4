@@ -69,6 +69,47 @@ pub fn map_wine_controllers() -> Result<bool, String> {
     Ok(wine::seed_winebus(&registry::WINEBUS_DEFAULTS)?)
 }
 
+/// Sets the game's per-program DLL overrides under Wine (`add`, each
+/// `native,builtin` where no value exists) and takes back ours for
+/// components turned off (`remove`). Wine's loader ignores
+/// `WINEDLLOVERRIDES` in the game's environment block; this key it reads
+/// in any prefix (plain Proton included). Returns log lines.
+pub fn app_dll_overrides(exe: &str, add: &[&str], remove: &[&str]) -> Result<Vec<String>, String> {
+    fn native_first<'a>(dlls: &[&'a str]) -> Vec<(&'a str, wine::DllMode)> {
+        dlls.iter()
+            .map(|dll| (*dll, wine::DllMode::NativeThenBuiltin))
+            .collect()
+    }
+    let (add, remove) = (native_first(add), native_first(remove));
+    let mut lines = Vec::new();
+    let removed = wine::remove_app_dll_overrides(exe, &remove)?;
+    if !removed.is_empty() {
+        lines.push(format!(
+            "Wine DLL overrides for {exe}: removed ours for {}",
+            removed.join(", ")
+        ));
+    }
+    let applied = wine::app_dll_overrides(exe, &add)?;
+    if !applied.written.is_empty() {
+        lines.push(format!(
+            "Wine DLL overrides for {exe}: native,builtin set for {}",
+            applied.written.join(", ")
+        ));
+    }
+    if !applied.ours.is_empty() {
+        lines.push(format!(
+            "Wine DLL overrides for {exe}: already native,builtin for {}",
+            applied.ours.join(", ")
+        ));
+    }
+    for (dll, value) in &applied.player {
+        lines.push(format!(
+            "Wine DLL overrides for {exe}: {dll} kept as the player set it (\"{value}\")"
+        ));
+    }
+    Ok(lines)
+}
+
 /// The player's own `WINEDLLOVERRIDES`, merged into the game's.
 pub fn inherited_overrides() -> Option<String> {
     let vars: Vec<_> = std::env::vars_os().collect();
@@ -234,6 +275,55 @@ mod tests {
 
     fn wide(text: &str) -> Vec<u16> {
         text.encode_utf16().chain([0]).collect()
+    }
+
+    /// Under Wine (`scripts/wine-test`): cmr4.exe's per-program overrides
+    /// round-trip through the prefix's registry, keep a player's value and
+    /// take back only ours. On native Windows nothing is written.
+    #[test]
+    fn wine_dll_overrides_round_trip_and_keep_the_players_value() {
+        use rea_launcher_win32::reg::Hive;
+        let exe = "cmr4-launcher-test.exe";
+        let key = Key::create(Hive::CurrentUser, &wine::app_defaults_key(exe)).unwrap();
+        for dll in ["d3d9", "dinput8", "dsound"] {
+            let _ = key.delete_value(dll);
+        }
+        if !is_wine() {
+            assert!(app_dll_overrides(exe, &["d3d9"], &[]).unwrap().is_empty());
+            return;
+        }
+        key.set_string("dsound", "builtin").unwrap();
+        let first = app_dll_overrides(exe, &["dinput8", "d3d9", "dsound"], &[]).unwrap();
+        assert!(
+            first
+                .iter()
+                .any(|l| l.ends_with("native,builtin set for dinput8, d3d9")),
+            "{first:?}"
+        );
+        assert!(
+            first
+                .iter()
+                .any(|l| l.contains("dsound kept as the player set it")),
+            "{first:?}"
+        );
+        assert_eq!(
+            key.string("d3d9").unwrap().as_deref(),
+            Some("native,builtin")
+        );
+        let again = app_dll_overrides(exe, &["dinput8", "d3d9"], &[]).unwrap();
+        assert_eq!(again.len(), 1, "{again:?}");
+        assert!(again[0].ends_with("already native,builtin for dinput8, d3d9"));
+        // The gamepad turned off: Xidi's override goes, the player's stays.
+        let off = app_dll_overrides(exe, &["d3d9"], &["dinput8", "dsound"]).unwrap();
+        assert!(
+            off.iter().any(|l| l.ends_with("removed ours for dinput8")),
+            "{off:?}"
+        );
+        assert_eq!(key.string("dinput8").unwrap(), None);
+        assert_eq!(key.string("dsound").unwrap().as_deref(), Some("builtin"));
+        for dll in ["d3d9", "dinput8", "dsound"] {
+            let _ = key.delete_value(dll);
+        }
     }
 
     #[test]

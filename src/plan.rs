@@ -33,6 +33,13 @@ pub struct Plan {
     pub winebus: Vec<(&'static str, u32)>,
     /// The game's environment changes.
     pub env: Vec<(&'static str, String)>,
+    /// Wine only: DLLs set to `native,builtin` in `cmr4.exe`'s per-program
+    /// overrides (`HKCU\Software\Wine\AppDefaults\cmr4.exe\DllOverrides`),
+    /// where no value exists yet.
+    pub app_dll_overrides: Vec<&'static str>,
+    /// Wine only: our per-program overrides taken back (a component
+    /// turned off); a player's own value is kept.
+    pub app_dll_overrides_removed: Vec<&'static str>,
     /// Arguments `cmr4.exe` gets (none: it takes none).
     pub args: Vec<String>,
     /// Windows only: the fast-GPU preference for the runtime's exe.
@@ -77,7 +84,13 @@ pub fn plan(
     // the game's environment, on Windows and under Wine alike.
     let mut env = vec![(rea_close_hook::ENV, CLOSE_HOOK_CONFIG.to_owned())];
     let mut winebus = Vec::new();
+    let mut app_dll_overrides = Vec::new();
+    let mut app_dll_overrides_removed = Vec::new();
     if platform.wine {
+        app_dll_overrides = components::app_override_dlls(controller);
+        if !controller {
+            app_dll_overrides_removed.push("dinput8");
+        }
         env.push((
             rea_launcher::wine::DLL_OVERRIDES,
             components::wine_overrides(inherited_overrides, controller),
@@ -99,6 +112,8 @@ pub fn plan(
         registry: registry::writes(game_mode, runtime, existing_size),
         winebus,
         env,
+        app_dll_overrides,
+        app_dll_overrides_removed,
         args: Vec::new(),
         prefer_fast_gpu: !platform.wine,
         gamepad_profile: controller,
@@ -133,6 +148,18 @@ impl Plan {
         let _ = writeln!(out, "\n[winebus, seeded when absent]");
         for (name, value) in &self.winebus {
             let _ = writeln!(out, "{name} = dword:{value}");
+        }
+        if !self.app_dll_overrides.is_empty() || !self.app_dll_overrides_removed.is_empty() {
+            let _ = writeln!(
+                out,
+                "\n[Wine per-program DLL overrides for cmr4.exe, set when absent]"
+            );
+            for dll in &self.app_dll_overrides {
+                let _ = writeln!(out, "{dll} = native,builtin");
+            }
+            for dll in &self.app_dll_overrides_removed {
+                let _ = writeln!(out, "{dll}: ours removed");
+            }
         }
         let _ = writeln!(out, "\n[environment]");
         for (name, value) in &self.env {

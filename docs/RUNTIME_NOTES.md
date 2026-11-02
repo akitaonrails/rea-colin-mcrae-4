@@ -130,6 +130,31 @@ Two notes:
   code into the issue form (`unknown-4k-fixed-root.jpg`).
 - README screenshots retaken from this build (`9ec2e57`).
 
+### Wine DLL overrides (rea-launcher-sdk v0.3.3)
+
+The launcher started with plain `wine` inside a headless gamescope (no
+`cmr4-play`, no `WINEDLLOVERRIDES` in its environment: `env -i` with
+only `HOME`, `USER`, `PATH`, `XDG_RUNTIME_DIR`, `WINEPREFIX`, `WINEDEBUG`),
+`WINEDEBUG=+loaddll`, then Alt+F4. Loader lines for the game's DLLs
+(`.work/realgame/logs/plain-*-v033/loaddll.txt`):
+
+| DLL (from the private copy) | Before (`5a51cb6`, SDK v0.3.2) | After (SDK v0.3.3, per-program overrides) |
+|---|---|---|
+| `d3d9.dll` (dgVoodoo 2.80) | native | native |
+| `D3D11.DLL`, `DXGI.DLL` (DXVK 3.1.1) | native | native |
+| `DINPUT8.dll` (Xidi) | **builtin** (Wine's, so no stick/pedal mapping) | native (it then loads Wine's `system32\dinput8.dll` itself, as `Xidi.ini` says) |
+| `DSOUND.dll` (the player's DSOAL, copied from the game folder) | **builtin** | native |
+| `rea_close_hook.dll` | native | native |
+
+`launcher.log`: "Wine DLL overrides for cmr4.exe: native,builtin set for
+dinput8, dsound, d3d9, d3d11, dxgi" on the first run, "already" after.
+Through `cmr4-play` (which also exports `WINEDLLOVERRIDES` in the Unix
+environment) all five load native as before
+(`helper-after-v033/loaddll.txt`). Alt+F4 ended the game at once in all
+three runs (close hook). dgVoodoo's `D3DImm.dll` is not shipped (only its
+`D3D9.dll`; see "Final component and display policy"), so there is no
+d3dimm to check.
+
 ### What a person still has to do
 
 - Look at the screenshots: `.work/realgame/logs/look-original/stage.jpg`,

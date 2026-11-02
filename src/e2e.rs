@@ -320,6 +320,31 @@ fn gamepad_switch_and_flag_reach_xidi_the_environment_and_winebus() {
         env(&on, "WINEDLLOVERRIDES"),
         Some("dinput8,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d")
     );
+    // Wine's loader ignores WINEDLLOVERRIDES in the game's environment
+    // block (SDK v0.3.3): the same DLLs go into cmr4.exe's per-program
+    // overrides, and Xidi's is taken back when the gamepad is off.
+    assert_eq!(
+        on.app_dll_overrides,
+        ["dinput8", "dsound", "d3d9", "d3d11", "dxgi"]
+    );
+    assert!(on.app_dll_overrides_removed.is_empty());
+    assert_eq!(off.app_dll_overrides, ["dsound", "d3d9", "d3d11", "dxgi"]);
+    assert_eq!(off.app_dll_overrides_removed, ["dinput8"]);
+}
+
+#[test]
+fn native_windows_writes_no_wine_dll_overrides() {
+    let settings = Settings::parse_file("").0.resolve_look(UHD);
+    let plan = plan::plan(
+        &settings,
+        true,
+        Path::new(r"C:\CMR4"),
+        &Platform::new(false, false, None),
+        None,
+        None,
+    );
+    assert!(plan.app_dll_overrides.is_empty());
+    assert!(plan.app_dll_overrides_removed.is_empty());
 }
 
 #[test]

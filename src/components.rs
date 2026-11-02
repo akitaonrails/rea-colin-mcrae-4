@@ -75,6 +75,20 @@ ActiveVirtualControllerMask = 0x01
 
 pub const WINE_OVERRIDES: &str = "dinput8,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d";
 
+/// The DLLs `WINE_OVERRIDES` loads native-then-builtin, for Wine's
+/// per-program overrides of `cmr4.exe` (Wine's loader ignores
+/// `WINEDLLOVERRIDES` in the game's environment block). Xidi's `dinput8`
+/// only with the gamepad on; `dsound` keeps a player's DSOAL.
+pub fn app_override_dlls(controller: bool) -> Vec<&'static str> {
+    let mut dlls = if controller {
+        vec!["dinput8"]
+    } else {
+        Vec::new()
+    };
+    dlls.extend(["dsound", "d3d9", "d3d11", "dxgi"]);
+    dlls
+}
+
 pub fn validate(components: &Path, controller: bool, wine: bool) -> Result<(), String> {
     let mut names = DGVOODOO_DLLS.to_vec();
     if controller {
