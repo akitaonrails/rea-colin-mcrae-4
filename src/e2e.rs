@@ -413,11 +413,15 @@ fn play_waits_for_the_game_folder_and_says_why() {
     ui.state_mut().form.game = fake_game(&dir).display().to_string();
     ui.run();
     ui.run();
-    // The synthetic exe is an unknown build: playable, with the report link.
+    // The synthetic exe is an unknown build: playable, with the report
+    // button, which carries the link and the code.
+    let report = ui.get_by_role_and_label(Role::Button, "Report this version…");
+    let about = testing::description(&report).unwrap();
     assert!(
-        ui.query_by_label_contains("issues/new?template=unknown-edition.yml")
-            .is_some()
+        about.contains("issues/new?template=unknown-edition.yml"),
+        "{about}"
     );
+    assert!(about.contains("(code: "), "{about}");
     assert!(!testing::disabled(
         &ui.get_by_role_and_label(Role::Button, "Play")
     ));
@@ -425,6 +429,26 @@ fn play_waits_for_the_game_folder_and_says_why() {
     // First run: the template, the game folder, the recommended look's values.
     assert!(saved.starts_with("# Colin McRae Rally 04 launcher settings."));
     assert!(has_line(&saved, "resolution = 3840x2160"));
+}
+
+/// Found in the real-game run of 2026-11-02: with an unknown build the
+/// report text and button pushed the Play tab down until the private-copy
+/// field and its note ran under the footer and the Play button.
+#[test]
+fn an_unknown_build_keeps_the_play_tab_above_the_footer() {
+    let (dir, _clean) = scratch("unknown-layout");
+    let (ui, _) = open(&dir, "");
+    assert!(ui.query_by_label("Report this version…").is_some());
+    let footer_top = ui.get_by_role_and_label(Role::Button, "Play").rect().top();
+    let note = ui.get_by_label_contains("Where the launcher keeps its own copy");
+    assert!(
+        note.rect().bottom() <= footer_top,
+        "the private-copy note ({:?}) runs under the footer (top {footer_top})",
+        note.rect()
+    );
+    for browse in ui.get_all_by_role_and_label(Role::Button, "Browse…") {
+        assert!(browse.rect().bottom() <= footer_top, "{:?}", browse.rect());
+    }
 }
 
 #[test]

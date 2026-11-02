@@ -85,6 +85,17 @@ impl Prepared {
     }
 }
 
+/// The issue form with the build's SHA-256 already filled in (GitHub issue
+/// forms take a field's value from a query parameter named by its `id`).
+pub fn report_url(sha256: &str) -> String {
+    format!("{ISSUE_URL}&sha256={sha256}")
+}
+
+/// The window's one-line note for an unknown build; the code travels in
+/// the Report button's link ([`report_url`]) and `launcher.log`.
+pub const UNKNOWN_SHORT: &str =
+    "A cmr4.exe the launcher doesn't know yet: it plays without the widescreen fix.";
+
 /// The plain-language note for an unknown build, with the report link.
 pub fn unknown_message(sha256: &str) -> String {
     format!(
@@ -169,6 +180,14 @@ mod tests {
         // non-negotiable 7); the message says so and how to get it.
         assert!(message.contains("widescreen fix only to builds it has checked"));
         assert!(message.contains("we'll add your build"));
+    }
+
+    #[test]
+    fn the_report_link_fills_in_the_forms_sha256_field() {
+        let form = include_str!("../.github/ISSUE_TEMPLATE/unknown-edition.yml");
+        assert!(form.contains("    id: sha256\n"));
+        assert_eq!(report_url("abc"), format!("{ISSUE_URL}&sha256=abc"));
+        assert!(UNKNOWN_SHORT.contains("without the widescreen fix"));
     }
 
     #[test]

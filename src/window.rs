@@ -83,7 +83,8 @@ pub enum Check {
     Empty,
     /// A known build: what to say.
     Found(String),
-    /// A build the launcher doesn't know: playable, without the fix.
+    /// A build the launcher doesn't know: playable, without the fix. Holds
+    /// its SHA-256.
     Unknown(String),
     Problem(String),
 }
@@ -126,7 +127,7 @@ pub fn check_game(folder: &str, widescreen: bool) -> Check {
             let exe = edition::prepare(&bytes, widescreen);
             match exe.edition {
                 Some(name) => Check::Found(format!("Found {name}. Ready to play.")),
-                None => Check::Unknown(edition::unknown_message(&exe.sha256)),
+                None => Check::Unknown(exe.sha256),
             }
         }
         Err(error) => Check::Problem(format!("Can't read {GAME_EXE}: {error}")),
@@ -340,17 +341,28 @@ impl Window {
             self.error = None;
         }
         mark_rendered(ui.ctx(), "game");
+        // One row whatever the check says, so the Play tab never runs
+        // under the footer: an unknown build gets a short note and the
+        // Report button, whose link carries the code (the long message with
+        // the code is its description and is in launcher.log).
         let (note, color) = match &self.check {
             Check::Empty => (option("game").description.to_string(), MUTED),
             Check::Found(name) => (name.clone(), INK),
-            Check::Unknown(message) | Check::Problem(message) => (message.clone(), ERROR),
+            Check::Unknown(_) => (edition::UNKNOWN_SHORT.to_string(), ERROR),
+            Check::Problem(message) => (message.clone(), ERROR),
         };
-        ui.add(egui::Label::new(egui::RichText::new(note).font(body(13.0)).color(color)).wrap());
-        if matches!(self.check, Check::Unknown(_))
-            && widgets::outline_button(ui, "Report this version…").clicked()
-        {
-            (self.host.open_url)(edition::ISSUE_URL);
-        }
+        ui.horizontal(|ui| {
+            if let Check::Unknown(sha256) = &self.check {
+                let report = widgets::outline_button(ui, "Report this version…");
+                widgets::name_control(&report, None, Some(&edition::unknown_message(sha256)));
+                if report.clicked() {
+                    (self.host.open_url)(&edition::report_url(sha256));
+                }
+            }
+            ui.add(
+                egui::Label::new(egui::RichText::new(note).font(body(13.0)).color(color)).wrap(),
+            );
+        });
         ui.add_space(10.0);
         self.look_cards(ui);
         ui.add_space(12.0);

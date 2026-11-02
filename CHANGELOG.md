@@ -152,6 +152,12 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- With a `cmr4.exe` the launcher doesn't know, the Play tab ran under the
+  footer: the long report text pushed the private-copy folder and its
+  note below the Play button (seen in the real-game run of 2026-11-02).
+  The window now says it in one line next to a **Report this version…**
+  button, whose link fills the code into the issue form; the full text
+  with the code is still in `launcher.log`.
 - Errors reach the player again under `cmr4-play`, the AppImage and
   Proton. Since the SDK v0.3.0 update an error such as a wrong game
   folder went only to the helper's log, because the launcher took the
