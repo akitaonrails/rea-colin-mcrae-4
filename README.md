@@ -45,8 +45,8 @@ retail discs, and other pad models. Details and the evidence behind each fix:
 
 ## Download
 
-- **Windows:** [CMR4Launcher-v0.1.0.zip](https://github.com/akitaonrails/rea-colin-mcrae-4/releases/latest/download/CMR4Launcher-v0.1.0.zip)
-- **Linux AppImage:** [CMR4Launcher-v0.1.0-x86_64.AppImage](https://github.com/akitaonrails/rea-colin-mcrae-4/releases/latest/download/CMR4Launcher-v0.1.0-x86_64.AppImage)
+- **Windows:** [CMR4Launcher-v0.2.0.zip](https://github.com/akitaonrails/rea-colin-mcrae-4/releases/latest/download/CMR4Launcher-v0.2.0.zip)
+- **Linux AppImage:** [CMR4Launcher-v0.2.0-x86_64.AppImage](https://github.com/akitaonrails/rea-colin-mcrae-4/releases/latest/download/CMR4Launcher-v0.2.0-x86_64.AppImage)
 
 ## What you need
 
