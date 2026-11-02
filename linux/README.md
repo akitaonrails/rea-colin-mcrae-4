@@ -54,7 +54,12 @@ linux/cmr4-play stop     # stop our session, then the prefix's wineserver
 It needs Wine. If gamescope is installed and not already running, the
 helper uses the configured resolution for both the game's size and the
 output, fits it to the screen and scales with the fixed `nis` filter (there
-is no scaler setting). Without gamescope it starts the game directly. To
+is no scaler setting). A look with no resolution of its own sets the size
+the way it sets the game's: Steam Deck 1280x800, Widescreen your screen
+(the launcher then picks the largest 16:9 inside it), Original 1024x768.
+`--look` and `--resolution` given to `cmr4-play --play` count for that run,
+and win over `launcher.cfg`. With neither set the size is 1024x768.
+Without gamescope it starts the game directly. To
 run Wine and gamescope inside a container such as a distrobox, set
 `CMR4_RUN` to a wrapper command.
 

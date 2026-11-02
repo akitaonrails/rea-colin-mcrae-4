@@ -169,6 +169,13 @@ All notable changes to this project. The format follows
 - `--check` while another launcher (or the game it started) is open now
   says so and exits with 1, instead of bringing that window forward and
   exiting 0, which a script read as a passed check.
+- `cmr4-play`: a look set in `launcher.cfg` or with `--look`, with no
+  resolution next to it, sized gamescope at the 1024x768 fallback: the
+  Steam Deck look's 1280x800 ran in a 1024x768 output, and Widescreen
+  shrank to 1024x576 (the largest 16:9 in that output). gamescope
+  now gets the look's size (Steam Deck 1280x800, Widescreen the screen,
+  Original 1024x768), and `--resolution`/`--look` on `cmr4-play --play`
+  count for that run like they do for the launcher.
 - The Windows build is linked with LLD (`.cargo/config.toml`, i686 and
   x86_64). GNU ld 2.47 left some kernel32 imports of `CMR4Launcher.exe`
   outside every import descriptor, so the launcher could crash on its
