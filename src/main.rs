@@ -8,12 +8,16 @@ mod win32;
 #[cfg(windows)]
 mod app {
     use std::fs;
-    use std::io::Write as _;
     use std::path::{Path, PathBuf};
 
     use cmr4_launcher::config::{self, Settings};
     use cmr4_launcher::patch::{self, Outcome};
-    use cmr4_launcher::{GAME_EXE, components, pe, profile, registry, runtime};
+    use cmr4_launcher::{GAME_EXE, components, profile, registry, runtime};
+    use rea_launcher::identify::validate_pe32;
+    use rea_launcher::log::Log;
+    use rea_launcher::{fsx, paths};
+    use rea_launcher_win32::dialog::{self, Icon};
+    use rea_launcher_win32::gpu;
 
     use crate::{ui, win32};
 
@@ -27,16 +31,16 @@ mod app {
             .join("CMR4Launcher")
     }
 
+    /// `launcher.log`, never truncated (as before the shared SDK).
     pub fn log_line(line: &str) {
-        let dir = home();
-        let _ = fs::create_dir_all(&dir);
-        if let Ok(mut file) = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(dir.join("launcher.log"))
-        {
-            let _ = writeln!(file, "{line}");
-        }
+        Log::new(home().join("launcher.log"))
+            .with_limit(u64::MAX)
+            .line(line);
+    }
+
+    pub fn message(text: &str, error: bool) {
+        let icon = if error { Icon::Error } else { Icon::Info };
+        dialog::message("Colin McRae Rally 04", text, icon);
     }
 
     fn settings_path() -> PathBuf {
@@ -69,7 +73,7 @@ mod app {
         let path = game.join(GAME_EXE);
         let bytes =
             fs::read(&path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-        pe::validate_pe32(&bytes).map_err(|error| format!("{}: {error}", path.display()))?;
+        validate_pe32(&bytes).map_err(|error| format!("{}: {error}", path.display()))?;
         let mut patched = bytes.clone();
         let outcome = patch::widescreen(&mut patched, widescreen)
             .map_err(|error| format!("{}: {error}", path.display()))?;
@@ -88,8 +92,8 @@ mod app {
         let Some(text) = text else {
             return Ok(());
         };
-        runtime::write_atomic(path, text.as_bytes())
-            .map_err(|error| format!("cannot write {}: {error}", path.display()))
+        // The error names the file.
+        fsx::write_atomic(path, text).map_err(|error| format!("cannot write {error}"))
     }
 
     /// Points an untouched game profile at the connected pad (see `profile`).
@@ -113,7 +117,7 @@ mod app {
         let cli = config::parse_args(raw.clone())?;
         if cli.help {
             log_line("help requested");
-            win32::message("Colin McRae Rally 04", config::USAGE, false);
+            message(config::USAGE, false);
             return Ok(0);
         }
         let wine = win32::is_wine();
@@ -124,7 +128,7 @@ mod app {
             cli.settings_window || (!cli.no_window && raw.iter().all(|arg| arg == "--linux"));
         if show_window {
             if wine {
-                match win32::prefer_gpu_opengl() {
+                match gpu::prefer_glx() {
                     Ok(true) => log_line("Wine settings window: OpenGL through GLX (UseEGL=N)"),
                     Ok(false) => {}
                     Err(error) => log_line(&format!("warning: {error}")),
@@ -171,15 +175,12 @@ mod app {
         log_line(&format!("resolution: {}", settings.resolution().value()));
         let game = find_game(&settings)?;
         let cwd = std::env::current_dir().map_err(|error| format!("current directory: {error}"))?;
-        let game = runtime::canonical_existing(&game, &cwd)
-            .map_err(|error| format!("game folder {}: {error}", game.display()))?;
-        let game = runtime::simplify_extended_length(&game);
+        let game = runtime::game_folder(&game, &cwd)?;
         let runtime = settings
             .runtime
             .clone()
             .unwrap_or_else(|| home().join("CMR4"));
-        let runtime = runtime::resolve(&runtime, &cwd)?;
-        let runtime = runtime::simplify_extended_length(&runtime);
+        let runtime = paths::resolve(&runtime, &cwd)?;
         settings.game = Some(game.clone());
         settings.runtime = Some(runtime.clone());
         log_line(&format!("game: {}", game.display()));
@@ -206,7 +207,7 @@ mod app {
                 patch_outcome
             );
             log_line("check passed");
-            win32::message("Colin McRae Rally 04", &text, false);
+            message(&text, false);
             return Ok(0);
         }
 
@@ -215,10 +216,24 @@ mod app {
             .and_then(|path| path.parent().map(|dir| dir.join("components")))
             .ok_or("cannot locate the launcher's components folder")?;
         components::validate(&components_dir, settings.controller(), wine)?;
-        runtime::check_separate(&game, &runtime)?;
-        let copied = runtime::sync(&game, &runtime)
+        paths::check_separate(&game, &runtime)?;
+        match runtime::remove_legacy_temps(&runtime) {
+            Ok(removed) if !removed.is_empty() => log_line(&format!(
+                "removed {} temp file(s) an interrupted older launch left",
+                removed.len()
+            )),
+            Ok(_) => {}
+            Err(error) => log_line(&format!("warning: {error}")),
+        }
+        let report = runtime::sync(&game, &runtime)
             .map_err(|error| format!("cannot prepare {}: {error}", runtime.display()))?;
-        log_line(&format!("runtime synchronized: {copied} files copied"));
+        for warning in &report.warnings {
+            log_line(&format!("warning: {warning}"));
+        }
+        log_line(&format!(
+            "runtime synchronized: {} files copied",
+            report.brought
+        ));
 
         let runtime_exe = runtime.join(GAME_EXE);
         let mut bytes = fs::read(&runtime_exe)
@@ -226,8 +241,8 @@ mod app {
         let outcome = patch::widescreen(&mut bytes, settings.widescreen())
             .map_err(|error| format!("{}: {error}", runtime_exe.display()))?;
         if matches!(outcome, Outcome::Patched | Outcome::Restored) {
-            runtime::write_atomic(&runtime_exe, &bytes)
-                .map_err(|error| format!("cannot write {}: {error}", runtime_exe.display()))?;
+            fsx::write_atomic(&runtime_exe, &bytes)
+                .map_err(|error| format!("cannot write {error}"))?;
         }
         // gamescope exposes one output; elsewhere avoid a portrait primary monitor.
         let game_mode = registry::game_mode(settings.resolution(), settings.widescreen());
@@ -255,7 +270,7 @@ mod app {
             if settings.controller() && win32::map_wine_controllers()? {
                 log_line("Wine: winebus Map Controllers seeded (absent before)");
             }
-        } else if let Err(error) = win32::prefer_fast_gpu(&runtime_exe) {
+        } else if let Err(error) = gpu::prefer_fast_gpu(&runtime_exe) {
             log_line(&format!("warning: {error}"));
         }
         log_line(&format!(
@@ -289,7 +304,7 @@ fn main() {
         Ok(code) => std::process::exit(code as i32),
         Err(error) => {
             app::log_line(&format!("error: {error}"));
-            win32::message("Colin McRae Rally 04", &error, true);
+            app::message(&error, true);
             std::process::exit(1);
         }
     }

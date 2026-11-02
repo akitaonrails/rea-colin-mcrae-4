@@ -1,6 +1,13 @@
 //! Command-line and commented `launcher.cfg` settings.
+//!
+//! Reading, line editing and value parsing are `rea_launcher::cfg`; the
+//! keys, defaults, template and what a launch remembers are CMR4's.
 
 use std::path::{Path, PathBuf};
+
+use rea_launcher::cfg::{self, ArgError, Rejected, need, on_off, parse_bool};
+pub use rea_launcher::cfg::{clear_key, read_file, set_key};
+use rea_launcher::display;
 
 pub const FILE_NAME: &str = "launcher.cfg";
 pub const DEFAULT_RESOLUTION: Resolution = Resolution::Custom(1920, 1080);
@@ -32,21 +39,8 @@ impl Resolution {
 /// Largest exact 16:9 mode that fits the active screen in landscape, capped
 /// at 4K and with a 640x360 minimum. Unknown screens use 1920x1080.
 pub fn default_resolution(screen: Option<(u32, u32)>) -> Resolution {
-    let Some((a, b)) = screen else {
-        return DEFAULT_RESOLUTION;
-    };
-    let (screen_w, screen_h) = (a.max(b).min(3840), a.min(b).min(2160));
-    let mut height = screen_h.min(2160);
-    while height >= 360 {
-        if height % 9 == 0 {
-            let width = height / 9 * 16;
-            if width <= screen_w && width >= 640 {
-                return Resolution::Custom(width, height);
-            }
-        }
-        height -= 1;
-    }
-    Resolution::Custom(640, 360)
+    let (width, height) = display::largest_16_9(screen, (3840, 2160), (1920, 1080));
+    Resolution::Custom(width, height)
 }
 
 pub fn validate_picture(settings: &Settings) -> Result<(), String> {
@@ -103,53 +97,26 @@ impl Settings {
         }
     }
 
+    /// Takes one `key = value` from the file or a `--key value` flag.
+    fn apply(&mut self, key: &str, value: &str) -> Result<(), Rejected> {
+        match key {
+            "game" => self.game = Some(value.into()),
+            "runtime" => self.runtime = Some(value.into()),
+            "resolution" => {
+                self.resolution = Some(need(parse_resolution(value), RESOLUTION_NEEDS)?);
+            }
+            "fps_limit" => self.fps_limit = Some(need(parse_fps(value), FPS_NEEDS)?),
+            "widescreen" => self.widescreen = Some(need(parse_bool(value), cfg::ON_OFF)?),
+            "vsync" => self.vsync = Some(need(parse_bool(value), cfg::ON_OFF)?),
+            "controller" => self.controller = Some(need(parse_bool(value), cfg::ON_OFF)?),
+            _ => return Err(Rejected::Unknown),
+        }
+        Ok(())
+    }
+
     pub fn parse_file(text: &str) -> (Settings, Vec<String>) {
         let mut settings = Settings::default();
-        let mut warnings = Vec::new();
-        for (line_number, line) in text.lines().enumerate() {
-            let line = line.trim();
-            if line.starts_with('#') {
-                continue;
-            }
-            let Some((key, value)) = line.split_once('=') else {
-                continue;
-            };
-            let key = key.trim();
-            let value = value.trim();
-            if value.is_empty() {
-                continue;
-            }
-            let mut bad = |expected: &str| {
-                warnings.push(format!(
-                    "{FILE_NAME} line {}: expected {expected}, not {value:?}",
-                    line_number + 1
-                ));
-            };
-            match key {
-                "game" => settings.game = Some(value.into()),
-                "runtime" => settings.runtime = Some(value.into()),
-                "resolution" => match parse_resolution(value) {
-                    Some(value) => settings.resolution = Some(value),
-                    None => bad("WIDTHxHEIGHT or original"),
-                },
-                "fps_limit" => match parse_fps(value) {
-                    Some(value) => settings.fps_limit = Some(value),
-                    None => bad("1 to 1000 or off"),
-                },
-                "widescreen" | "vsync" | "controller" => match parse_bool(value) {
-                    Some(value) => match key {
-                        "widescreen" => settings.widescreen = Some(value),
-                        "vsync" => settings.vsync = Some(value),
-                        _ => settings.controller = Some(value),
-                    },
-                    None => bad("on or off"),
-                },
-                _ => warnings.push(format!(
-                    "{FILE_NAME} line {}: unknown setting {key:?} (ignored, kept in the file)",
-                    line_number + 1
-                )),
-            }
-        }
+        let warnings = cfg::parse(text, FILE_NAME, |key, value| settings.apply(key, value));
         (settings, warnings)
     }
 
@@ -184,24 +151,6 @@ impl Settings {
         }
         out
     }
-}
-
-/// Reads a settings file: None when it doesn't exist (a first run). Text that
-/// isn't UTF-8 (Notepad's ANSI) is read as Latin-1, which keeps the accented
-/// letters of Western code pages instead of turning a folder name into
-/// U+FFFD; the file is saved back as UTF-8. Any other I/O error is returned
-/// so the caller never overwrites a file it could not read.
-pub fn read_file(path: &Path) -> std::io::Result<Option<String>> {
-    match std::fs::read(path) {
-        Ok(bytes) => Ok(Some(decode(bytes))),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error),
-    }
-}
-
-fn decode(bytes: Vec<u8>) -> String {
-    String::from_utf8(bytes)
-        .unwrap_or_else(|error| error.into_bytes().iter().map(|&b| char::from(b)).collect())
 }
 
 /// Whether a launch should write its game folder into the settings file:
@@ -287,54 +236,6 @@ fn refresh_header(text: &str) -> String {
     text.replacen(STALE_HEADER, HEADER, 1)
 }
 
-/// The newline `text` uses: CRLF when it has any (Notepad), else LF.
-fn newline(text: &str) -> &'static str {
-    if text.contains("\r\n") { "\r\n" } else { "\n" }
-}
-
-/// Whether `line` is an active (uncommented) `key = ...` line.
-fn is_key_line(line: &str, key: &str) -> bool {
-    let line = line.trim();
-    !line.starts_with('#') && line.split_once('=').is_some_and(|(k, _)| k.trim() == key)
-}
-
-/// Sets `key` in a settings file, keeping every other line (and comments)
-/// as it was: replaces each active `key =` line, else appends one.
-pub fn set_key(text: &str, key: &str, value: &str) -> String {
-    let nl = newline(text);
-    let mut out = String::with_capacity(text.len() + key.len() + value.len() + 4);
-    let mut done = false;
-    for line in text.lines() {
-        if is_key_line(line, key) {
-            out.push_str(&format!("{key} = {value}"));
-            done = true;
-        } else {
-            out.push_str(line);
-        }
-        out.push_str(nl);
-    }
-    if !done {
-        out.push_str(&format!("{key} = {value}{nl}"));
-    }
-    out
-}
-
-/// Turns `key` off in a settings file: each active line becomes `#key =`,
-/// so the default applies; other lines are kept.
-pub fn clear_key(text: &str, key: &str) -> String {
-    let nl = newline(text);
-    let mut out = String::with_capacity(text.len() + 2);
-    for line in text.lines() {
-        if is_key_line(line, key) {
-            out.push_str(&format!("#{key} ="));
-        } else {
-            out.push_str(line);
-        }
-        out.push_str(nl);
-    }
-    out
-}
-
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Cli {
     pub settings: Settings,
@@ -363,80 +264,57 @@ pub const USAGE: &str = concat!(
     "The original game folder is never modified. Options override launcher.cfg for one\nrun; only --game is remembered there."
 );
 
-fn on_off(value: bool) -> &'static str {
-    if value { "on" } else { "off" }
-}
-
-fn parse_bool(value: &str) -> Option<bool> {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "on" | "true" | "yes" | "1" => Some(true),
-        "off" | "false" | "no" | "0" => Some(false),
-        _ => None,
-    }
-}
+/// What `resolution` takes, for messages.
+const RESOLUTION_NEEDS: &str = "WIDTHxHEIGHT or original";
+/// What `fps_limit` takes, for messages.
+const FPS_NEEDS: &str = "1 to 1000 or off";
+/// The settings keys, which are also the `--flag` names.
+const KEYS: [&str; 7] = [
+    "game",
+    "runtime",
+    "resolution",
+    "widescreen",
+    "fps_limit",
+    "vsync",
+    "controller",
+];
+/// The launcher's own flags that take no value.
+const SWITCHES: [&str; 4] = ["--check", "--no-window", "--settings", "--linux"];
 
 fn parse_resolution(value: &str) -> Option<Resolution> {
-    let value = value.trim().to_ascii_lowercase();
-    if value == "original" {
-        return Some(Resolution::Original);
+    match cfg::parse_resolution(value, (320, 240), (7680, 4320), cfg::ORIGINAL)? {
+        cfg::Resolution::Size(width, height) => Some(Resolution::Custom(width, height)),
+        _ => Some(Resolution::Original),
     }
-    let (width, height) = value.split_once('x')?;
-    let width: u32 = width.trim().parse().ok()?;
-    let height: u32 = height.trim().parse().ok()?;
-    ((320..=7680).contains(&width) && (240..=4320).contains(&height))
-        .then_some(Resolution::Custom(width, height))
 }
 
 fn parse_fps(value: &str) -> Option<u32> {
-    let value = value.trim();
-    if value.eq_ignore_ascii_case("off") || value == "0" {
+    if value.trim().eq_ignore_ascii_case("off") {
         return Some(0);
     }
-    let fps: u32 = value.parse().ok()?;
-    (1..=1000).contains(&fps).then_some(fps)
+    cfg::parse_range(value, 0..=1000)
 }
 
 pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Cli, String> {
     let mut cli = Cli::default();
-    let mut args = args.into_iter();
-    while let Some(arg) = args.next() {
-        let mut value = |name: &str| {
-            args.next()
-                .ok_or_else(|| format!("{name} needs a value\n\n{USAGE}"))
-        };
-        match arg.as_str() {
-            "--game" => cli.settings.game = Some(value("--game")?.into()),
-            "--runtime" => cli.settings.runtime = Some(value("--runtime")?.into()),
-            "--resolution" => {
-                let raw = value("--resolution")?;
-                cli.settings.resolution = Some(parse_resolution(&raw).ok_or_else(|| {
-                    format!("--resolution needs WIDTHxHEIGHT or original, not {raw}\n\n{USAGE}")
-                })?);
-            }
-            "--fps-limit" => {
-                let raw = value("--fps-limit")?;
-                cli.settings.fps_limit = Some(parse_fps(&raw).ok_or_else(|| {
-                    format!("--fps-limit needs 1 to 1000 or off, not {raw}\n\n{USAGE}")
-                })?);
-            }
-            "--check" => cli.check = true,
-            "--no-window" => cli.no_window = true,
-            "--settings" => cli.settings_window = true,
-            "--linux" => cli.linux = true,
-            "--help" | "-h" | "/?" => cli.help = true,
-            flag @ ("--widescreen" | "--vsync" | "--controller") => {
-                let raw = value(flag)?;
-                let enabled = parse_bool(&raw)
-                    .ok_or_else(|| format!("{flag} needs on or off, not {raw}\n\n{USAGE}"))?;
-                match flag {
-                    "--widescreen" => cli.settings.widescreen = Some(enabled),
-                    "--vsync" => cli.settings.vsync = Some(enabled),
-                    _ => cli.settings.controller = Some(enabled),
+    let mut settings = Settings::default();
+    match cfg::parse_args(args, &KEYS, &SWITCHES, |key, value| {
+        settings.apply(key, value)
+    }) {
+        Ok(switches) => {
+            for switch in switches {
+                match switch.as_str() {
+                    "--check" => cli.check = true,
+                    "--no-window" => cli.no_window = true,
+                    "--settings" => cli.settings_window = true,
+                    _ => cli.linux = true,
                 }
             }
-            other => return Err(format!("unknown argument {other}\n\n{USAGE}")),
         }
+        Err(ArgError::Help) => cli.help = true,
+        Err(error) => return Err(format!("{error}\n\n{USAGE}")),
     }
+    cli.settings = settings;
     Ok(cli)
 }
 

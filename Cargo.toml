@@ -15,27 +15,16 @@ name = "CMR4Launcher"
 path = "src/main.rs"
 
 [dependencies]
-sha2 = "0.11.1"
+rea-launcher = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.1.0" }
 
 [target.'cfg(windows)'.dependencies]
+rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.1.0" }
+rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.1.0" }
 eframe = { version = "0.37", default-features = false, features = ["glow"] }
-jpeg-decoder = { version = "0.3", default-features = false }
 
-[target.'cfg(windows)'.dependencies.windows-sys]
-version = "0.61"
-features = [
-    "Win32_Foundation",
-    "Win32_Graphics_Gdi",
-    "Win32_Media_Multimedia",
-    "Win32_Security",
-    "Win32_System_Com",
-    "Win32_System_LibraryLoader",
-    "Win32_System_Registry",
-    "Win32_System_Threading",
-    "Win32_UI_Shell",
-    "Win32_UI_Shell_Common",
-    "Win32_UI_WindowsAndMessaging",
-]
+[dev-dependencies]
+# The pure registry helpers (VirtualStore path) are host-testable.
+rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.1.0" }
 
 [profile.release]
 panic = "abort"

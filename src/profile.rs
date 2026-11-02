@@ -110,7 +110,7 @@ pub fn choose_gamepad_in(
         return Ok(false);
     }
     // Whole or not at all: a torn OPTIONS would lose every player's profile.
-    crate::runtime::write_atomic(path, &profile)?;
+    rea_launcher::fsx::write_atomic(path, &profile)?;
     Ok(true)
 }
 

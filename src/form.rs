@@ -6,10 +6,10 @@
 
 use std::path::PathBuf;
 
-use crate::config::{Resolution, Settings, default_resolution};
+pub use rea_launcher::display::STEAM_DECK_SCREEN;
+use rea_launcher::display::is_steam_deck;
 
-/// The Steam Deck's native screen (16:10).
-pub const STEAM_DECK_SCREEN: (u32, u32) = (1280, 800);
+use crate::config::{Resolution, Settings, default_resolution};
 
 /// Picture presets offered on the Play tab.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,9 +33,10 @@ impl Look {
 /// The look to recommend: Steam Deck on a 1280x800 screen (either
 /// orientation), otherwise 4K.
 pub fn recommended(screen: Option<(u32, u32)>) -> Look {
-    match screen {
-        Some((a, b)) if (a.max(b), a.min(b)) == STEAM_DECK_SCREEN => Look::SteamDeck,
-        _ => Look::FourK,
+    if is_steam_deck(screen) {
+        Look::SteamDeck
+    } else {
+        Look::FourK
     }
 }
 
@@ -210,76 +211,10 @@ impl Tab {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PadAction {
-    Play,
-    Next,
-    Previous,
-    Press,
-    NextTab,
-    PreviousTab,
-}
-
-pub const PAD_UP: u16 = 0x0001;
-pub const PAD_DOWN: u16 = 0x0002;
-pub const PAD_LEFT: u16 = 0x0004;
-pub const PAD_RIGHT: u16 = 0x0008;
-pub const PAD_START: u16 = 0x0010;
-pub const PAD_LB: u16 = 0x0100;
-pub const PAD_RB: u16 = 0x0200;
-pub const PAD_A: u16 = 0x1000;
-
-/// Edge-triggered XInput actions: d-pad focus, A activate, shoulders tabs,
-/// Start play. Held buttons do not repeat.
-pub fn pad_actions(before: u16, now: u16) -> Vec<PadAction> {
-    let pressed = now & !before;
-    [
-        (PAD_START, PadAction::Play),
-        (PAD_DOWN, PadAction::Next),
-        (PAD_RIGHT, PadAction::Next),
-        (PAD_UP, PadAction::Previous),
-        (PAD_LEFT, PadAction::Previous),
-        (PAD_A, PadAction::Press),
-        (PAD_RB, PadAction::NextTab),
-        (PAD_LB, PadAction::PreviousTab),
-    ]
-    .into_iter()
-    .filter(|(bit, _)| pressed & bit != 0)
-    .map(|(_, action)| action)
-    .collect()
-}
-
 /// The Controls tab's note. `profile::choose_gamepad` selects the pad for a
 /// profile whose controls were never set up, so players need not visit the
 /// game's Options (choosing the controller there can freeze it under Wine).
 pub const CONTROLS_NOTE: &str = "For a profile whose controls were never set up, the launcher selects the pad and analogue pedals before the game starts; a profile you set up yourself is left as it is. In this window: D-pad moves, A activates, LB/RB change tabs, Start plays.";
-
-pub const WINDOW: (f32, f32) = (880.0, 640.0);
-
-pub fn window_zoom(screen: Option<(u32, u32)>, native: f32) -> f32 {
-    let native = if native > 0.0 { native } else { 1.0 };
-    let Some((width, height)) = screen else {
-        return 1.0;
-    };
-    let (width, height) = (width as f32, height as f32);
-    let fit = 0.9 * (width / WINDOW.0).min(height / WINDOW.1);
-    let target = (width.min(height) / 1440.0).max(1.0).min(fit);
-    let zoom = (target / native).max(1.0);
-    (zoom * 20.0).round() / 20.0
-}
-
-/// The zoom the settings window is created with. Under Wine it is the
-/// final one (XWayland can lose a resize sent after the window exists),
-/// with Wine's own DPI scale (`native`, 1.5 at 144 DPI) divided out, as
-/// Wine multiplies the window by it. On Windows the window starts at 1x and
-/// the first frame fits it to the DPI-aware scale.
-pub fn creation_zoom(wine: bool, screen: Option<(u32, u32)>, native: f32) -> f32 {
-    if wine {
-        window_zoom(screen, native)
-    } else {
-        1.0
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -364,15 +299,7 @@ mod tests {
     }
 
     #[test]
-    fn gamepad_buttons_act_once_and_shoulders_wrap_three_tabs() {
-        assert_eq!(pad_actions(0, PAD_START), [PadAction::Play]);
-        assert_eq!(pad_actions(PAD_START, PAD_START), []);
-        assert_eq!(
-            pad_actions(0, PAD_DOWN | PAD_A),
-            [PadAction::Next, PadAction::Press]
-        );
-        assert_eq!(pad_actions(0, PAD_RB), [PadAction::NextTab]);
-        assert_eq!(pad_actions(0, PAD_LB), [PadAction::PreviousTab]);
+    fn shoulders_wrap_the_three_tabs() {
         assert_eq!(Tab::Play.step(-1), Tab::Controls);
         assert_eq!(Tab::Controls.step(1), Tab::Play);
         assert_eq!(Tab::Play.step(1), Tab::Picture);
@@ -385,34 +312,6 @@ mod tests {
         assert!(!CONTROLS_NOTE.contains("Options"));
         assert!(CONTROLS_NOTE.contains("never set up"));
         assert!(CONTROLS_NOTE.contains("Start plays"));
-    }
-
-    #[test]
-    fn under_wine_the_window_is_created_at_its_final_size() {
-        // XWayland can lose a later resize: Wine starts zoomed.
-        assert_eq!(creation_zoom(true, Some((3840, 2160)), 1.0), 1.5);
-        assert_eq!(creation_zoom(true, Some((1920, 1080)), 1.0), 1.0);
-        // Wine at 144 or 192 DPI already scales the window: never zoomed
-        // on top of that (it was 2.25x and 3x, taller than a 4K screen).
-        assert_eq!(creation_zoom(true, Some((3840, 2160)), 1.5), 1.0);
-        assert_eq!(creation_zoom(true, Some((3840, 2160)), 2.0), 1.0);
-        // 96, 120, 144 and 192 DPI all fit a 4K screen.
-        for native in [1.0, 1.25, 1.5, 2.0] {
-            let zoom = creation_zoom(true, Some((3840, 2160)), native);
-            assert!(WINDOW.1 * zoom * native <= 2160.0, "{native}");
-            assert!(WINDOW.0 * zoom * native <= 3840.0, "{native}");
-        }
-        // Windows starts at 1x; the first frame fits the DPI-aware scale.
-        assert_eq!(creation_zoom(false, Some((3840, 2160)), 1.5), 1.0);
-    }
-
-    #[test]
-    fn window_grows_to_fit_large_screens() {
-        assert_eq!(window_zoom(Some((1920, 1080)), 1.0), 1.0);
-        assert_eq!(window_zoom(Some((3840, 2160)), 1.0), 1.5);
-        assert_eq!(window_zoom(Some((3840, 2160)), 1.5), 1.0);
-        assert_eq!(window_zoom(Some((1280, 800)), 1.0), 1.0);
-        assert_eq!(window_zoom(None, 1.0), 1.0);
     }
 
     const DECK: Option<(u32, u32)> = Some((1280, 800));

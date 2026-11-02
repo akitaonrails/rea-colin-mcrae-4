@@ -1,12 +1,19 @@
 //! Bundled wrappers and their owned configuration files.
+//!
+//! What the launcher installed is recorded by SHA-256 in the runtime's
+//! `rea_launcher::ledger` (`.cmr4-launcher-components`, the file and format
+//! older launchers wrote); which wrappers and configs exist is CMR4's.
 
 use std::fs;
 use std::path::Path;
 #[cfg(test)]
 use std::path::PathBuf;
 
+use rea_launcher::fsx;
+use rea_launcher::ledger::{Ledger, Outcome};
+use rea_launcher::wine::merge_dll_overrides;
+
 use crate::config::{Resolution, Settings};
-use crate::patch::sha256;
 use crate::registry;
 
 pub const DGVOODOO_DLLS: [&str; 1] = ["D3D9.dll"];
@@ -16,7 +23,6 @@ pub const XIDI_DLL: &str = "dinput8.dll";
 /// It is loaded from the package and never copied into the runtime.
 pub const CLOSE_HOOK_DLL: &str = "cmr4close.dll";
 const OWNERSHIP_FILE: &str = ".cmr4-launcher-components";
-type Ownership = std::collections::BTreeMap<String, String>;
 
 /// Xidi's view of the pad, following the CMR3 launcher's rally mapper.
 ///
@@ -126,156 +132,39 @@ pub fn dgvoodoo_conf(
     )
 }
 
-fn copy(source: &Path, destination: &Path) -> Result<(), String> {
-    fs::copy(source, destination).map_err(|error| {
-        format!(
-            "cannot copy {} to {}: {error}",
-            source.display(),
-            destination.display()
-        )
-    })?;
-    Ok(())
-}
-
-fn read_ownership(runtime: &Path) -> Ownership {
-    fs::read_to_string(runtime.join(OWNERSHIP_FILE))
-        .unwrap_or_default()
-        .lines()
-        .filter_map(|line| {
-            let (digest, name) = line.split_once('\t')?;
-            Some((name.to_owned(), digest.to_owned()))
-        })
-        .collect()
-}
-
-fn write_ownership(runtime: &Path, ownership: &Ownership) -> Result<(), String> {
-    let text: String = ownership
-        .iter()
-        .map(|(name, digest)| format!("{digest}\t{name}\n"))
-        .collect();
-    crate::runtime::write_atomic(&runtime.join(OWNERSHIP_FILE), text.as_bytes())
-        .map_err(|error| format!("cannot record component ownership: {error}"))
-}
-
-fn is_owned(runtime: &Path, name: &str, ownership: &Ownership) -> Result<bool, String> {
-    let path = runtime.join(name);
-    if !path.is_file() {
-        return Ok(false);
-    }
-    let Some(expected) = ownership.get(name) else {
-        return Ok(false);
-    };
-    let current = fs::read(&path).map_err(|error| {
-        format!(
-            "cannot inspect runtime component {}: {error}",
-            path.display()
-        )
-    })?;
-    Ok(sha256(&current) == *expected)
-}
-
-fn is_unmodified_source_copy(game: &Path, runtime: &Path, name: &str) -> Result<bool, String> {
-    let source = game.join(name);
-    if !source.is_file() {
-        return Ok(false);
-    }
-    let source_bytes = fs::read(&source).map_err(|error| {
-        format!(
-            "cannot inspect source component {}: {error}",
-            source.display()
-        )
-    })?;
-    let destination = runtime.join(name);
-    let destination_bytes = fs::read(&destination).map_err(|error| {
-        format!(
-            "cannot inspect runtime component {}: {error}",
-            destination.display()
-        )
-    })?;
-    Ok(destination_bytes == source_bytes)
+fn ledger_error(name: &str) -> impl FnOnce(std::io::Error) -> String + '_ {
+    move |error| format!("cannot update launcher component {name}: {error}")
 }
 
 fn install_wrapper(
-    game: &Path,
+    ledger: &mut Ledger,
     runtime: &Path,
     components: &Path,
     name: &str,
-    ownership: &mut Ownership,
 ) -> Result<(), String> {
-    let destination = runtime.join(name);
-    if destination.exists()
-        && !is_owned(runtime, name, ownership)?
-        && !is_unmodified_source_copy(game, runtime, name)?
-    {
-        return Err(format!(
-            "runtime-only component {name} is not launcher-owned; refusing to replace {}",
-            destination.display()
-        ));
-    }
     let bundled = components.join(name);
-    copy(&bundled, &destination)?;
     let bytes = fs::read(&bundled)
         .map_err(|error| format!("cannot read bundled component {name}: {error}"))?;
-    ownership.insert(name.to_owned(), sha256(&bytes));
-    write_ownership(runtime, ownership)
-}
-
-fn disable_xidi(game: &Path, runtime: &Path, ownership: &mut Ownership) -> Result<(), String> {
-    let destination = runtime.join(XIDI_DLL);
-    // The game folder may ship its own dinput8.dll (even Xidi itself); an
-    // untouched copy of it is already the "off" state.
-    if destination.exists()
-        && !is_owned(runtime, XIDI_DLL, ownership)?
-        && is_unmodified_source_copy(game, runtime, XIDI_DLL)?
+    match ledger
+        .install(name, &bytes, &[])
+        .map_err(ledger_error(name))?
     {
-        ownership.remove(XIDI_DLL);
-        return write_ownership(runtime, ownership);
+        Outcome::NotOurs => Err(format!(
+            "runtime-only component {name} is not launcher-owned; refusing to replace {}",
+            runtime.join(name).display()
+        )),
+        _ => Ok(()),
     }
-    if destination.exists() && !is_owned(runtime, XIDI_DLL, ownership)? {
-        return Err(format!(
-            "runtime {XIDI_DLL} is not the launcher-installed Xidi; refusing to replace or remove a modified DLL"
-        ));
-    }
-    if destination.exists() {
-        let source = game.join(XIDI_DLL);
-        if source.is_file() {
-            copy(&source, &destination)?;
-        } else {
-            fs::remove_file(&destination)
-                .map_err(|error| format!("cannot remove launcher-installed {XIDI_DLL}: {error}"))?;
-        }
-    }
-    ownership.remove(XIDI_DLL);
-    write_ownership(runtime, ownership)
 }
 
-fn disable_dxvk(game: &Path, runtime: &Path, ownership: &mut Ownership) -> Result<(), String> {
-    for name in DXVK_DLLS {
-        let destination = runtime.join(name);
-        if destination.exists()
-            && !is_owned(runtime, name, ownership)?
-            && is_unmodified_source_copy(game, runtime, name)?
-        {
-            ownership.remove(name);
-            continue;
-        }
-        if destination.exists() && !is_owned(runtime, name, ownership)? {
-            return Err(format!(
-                "runtime {name} is not launcher-owned; refusing to remove a modified DLL"
-            ));
-        }
-        if destination.exists() {
-            let source = game.join(name);
-            if source.is_file() {
-                copy(&source, &destination)?;
-            } else {
-                fs::remove_file(&destination)
-                    .map_err(|error| format!("cannot remove launcher-installed {name}: {error}"))?;
-            }
-        }
-        ownership.remove(name);
+/// Takes a launcher-installed wrapper out: the game's own copy comes back,
+/// or the file goes. The game's own untouched DLL (some ship Xidi itself)
+/// is already the "off" state; a changed one is refused with `refusal`.
+fn take_out(ledger: &mut Ledger, name: &str, refusal: &str) -> Result<(), String> {
+    match ledger.take_out(name, &[]).map_err(ledger_error(name))? {
+        Outcome::NotOurs => Err(refusal.to_owned()),
+        _ => Ok(()),
     }
-    write_ownership(runtime, ownership)
 }
 
 /// Installs only launcher-owned wrappers. Other runtime DLLs, including a
@@ -290,31 +179,41 @@ pub fn install(
     output: Option<u32>,
 ) -> Result<(), String> {
     validate(components, settings.controller(), wine)?;
-    let mut ownership = read_ownership(runtime);
+    let mut ledger = Ledger::load(game, runtime, OWNERSHIP_FILE);
     for name in DGVOODOO_DLLS {
-        install_wrapper(game, runtime, components, name, &mut ownership)?;
+        install_wrapper(&mut ledger, runtime, components, name)?;
     }
-    if wine {
-        for name in DXVK_DLLS {
-            install_wrapper(game, runtime, components, name, &mut ownership)?;
+    for name in DXVK_DLLS {
+        if wine {
+            install_wrapper(&mut ledger, runtime, components, name)?;
+        } else {
+            take_out(
+                &mut ledger,
+                name,
+                &format!("runtime {name} is not launcher-owned; refusing to remove a modified DLL"),
+            )?;
         }
-    } else {
-        disable_dxvk(game, runtime, &mut ownership)?;
     }
-    crate::runtime::write_atomic(
+    fsx::write_atomic(
         &runtime.join("dgVoodoo.conf"),
-        dgvoodoo_conf(settings, wine, gamescope, output).as_bytes(),
+        dgvoodoo_conf(settings, wine, gamescope, output),
     )
     .map_err(|error| format!("cannot write dgVoodoo.conf: {error}"))?;
 
     if settings.controller() {
-        install_wrapper(game, runtime, components, XIDI_DLL, &mut ownership)?;
-        crate::runtime::write_atomic(&runtime.join("Xidi.ini"), XIDI_CONF.as_bytes())
+        install_wrapper(&mut ledger, runtime, components, XIDI_DLL)?;
+        fsx::write_atomic(&runtime.join("Xidi.ini"), XIDI_CONF)
             .map_err(|error| format!("cannot write Xidi.ini: {error}"))?;
     } else {
-        disable_xidi(game, runtime, &mut ownership)?;
+        take_out(
+            &mut ledger,
+            XIDI_DLL,
+            &format!(
+                "runtime {XIDI_DLL} is not the launcher-installed Xidi; refusing to replace or remove a modified DLL"
+            ),
+        )?;
         if fs::read(runtime.join("Xidi.ini")).is_ok_and(|bytes| bytes == XIDI_CONF.as_bytes()) {
-            fs::remove_file(runtime.join("Xidi.ini"))
+            fsx::remove(&runtime.join("Xidi.ini"))
                 .map_err(|error| format!("cannot remove owned Xidi.ini: {error}"))?;
         }
     }
@@ -324,46 +223,12 @@ pub fn install(
 /// Replaces only rules for DLLs this launcher owns and keeps all unrelated
 /// user rules. The required rule stays first and deterministic.
 pub fn wine_overrides(existing: Option<&str>, controller: bool) -> String {
-    let mut replaced = vec!["dsound", "d3d9", "d3d11", "dxgi", "mscoree"];
-    if controller {
-        replaced.push("dinput8");
-    }
-    let required = if controller {
+    let ours = if controller {
         WINE_OVERRIDES
     } else {
         "dsound,d3d9,d3d11,dxgi=n,b;mscoree=d"
     };
-    let mut result = vec![required.to_owned()];
-    for rule in existing.into_iter().flat_map(|rules| rules.split(';')) {
-        if rule.trim().is_empty() {
-            continue;
-        }
-        let Some((names, action)) = rule.split_once('=') else {
-            result.push(rule.to_owned());
-            continue;
-        };
-        let kept: Vec<_> = names
-            .split(',')
-            .map(str::trim)
-            .filter(|name| {
-                // Wine accepts `d3d9` and `d3d9.dll` alike, in any case.
-                let len = name.len();
-                let base = if len > 4 && name[len - 4..].eq_ignore_ascii_case(".dll") {
-                    &name[..len - 4]
-                } else {
-                    name
-                };
-                !base.is_empty()
-                    && !replaced
-                        .iter()
-                        .any(|replaced| base.eq_ignore_ascii_case(replaced))
-            })
-            .collect();
-        if !kept.is_empty() {
-            result.push(format!("{}={action}", kept.join(",")));
-        }
-    }
-    result.join(";")
+    merge_dll_overrides(ours, existing)
 }
 
 #[cfg(test)]
@@ -666,9 +531,10 @@ mod tests {
             None,
         )
         .unwrap();
-        let ownership = read_ownership(&runtime);
+        let ledger = Ledger::load(&game, &runtime, OWNERSHIP_FILE);
+        let owned: Vec<&str> = ledger.names().collect();
         for name in DGVOODOO_DLLS.into_iter().chain(DXVK_DLLS).chain([XIDI_DLL]) {
-            assert!(ownership.contains_key(name));
+            assert!(owned.contains(&name), "{name}");
             assert_eq!(
                 fs::read(runtime.join(name)).unwrap(),
                 format!("bundle {name}").as_bytes()
@@ -689,6 +555,45 @@ mod tests {
             fs::read(runtime.join("D3D9.dll")).unwrap(),
             b"updated bundle"
         );
+        for path in [game, runtime, components] {
+            fs::remove_dir_all(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_ledger_written_by_an_older_launcher_still_proves_ownership() {
+        let game = temp("old-ledger-game");
+        let runtime = temp("old-ledger-runtime");
+        let components = temp("old-ledger-components");
+        fs::create_dir_all(&game).unwrap();
+        fs::create_dir_all(&runtime).unwrap();
+        write_components(&components);
+        // v0.2.0's `.cmr4-launcher-components`: `sha256\tname` lines.
+        fs::write(runtime.join("D3D9.dll"), b"dgVoodoo 2.80").unwrap();
+        fs::write(
+            runtime.join(OWNERSHIP_FILE),
+            format!("{}\tD3D9.dll\n", crate::patch::sha256(b"dgVoodoo 2.80")),
+        )
+        .unwrap();
+        install(
+            &game,
+            &runtime,
+            &components,
+            &Settings::default(),
+            false,
+            false,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            fs::read(runtime.join("D3D9.dll")).unwrap(),
+            b"bundle D3D9.dll"
+        );
+        let ledger = fs::read_to_string(runtime.join(OWNERSHIP_FILE)).unwrap();
+        assert!(ledger.contains(&format!(
+            "{}\tD3D9.dll\n",
+            crate::patch::sha256(b"bundle D3D9.dll")
+        )));
         for path in [game, runtime, components] {
             fs::remove_dir_all(path).unwrap();
         }

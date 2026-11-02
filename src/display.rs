@@ -3,20 +3,11 @@
 //! The game sizes its window from the primary display, and dgVoodoo presents
 //! on the adapter's default output. With a portrait primary monitor that
 //! squeezes the 16:9 picture into a strip, so a landscape monitor is chosen
-//! and handed to dgVoodoo as `FullScreenOutput`.
+//! (`rea_launcher::display::game_monitor`) and handed to dgVoodoo as
+//! `FullScreenOutput`.
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Monitor {
-    pub width: u32,
-    pub height: u32,
-    pub primary: bool,
-}
-
-impl Monitor {
-    fn landscape(self) -> bool {
-        self.width >= self.height
-    }
-}
+pub use rea_launcher::display::Monitor;
+use rea_launcher::display::{game_monitor, primary};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Target {
@@ -28,25 +19,14 @@ pub struct Target {
 /// Keeps the primary monitor when it is landscape. Otherwise uses the
 /// largest landscape monitor, numbered in enumeration order.
 pub fn choose(monitors: &[Monitor]) -> Option<Target> {
-    let primary = monitors.iter().find(|m| m.primary).or(monitors.first())?;
-    if primary.landscape() {
-        return Some(Target {
-            size: (primary.width, primary.height),
-            output: None,
-        });
-    }
-    let best = monitors
-        .iter()
-        .enumerate()
-        .filter(|(_, m)| m.landscape())
-        .max_by_key(|(index, m)| (u64::from(m.width) * u64::from(m.height), usize::MAX - index));
-    Some(match best {
-        Some((index, m)) => Target {
-            size: (m.width, m.height),
+    let primary = primary(monitors)?;
+    Some(match game_monitor(monitors) {
+        Some(index) => Target {
+            size: monitors[index].size(),
             output: Some(index as u32 + 1),
         },
         None => Target {
-            size: (primary.width, primary.height),
+            size: primary.size(),
             output: None,
         },
     })
@@ -96,5 +76,8 @@ mod tests {
         assert_eq!(target.size, (1080, 1920));
         assert_eq!(target.output, None);
         assert_eq!(choose(&[]), None);
+        // No monitor flagged primary: the first one counts as it.
+        let target = choose(&[m(1920, 1080, false), m(3840, 2160, false)]).unwrap();
+        assert_eq!((target.size, target.output), ((1920, 1080), None));
     }
 }

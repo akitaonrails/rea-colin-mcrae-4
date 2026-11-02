@@ -1,17 +1,15 @@
 //! The tested CMR4 16:9 Low patch, applied only to a private executable copy.
+//!
+//! The one-match signature toggle is `rea_launcher::patch::signature_toggle`;
+//! the signature and the messages are CMR4's.
 
-use sha2::{Digest, Sha256};
+use rea_launcher::identify::hex;
+use rea_launcher::patch::{self, PatchError as SdkError};
+
+pub use rea_launcher::patch::Toggle as Outcome;
 
 pub const ORIGINAL: [u8; 6] = [0x04, 0x00, 0x00, 0x80, 0x3f, 0xe8];
 pub const WIDESCREEN: [u8; 6] = [0x04, 0x00, 0x00, 0x40, 0x3f, 0xe8];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Outcome {
-    Patched,
-    AlreadyPatched,
-    Restored,
-    AlreadyOriginal,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PatchError {
@@ -38,44 +36,26 @@ impl std::fmt::Display for PatchError {
     }
 }
 
+/// Lower-case hex SHA-256 of `bytes`.
 pub fn sha256(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
-}
-
-fn occurrences(haystack: &[u8], needle: &[u8]) -> Vec<usize> {
-    haystack
-        .windows(needle.len())
-        .enumerate()
-        .filter_map(|(at, window)| (window == needle).then_some(at))
-        .collect()
+    hex(&rea_launcher::identify::sha256(bytes))
 }
 
 /// Applies or reverses the one tested signature. Both already-patched and
 /// already-original inputs are successful, so repeated launches are idempotent.
 pub fn widescreen(bytes: &mut [u8], enable: bool) -> Result<Outcome, PatchError> {
-    let original = occurrences(bytes, &ORIGINAL);
-    let patched = occurrences(bytes, &WIDESCREEN);
-    let error = || PatchError {
-        sha256: sha256(bytes),
-        original_count: original.len(),
-        patched_count: patched.len(),
-    };
-    match (enable, original.as_slice(), patched.as_slice()) {
-        (true, &[at], []) => {
-            bytes[at..at + ORIGINAL.len()].copy_from_slice(&WIDESCREEN);
-            Ok(Outcome::Patched)
-        }
-        (true, [], &[_]) => Ok(Outcome::AlreadyPatched),
-        (false, [], &[at]) => {
-            bytes[at..at + WIDESCREEN.len()].copy_from_slice(&ORIGINAL);
-            Ok(Outcome::Restored)
-        }
-        (false, &[_], []) => Ok(Outcome::AlreadyOriginal),
-        _ => Err(error()),
-    }
+    patch::signature_toggle(bytes, &ORIGINAL, &WIDESCREEN, enable).map_err(|error| match error {
+        SdkError::Signature {
+            original,
+            patched,
+            sha256,
+        } => PatchError {
+            sha256: hex(&sha256),
+            original_count: original,
+            patched_count: patched,
+        },
+        other => unreachable!("signature_toggle only reports signatures: {other}"),
+    })
 }
 
 #[cfg(test)]
@@ -105,16 +85,32 @@ mod tests {
         let mut missing = [0; 16];
         let error = widescreen(&mut missing, true).unwrap_err();
         assert_eq!(error.sha256, sha256(&missing));
-        assert!(error.to_string().contains("missing"));
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "the CMR4 widescreen signature is missing; SHA-256: {}",
+                sha256(&missing)
+            )
+        );
 
         let mut twice = [ORIGINAL, ORIGINAL].concat();
         let before = twice.clone();
         let error = widescreen(&mut twice, true).unwrap_err();
         assert_eq!(error.original_count, 2);
         assert_eq!(error.sha256, sha256(&before));
+        assert!(
+            error
+                .to_string()
+                .contains("ambiguous (2 original, 0 patched)")
+        );
         assert_eq!(twice, before, "a failed patch changes nothing");
 
         let mut mixed = [ORIGINAL, WIDESCREEN].concat();
         assert_eq!(widescreen(&mut mixed, false).unwrap_err().patched_count, 1);
+    }
+
+    #[test]
+    fn outcomes_log_with_the_names_older_launchers_wrote() {
+        assert_eq!(format!("{:?}", Outcome::AlreadyPatched), "AlreadyPatched");
     }
 }
