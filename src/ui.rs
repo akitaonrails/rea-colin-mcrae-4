@@ -283,9 +283,8 @@ impl<'a> Window<'a> {
         // Written into the file as it is now, keeping comments and keys the
         // window doesn't show. A file that exists but can't be read is not
         // replaced.
-        let text = match std::fs::read_to_string(&self.path) {
-            Ok(text) => text,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        let text = match cmr4_launcher::config::read_file(&self.path) {
+            Ok(text) => text.unwrap_or_default(),
             Err(error) => {
                 self.error = Some(format!("Can't read the settings: {error}"));
                 return;

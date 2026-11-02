@@ -186,6 +186,24 @@ impl Settings {
     }
 }
 
+/// Reads a settings file: None when it doesn't exist (a first run). Text that
+/// isn't UTF-8 (Notepad's ANSI) is read as Latin-1, which keeps the accented
+/// letters of Western code pages instead of turning a folder name into
+/// U+FFFD; the file is saved back as UTF-8. Any other I/O error is returned
+/// so the caller never overwrites a file it could not read.
+pub fn read_file(path: &Path) -> std::io::Result<Option<String>> {
+    match std::fs::read(path) {
+        Ok(bytes) => Ok(Some(decode(bytes))),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+fn decode(bytes: Vec<u8>) -> String {
+    String::from_utf8(bytes)
+        .unwrap_or_else(|error| error.into_bytes().iter().map(|&b| char::from(b)).collect())
+}
+
 /// Whether a launch should write its game folder into the settings file:
 /// when the file has none yet, or `--game` named a different one. No other
 /// command-line value is ever saved (the family rule: flags are one-run
@@ -771,6 +789,34 @@ mod tests {
         );
         let nested = remember("", &Settings::default(), &Settings::default(), game, None).unwrap();
         assert_eq!(Settings::parse_file(&nested).0.resolution, None);
+    }
+
+    #[test]
+    fn settings_files_in_utf8_or_ansi_read_and_only_missing_is_a_first_run() {
+        let dir = std::env::temp_dir().join(format!("cmr4-config-read-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(FILE_NAME);
+        assert!(read_file(&path).unwrap().is_none());
+        // Notepad ANSI (Windows-1252): "C:\Jogos\Colin McRae Rally 04 Edição".
+        let mut ansi = b"game = C:\\Jogos\\Edi".to_vec();
+        ansi.extend([0xE7, 0xE3]);
+        ansi.extend(b"o\r\n");
+        std::fs::write(&path, &ansi).unwrap();
+        let text = read_file(&path).unwrap().unwrap();
+        assert_eq!(
+            Settings::parse_file(&text).0.game,
+            Some(PathBuf::from("C:\\Jogos\\Edição"))
+        );
+        std::fs::write(&path, "game = D:\\Edição\n").unwrap();
+        let text = read_file(&path).unwrap().unwrap();
+        assert_eq!(
+            Settings::parse_file(&text).0.game,
+            Some(PathBuf::from("D:\\Edição"))
+        );
+        // Not a file: a real error, so the caller won't overwrite it.
+        assert!(read_file(&dir).is_err());
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

@@ -79,11 +79,7 @@ mod app {
     /// The settings file's text, or None when there is none yet. A file that
     /// exists but can't be read stops the launch rather than being replaced.
     fn read_settings(path: &Path) -> Result<Option<String>, String> {
-        match fs::read_to_string(path) {
-            Ok(text) => Ok(Some(text)),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(format!("cannot read {}: {error}", path.display())),
-        }
+        config::read_file(path).map_err(|error| format!("cannot read {}: {error}", path.display()))
     }
 
     /// Writes back the game folder and an auto-picked resolution (see

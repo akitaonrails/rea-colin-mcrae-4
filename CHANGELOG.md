@@ -25,7 +25,9 @@ All notable changes to this project. The format follows
   sets one, is still saved, except inside gamescope: there the screen is
   `cmr4-play`'s 1024x768 fallback, which would otherwise be kept for good.
 - A `launcher.cfg` that exists but can't be read stops the launch with an
-  error instead of being replaced by defaults.
+  error instead of being replaced by defaults. One saved by Notepad in ANSI
+  (not UTF-8), e.g. with an accented folder name, is read as Latin-1 instead
+  of blocking every launch, and saved back as UTF-8.
 - The game's `OPTIONS` save, the patched `cmr4.exe`, `dgVoodoo.conf`,
   `Xidi.ini` and the launcher's own bookkeeping files are written to a temp
   file and renamed into place, so a crash or full disk can't leave them torn.
