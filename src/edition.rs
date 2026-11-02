@@ -123,6 +123,14 @@ pub fn prepare(source: &[u8], widescreen: bool) -> Prepared {
 mod tests {
     use super::*;
 
+    #[test]
+    fn the_issue_link_names_the_unknown_edition_form() {
+        // Read at compile time: the build fails if the form is renamed.
+        let form = include_str!("../.github/ISSUE_TEMPLATE/unknown-edition.yml");
+        assert!(ISSUE_URL.ends_with("?template=unknown-edition.yml"));
+        assert!(form.starts_with("name: Unknown edition\n"));
+    }
+
     /// A tiny stand-in with the site's original bytes at its offset (no
     /// game bytes): its hash is not a known build.
     fn synthetic() -> Vec<u8> {

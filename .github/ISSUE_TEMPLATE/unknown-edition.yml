@@ -1,38 +1,47 @@
 name: Unknown edition
-description: The launcher says your cmr4.exe is a version it doesn't know yet.
+description: "CMR4Launcher.exe said your cmr4.exe is a build it does not know."
 title: "Unknown edition: "
-labels: ["unknown edition"]
+labels: ["edition"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks: this is how new editions get the widescreen fix. The game still runs without it meanwhile.
-        **Never attach cmr4.exe or any other game file.** The code (SHA-256) is all we need.
+        The launcher applies the widescreen fix only to builds it has identified by SHA-256, so
+        yours runs without it, with the game's own view. Tell us about your copy and we will add it.
+        **Never attach cmr4.exe or any other game file.** The SHA-256 is all we need.
   - type: input
     id: sha256
     attributes:
-      label: The code from the launcher (SHA-256 of cmr4.exe)
-      description: The 64-character code in the launcher's message, or the "cmr4.exe SHA-256" line of launcher.log.
+      label: SHA-256
+      description: The 64-character code the launcher showed, or the "cmr4.exe SHA-256" line of launcher.log.
       placeholder: 7dca9f4cab16bc1a98df8871f3d20aec4cd931a818ea0899db86c83c1f712b41
     validations:
       required: true
-  - type: input
-    id: edition
+  - type: dropdown
+    id: source
     attributes:
-      label: Where your copy comes from
-      description: For example "UK retail CD, patched to 1.01", "budget re-release", "Spanish DVD".
+      label: Where is your copy of the game from?
+      options:
+        - Retail disc
+        - GOG
+        - Steam
+        - Another store
+        - Patched by hand (official or community patch)
+        - Not sure
     validations:
       required: true
   - type: input
     id: details
     attributes:
-      label: cmr4.exe size and version
-      description: Right-click cmr4.exe → Properties → Details (file version), and its size in bytes.
+      label: Version, language and patches
+      description: |
+        e.g. "UK retail CD, patched to 1.01", "budget re-release", "Spanish DVD". Right-click
+        cmr4.exe → Properties → Details for the file version; its size in bytes helps too.
   - type: input
     id: version
     attributes:
       label: Launcher version
-      description: The first line of launcher.log, for example "CMR4Launcher 0.3.0".
+      description: The first line of launcher.log, e.g. "CMR4Launcher 0.3.0".
     validations:
       required: true
   - type: textarea
@@ -40,7 +49,8 @@ body:
     attributes:
       label: launcher.log
       description: |
-        Windows: %LOCALAPPDATA%\CMR4Launcher\launcher.log. AppImage/Wine: in the prefix (~/.local/share/cmr4-launcher/prefix/drive_c/users/<you>/AppData/Local/CMR4Launcher).
+        Windows: %LOCALAPPDATA%\CMR4Launcher\launcher.log. AppImage/Wine: in the prefix
+        (~/.local/share/cmr4-launcher/prefix/drive_c/users/<you>/AppData/Local/CMR4Launcher).
         Remove personal paths before posting.
       render: text
     validations:
