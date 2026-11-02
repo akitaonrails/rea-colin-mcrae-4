@@ -23,6 +23,14 @@ fails=0
 ok() { echo "ok   $1"; }
 fail() { echo "FAIL $1"; fails=$((fails + 1)); }
 
+# Wine commands are recorded, never run.
+cat > "$T/wine-run" <<'FAKE'
+#!/bin/sh
+echo "$*" >> "$T/wine-ran"
+FAKE
+chmod +x "$T/wine-run"
+RUN=$T/wine-run
+
 # A live pid with the wrong start identity models a reused/stale lock.
 sleep 30 & STALE_PID=$!
 stats=$(proc_stat "$STALE_PID"); STALE_START=${stats#* }
@@ -41,6 +49,20 @@ if running; then fail "unrelated cmr4.exe blocked launch"; else ok "unrelated cm
 stop_session > /dev/null
 if kill -0 "$OTHER_PID" 2>/dev/null; then ok "unrelated cmr4.exe was not signaled"; else fail "unrelated helper was signaled"; fi
 stop_helper "$OTHER_PID" "$OTHER_START"; OTHER_PID= OTHER_START=
+
+# stop ends the owned session group and then the private prefix's wineserver.
+setsid sleep 30 & OWNED=$!
+sleep 0.2
+stats=$(proc_stat "$OWNED") && printf '%s %s\n' "$OWNED" "${stats#* }" > "$LOCK"
+: > "$T/wine-ran"
+stop_session > /dev/null
+wait "$OWNED" 2>/dev/null
+if kill -0 "$OWNED" 2>/dev/null; then fail "owned session survived stop"; kill "$OWNED"; else ok "stop signals the owned session group"; fi
+if [ ! -f "$LOCK" ]; then ok "stop removes the lock"; else fail "stop left the lock"; fi
+case "$(cat "$T/wine-ran")" in
+  "env WINEPREFIX=$CMR4_PREFIX wineserver -k") ok "stop kills only the private prefix's wineserver" ;;
+  *) fail "stop wine commands: $(cat "$T/wine-ran")" ;;
+esac
 
 cat > "$T/fake-run" <<'FAKE'
 #!/bin/sh

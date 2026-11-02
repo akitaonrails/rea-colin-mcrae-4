@@ -124,6 +124,9 @@ in the game yet.
   widescreen off, 60 fps) instead of 4K (1280x720 widescreen). The look itself
   is unchanged; check that the window sees the Deck's 1280x800 screen in
   Desktop Mode.
+- **`cmr4-play stop`** now also runs `wineserver -k` on the private prefix.
+  Check with a running stage that the game, its wineserver and the AppImage
+  exit cleanly and that the next start works.
 
 ## Remaining unknowns
 

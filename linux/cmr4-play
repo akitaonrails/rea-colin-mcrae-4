@@ -4,6 +4,7 @@
 #   cmr4-play           show settings through Wine, then start the game
 #   cmr4-play --play    start with saved settings (no window); "start" is an alias
 #   cmr4-play stop      end the owned game session and its private Wine prefix
+#                       (session group, then wineserver -k for that prefix only)
 #   cmr4-play status    running or idle
 #
 # Optional environment:
@@ -125,6 +126,9 @@ stop_session() {
     kill -TERM "-$LOCK_PID" 2>/dev/null || true
   fi
   rm -f "$LOCK"
+  # Wine processes outside the session group (wineserver, services, a game
+  # left behind by a crashed launcher) end with the private prefix only.
+  $RUN env WINEPREFIX="$PREFIX" wineserver -k 2>/dev/null || true
 }
 
 start() {

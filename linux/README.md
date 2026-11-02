@@ -15,13 +15,15 @@ any settings were saved starts small; open the settings window once first.
 linux/cmr4-play          # settings window through Wine, then game
 linux/cmr4-play --play   # saved settings, no window (alias: start)
 linux/cmr4-play status   # owned session only
-linux/cmr4-play stop     # stop only the validated owned session
+linux/cmr4-play stop     # stop the owned session, then the prefix's wineserver
 ```
 
 Wine is required for this standalone helper. The AppImage supplies it. The
 helper uses a dedicated Wine prefix and synchronous supervision in every mode.
 An unrelated process named `cmr4.exe` neither blocks nor receives its stop
-signal. Lock records include process start identity and are removed on exit.
+signal. `stop` then runs `wineserver -k` for the launcher's own prefix only,
+which also ends Wine processes left outside the session. Lock records include
+process start identity and are removed on exit.
 
 Optional environment:
 

@@ -8,6 +8,9 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- `cmr4-play stop` also runs `wineserver -k` for the launcher's private
+  prefix after ending the session group, so Wine processes outside the group
+  (or left by a crashed launcher) end too.
 - First run: the settings window opens on the recommended look (Steam Deck on
   a 1280x800 screen, 4K elsewhere) only when there is no `launcher.cfg` yet.
   Before, a Deck got the 4K look, and an unreadable file counted as a first
