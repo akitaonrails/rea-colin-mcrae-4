@@ -32,8 +32,10 @@ All notable changes to this project. The format follows
 
 ### Changed
 
-- Updated rea-launcher-sdk to v0.3.0 (crates, vendored `sdk/` with the
-  SDK's standards and playbooks in `sdk/docs/`, CI workflows). Screen
+- Updated rea-launcher-sdk to v0.3.2 (crates, vendored `sdk/` with the
+  SDK's standards and playbooks in `sdk/docs/`, CI workflows). The Linux
+  helper now reads `display_mode`, the resolution and the scaler in any
+  case, and `--flag=value` works like `--flag value`. Screen
   readers now name the two folder fields by their headings ("Game
   folder", "Private copy folder").
 - The option table now uses the SDK for what the launcher did by hand: the

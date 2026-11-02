@@ -13,22 +13,22 @@ name = "CMR4Launcher"
 path = "src/main.rs"
 
 [dependencies]
-rea-launcher = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.1" }
+rea-launcher = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.2" }
 # The settings window's drawing is portable (src/window.rs), so its GUI
 # tests run headless on the host as well as under Wine.
-rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.1" }
+rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.2" }
 # The close hook DLL shipped in components/ (built with
 # `cargo build -p rea-launcher-close-hook`); its parser checks our
 # configuration in the host tests.
-rea-launcher-close-hook = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.1" }
+rea-launcher-close-hook = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.2" }
 
 [target.'cfg(windows)'.dependencies]
-rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.1" }
+rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.2" }
 
 [dev-dependencies]
-rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.1", features = ["testing"] }
+rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.2", features = ["testing"] }
 # The pure registry helpers (VirtualStore path) are host-testable.
-rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.1" }
+rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.2" }
 
 [profile.release]
 panic = "abort"
