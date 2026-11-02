@@ -1,3 +1,18 @@
-/target/
+# Local reverse-engineering and packaging evidence. Never commit
+# third-party binaries or anything copied out of the game.
 /.work/
 /.slim/deepwork/
+
+# User-supplied game data.
+/runtime-data/
+/original-data/
+
+# Build output.
+/target/
+/build/
+/dist/
+
+# Editor and operating system noise.
+.DS_Store
+*.swp
+*~

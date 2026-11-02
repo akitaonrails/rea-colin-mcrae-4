@@ -6,6 +6,11 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `.gitignore` also ignores `/dist/`, `/runtime-data/`, `/original-data/`
+  and `/build/`, so local packages and game data can't be committed.
+
 ## [0.2.0] - 2026-11-02
 
 ### Added
