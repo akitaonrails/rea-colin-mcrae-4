@@ -33,6 +33,11 @@ All notable changes to this project. The format follows
   SDK's standards and playbooks in `sdk/docs/`, CI workflows). Screen
   readers now name the two folder fields by their headings ("Game
   folder", "Private copy folder").
+- The option table now uses the SDK for what the launcher did by hand: the
+  `off` spelling of `fps_limit`, the removed `widescreen` key, the
+  switches in `--help`, Ctrl+Tab/Ctrl+PageDown tab switching, the chip
+  rows' and Play's screen-reader text. `--help`, `launcher.cfg` and the
+  window are unchanged.
 - Docs: README rewritten for this release (download links that don't
   name an old version, where saves live and how to uninstall, the
   generated `--help`, developer checks including `wine-test` and

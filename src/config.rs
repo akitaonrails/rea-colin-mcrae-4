@@ -150,6 +150,8 @@ pub const OPTIONS: &[OptionSpec] = &[
         "Frame-rate cap",
         "The most frames per second the game draws; 0 or off for no cap.",
     )
+    // What the window and older launchers wrote for no cap.
+    .with_value_aliases(&[("off", "0")])
     .with_example("60"),
     OptionSpec::new(
         "vsync",
@@ -169,13 +171,13 @@ pub const OPTIONS: &[OptionSpec] = &[
         "Private copy folder",
         "Where the launcher keeps its own copy of the game, with your saves and settings. Empty: %LOCALAPPDATA%\\CMR4Launcher\\CMR4. It must be outside the game folder.",
     ),
+    // `widescreen = on|off` and `--widescreen on|off` from launchers before
+    // 0.3.0: accepted and ignored, commented out on save.
+    OptionSpec::removed(
+        "widescreen",
+        "It only ever worked with a 16:9 resolution, so the resolution decides now.",
+    ),
 ];
-
-/// `widescreen = on|off` and `--widescreen on|off` from launchers before
-/// 0.3.0. The switch only ever worked with a 16:9 resolution, so it was
-/// removed (the resolution decides); old files and flags are accepted and
-/// ignored.
-pub const REMOVED: &[&str] = &["widescreen"];
 
 /// The launcher's own flags that take no value, with their `--help` text.
 pub const SWITCHES: [(&str, &str); 4] = [
@@ -184,16 +186,6 @@ pub const SWITCHES: [(&str, &str); 4] = [
     ("--settings", "only the settings window (Linux helper)"),
     ("--linux", "started by the Linux helper (cmr4-play)"),
 ];
-
-/// The spelling the table takes: `fps_limit = off` (what the window and
-/// older launchers wrote) is 0, no cap.
-fn normalize<'a>(key: &str, value: &'a str) -> &'a str {
-    if key == "fps_limit" && value.trim().eq_ignore_ascii_case("off") {
-        "0"
-    } else {
-        value
-    }
-}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Settings {
@@ -274,13 +266,8 @@ impl Settings {
     /// The settings in `text` and a warning per line that was refused.
     pub fn parse_file(text: &str) -> (Settings, Vec<String>) {
         let mut settings = Settings::default();
-        let warnings = cfg::parse(text, FILE_NAME, |key, value| {
-            if REMOVED.contains(&key) {
-                return Ok(());
-            }
-            spec::dispatch(OPTIONS, key, normalize(key, value), &mut |key, value| {
-                settings.apply(key, value)
-            })
+        let warnings = spec::parse_file(text, FILE_NAME, OPTIONS, |key, value| {
+            settings.apply(key, value)
         });
         (settings, warnings)
     }
@@ -314,16 +301,13 @@ impl Settings {
         } else {
             refresh_header(text)
         };
-        for option in OPTIONS {
+        for option in spec::active(OPTIONS) {
             out = match self.value_of(option.key) {
                 Some(value) => spec::set_key(&out, option, &value),
                 None => clear_key(&out, option.key),
             };
         }
-        for key in REMOVED {
-            out = clear_key(&out, key);
-        }
-        out
+        spec::retire_removed(&out, OPTIONS)
     }
 }
 
@@ -405,17 +389,9 @@ pub fn usage() -> String {
         "CMR4Launcher {}\n\nCMR4Launcher [options]\n\n",
         env!("CARGO_PKG_VERSION")
     );
-    out.push_str(&spec::usage(OPTIONS, KeyStyle::Underscore));
-    // The switches line up with the option lines above.
-    let width = OPTIONS
-        .iter()
-        .map(|o| o.flag_name(KeyStyle::Underscore).len() + 1 + o.placeholder().len())
-        .chain(SWITCHES.iter().map(|(flag, _)| flag.len()))
-        .max()
-        .unwrap_or(0);
-    for (flag, text) in SWITCHES.iter().chain(&[("--help", "show this help")]) {
-        out.push_str(&format!("  {flag:width$}  {text}\n"));
-    }
+    let mut switches = SWITCHES.to_vec();
+    switches.push(("--help", "show this help"));
+    out.push_str(&spec::usage_with(OPTIONS, KeyStyle::Underscore, &switches));
     out.push_str(
         "\nWith no options the settings window opens. Options override launcher.cfg\n\
          for one run; only --game is remembered there. The game folder is never\n\
@@ -427,23 +403,9 @@ pub fn usage() -> String {
 pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Cli, String> {
     let mut cli = Cli::default();
     let mut settings = Settings::default();
-    // Removed flags and their value are dropped; `--fps-limit off` is 0.
-    let mut kept = Vec::new();
-    let mut args = args.into_iter();
-    while let Some(arg) = args.next() {
-        if REMOVED.iter().any(|key| cfg::key_flag(key) == arg) {
-            args.next();
-            continue;
-        }
-        let next = (arg == "--fps-limit").then(|| args.next()).flatten();
-        kept.push(arg);
-        if let Some(value) = next {
-            kept.push(normalize("fps_limit", &value).to_owned());
-        }
-    }
     let switches: Vec<&str> = SWITCHES.iter().map(|(flag, _)| *flag).collect();
     match spec::parse_args(
-        kept,
+        args,
         KeyStyle::Underscore,
         OPTIONS,
         &switches,
@@ -606,7 +568,7 @@ mod tests {
             assert!(args(&[help]).unwrap().help, "{help}");
         }
         let text = usage();
-        for option in OPTIONS {
+        for option in spec::active(OPTIONS) {
             let flag = option.flag_name(KeyStyle::Underscore);
             assert!(text.contains(&flag), "{flag} missing from --help");
             assert!(text.contains(option.label), "{} missing", option.label);
@@ -955,7 +917,7 @@ mod tests {
         let (settings, warnings) = Settings::parse_file(&text);
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(settings, Settings::default());
-        for option in OPTIONS {
+        for option in spec::active(OPTIONS) {
             assert!(
                 text.contains(&format!("\n#{} ", option.key))
                     || text.contains(&format!("\n#{} =", option.key)),
@@ -1007,10 +969,10 @@ mod tests {
     fn the_table_is_consistent() {
         // Duplicate keys or flags, empty choices, bad examples: the GUI
         // parity test also checks the window's side.
-        let keys: Vec<&str> = OPTIONS.iter().map(|o| o.key).collect();
+        let keys: Vec<&str> = spec::active(OPTIONS).map(|o| o.key).collect();
         let problems = spec::parity_problems(OPTIONS, KeyStyle::Underscore, &keys);
         assert!(problems.is_empty(), "{problems:?}");
-        for option in OPTIONS {
+        for option in spec::active(OPTIONS) {
             assert!(!option.description.is_empty(), "{}", option.key);
             assert!(option.description.len() < 200, "{} too long", option.key);
         }

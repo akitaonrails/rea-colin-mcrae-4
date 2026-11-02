@@ -143,11 +143,7 @@ fn option(key: &str) -> &'static OptionSpec {
 fn name_control(ui: &egui::Ui, response: &egui::Response, key: &'static str) {
     let row = option(key);
     mark_rendered(ui.ctx(), row.key);
-    let (label, description) = (row.label, row.description);
-    ui.ctx().accesskit_node_builder(response.id, |node| {
-        node.set_label(label.to_owned());
-        node.set_description(description.to_owned());
-    });
+    widgets::name_control(response, Some(row.label), Some(row.description));
 }
 
 pub struct Window {
@@ -263,26 +259,15 @@ impl Window {
             "Play needs the game folder first."
         };
         let play = widgets::footer(ui, layout.footer, hint, self.check.ready());
-        // A disabled Play says why to screen readers too.
-        ctx.accesskit_node_builder(play.id, |node| node.set_description(hint.to_owned()));
+        // The footer describes a disabled Play; a ready one keeps its hint.
+        if self.check.ready() {
+            widgets::name_control(&play, None, Some(hint));
+        }
         if play.clicked() {
             self.play();
         }
         if ctx.input(|input| input.key_pressed(Key::Enter)) && !ctx.egui_wants_keyboard_input() {
             self.play();
-        }
-        // Keyboard: Ctrl+Tab / Ctrl+Shift+Tab (or Ctrl+PageDown/PageUp)
-        // change tabs, as LB/RB do on a pad; tabs are not focus stops.
-        let step = ctx.input_mut(|input| {
-            // The Shift form first: Ctrl+Tab would also match it.
-            let back = input.consume_key(egui::Modifiers::CTRL | egui::Modifiers::SHIFT, Key::Tab)
-                || input.consume_key(egui::Modifiers::CTRL, Key::PageUp);
-            let next = input.consume_key(egui::Modifiers::CTRL, Key::Tab)
-                || input.consume_key(egui::Modifiers::CTRL, Key::PageDown);
-            (next as isize) - (back as isize)
-        });
-        if step != 0 {
-            self.tab = self.tab.step(step);
         }
         // Taken, so a second egui pass in one frame can't play twice.
         for nav in std::mem::take(&mut self.pending) {
