@@ -8,6 +8,9 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- Settings window under Wine: Wine's own DPI setting (e.g. 144 or 192 in
+  `winecfg`) is divided out of the zoom the window is created with, so it is
+  no longer enlarged twice (2.25x/3x, taller than a 4K screen).
 - Saving a `launcher.cfg` written by v0.1.0/v0.2.0 replaces its header line
   "Command-line options override these values and are saved.", which is no
   longer true, with the current rule.

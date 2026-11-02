@@ -134,6 +134,9 @@ in the game yet.
 - **Folders that can't be canonicalized** (RAM disk, `subst`) now fall back
   to lexical normalisation. Check a game or runtime folder on such a drive on
   Windows.
+- **Settings window with Wine's DPI at 144 and 192** (`winecfg` → Graphics)
+  on a 4K screen: it must fit the screen at about 1.5x and be fully drawn;
+  at 96 DPI it must still open at 1.5x.
 
 ## Remaining unknowns
 

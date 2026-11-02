@@ -209,6 +209,28 @@ pub fn display_target() -> Option<display::Target> {
     })
 }
 
+/// Under Wine, before any window: makes the process DPI aware (so screen
+/// sizes are in pixels) and returns Wine's DPI setting as a scale (1.0 at
+/// 96 DPI, 1.5 at 144). Wine has one DPI for every monitor, so system
+/// awareness loses nothing there; on Windows winit's per-monitor
+/// awareness is left alone.
+pub fn wine_dpi_scale() -> f32 {
+    use windows_sys::Win32::Graphics::Gdi::{GetDC, GetDeviceCaps, LOGPIXELSY, ReleaseDC};
+    use windows_sys::Win32::UI::WindowsAndMessaging::SetProcessDPIAware;
+    // SAFETY: plain GDI calls on the screen DC, released before returning.
+    let dpi = unsafe {
+        SetProcessDPIAware();
+        let dc = GetDC(null_mut());
+        if dc.is_null() {
+            return 1.0;
+        }
+        let dpi = GetDeviceCaps(dc, LOGPIXELSY as i32);
+        ReleaseDC(null_mut(), dc);
+        dpi
+    };
+    if dpi > 0 { dpi as f32 / 96.0 } else { 1.0 }
+}
+
 pub fn screen_size() -> Option<(u32, u32)> {
     display_target().map(|target| target.size)
 }
