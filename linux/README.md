@@ -69,12 +69,18 @@ configuration and log are under the prefix user's
 RT/LT pedals were driven through `cmr4-play` (gamescope) with an 8BitDo pad;
 separate Proton/Deck testing and protected retail media remain unverified.
 
-Build from an allowlisted unpacked Windows package:
+Build from an allowlisted unpacked Windows package with the shared builder
+(vendored from rea-launcher-sdk):
 
 ```sh
-packaging/appimage/build.sh <unpacked-package-folder> <output-folder>
+sdk/packaging/appimage-wine.sh --app cmr4 --exe CMR4Launcher.exe \
+  --icon packaging/appimage/cmr4-launcher.png \
+  --desktop packaging/appimage/cmr4-launcher.desktop \
+  --payload components --doc licenses --doc docs \
+  <unpacked-package-folder> <output-folder>
 ```
 
 The build downloads Wine, appimagetool, and the AppImage runtime from their
-official releases and verifies pinned SHA-256 digests. Wine source and LGPL notices are included in
-the AppImage under `usr/share/doc/wine`.
+official releases and verifies the SHA-256 digests pinned in
+`sdk/packaging/appimage/tools.pins`. Wine source and LGPL notices are included
+in the AppImage under `usr/share/doc/wine`.

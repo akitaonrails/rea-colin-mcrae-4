@@ -1,0 +1,28 @@
+# Every file of the Windows zip (sdk/packaging/smoke-package.sh). Each one
+# must be present and non-empty; anything else, game data above all, fails.
+CMR4Launcher.exe
+README.md
+THIRD_PARTY.md
+LICENSE-MIT
+LICENSE-APACHE
+docs/ENHANCEMENTS.md
+docs/RESEARCH.md
+docs/RUNTIME_NOTES.md
+docs/images/game.png
+docs/images/launcher-picture.png
+docs/images/launcher.png
+components/D3D9.dll
+components/cmr4close.dll
+components/dinput8.dll
+components/d3d11.dll
+components/dxgi.dll
+linux/cmr4-play x
+linux/rea-play.sh
+linux/README.md
+licenses/dgVoodoo2/README.md
+licenses/DXVK/LICENSE
+licenses/Xidi/LICENSE
+licenses/Xidi/README.md
+licenses/Xidi/ThirdParty/Boost_LICENSE
+licenses/Xidi/ThirdParty/Hookshot_LICENSE
+licenses/Xidi/ThirdParty/XstdBitSet_LICENSE

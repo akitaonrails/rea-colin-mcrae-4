@@ -7,99 +7,48 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 permissions:
   contents: read
 
 jobs:
-  package:
-    name: Test and build CMR04 packages
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Install packaging and 32-bit MinGW tools
-        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-i686 zip unzip
-
-      - name: Install Rust with the 32-bit Windows target
-        run: |
-          rustup toolchain install stable --profile minimal --component clippy,rustfmt
-          rustup target add i686-pc-windows-gnu
-
-      - name: Check formatting
-        run: cargo fmt --all --check
-
-      - name: Host unit tests
-        run: cargo test --workspace --locked
-
-      - name: Linux helper and package tests
-        run: |
-          sh linux/tests/gpu-env.sh
-          sh linux/tests/gamescope.sh
-          sh linux/tests/supervision.sh
-          sh packaging/tests/package.sh
-
-      - name: Lint the Windows target
-        run: cargo clippy --release --target i686-pc-windows-gnu --all-targets --locked -- -D warnings
-
-      - name: Build CMR4Launcher.exe
-        run: cargo build --release --target i686-pc-windows-gnu --locked
-
-      - name: Assemble and smoke-check the Windows package
-        env:
-          CMR4_CACHE: ${{ runner.temp }}/cmr4-components
-        run: |
-          packaging/build-windows.sh "${GITHUB_REF_NAME//\//-}" dist "$CMR4_CACHE"
-          name=CMR4Launcher-${GITHUB_REF_NAME//\//-}
-          echo "PACKAGE=dist/$name.zip" >> "$GITHUB_ENV"
-          echo "PACKAGE_DIR=dist/$name" >> "$GITHUB_ENV"
-          echo "APPIMAGE=dist/$name-x86_64.AppImage" >> "$GITHUB_ENV"
-
-      - name: Build and smoke-check the Linux AppImage
-        env:
-          CMR4_CACHE: ${{ runner.temp }}/cmr4-appimage
-        run: |
-          packaging/appimage/build.sh "$PACKAGE_DIR" dist/appimage
-          mv dist/appimage/CMR4Launcher-x86_64.AppImage "$APPIMAGE"
-          test -s "$APPIMAGE"
-
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: CMR4Launcher-windows
-          path: ${{ env.PACKAGE }}
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: CMR4Launcher-linux
-          path: ${{ env.APPIMAGE }}
-          if-no-files-found: error
+  ci:
+    # fmt, host tests, cargo audit/deny, shell syntax and tests (linux/tests,
+    # packaging/tests), the sdk/ drift check, Windows clippy and release
+    # build, then the zip and the AppImage checked against the allowlist.
+    uses: akitaonrails/rea-launcher-sdk/.github/workflows/launcher-ci.yml@v0.1.0
+    with:
+      apt-packages: gcc-mingw-w64-i686 lld zip unzip
+      shell-tests: linux/tests/*.sh packaging/tests/*.sh
+      package-command: |
+        packaging/build-windows.sh "$REA_VERSION_NAME" dist "$REA_CACHE"
+        "$REA_SDK/packaging/appimage-wine.sh" --app cmr4 --exe CMR4Launcher.exe \
+          --icon packaging/appimage/cmr4-launcher.png \
+          --desktop packaging/appimage/cmr4-launcher.desktop \
+          --payload components --doc licenses --doc docs \
+          --cache "$REA_CACHE" \
+          --name "CMR4Launcher-$REA_VERSION_NAME" \
+          "dist/CMR4Launcher-$REA_VERSION_NAME" dist
+        test -s "dist/CMR4Launcher-$REA_VERSION_NAME-x86_64.AppImage"
+      package-dir: dist/CMR4Launcher-*.zip
+      package-allowlist: packaging/package.allow
+      artifact-name: CMR4Launcher-packages
+      artifact-paths: |
+        dist/*.zip
+        dist/*.AppImage
 
   release:
-    name: Publish version-tag releases
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: package
-    runs-on: ubuntu-24.04
+    needs: ci
     permissions:
       contents: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Verify the tag matches the package version
-        run: |
-          version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
-          test "$GITHUB_REF_NAME" = "v${version}"
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          pattern: CMR4Launcher-*
-          merge-multiple: true
-          path: dist
-      - name: Create checksums
-        run: (cd dist && sha256sum ./*.zip ./*.AppImage > SHA256SUMS)
-      - name: Create the GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "$GITHUB_REF_NAME" dist/*
-          --repo "$GITHUB_REPOSITORY"
-          --title "$GITHUB_REF_NAME"
-          --verify-tag
-          --generate-notes
+      id-token: write
+      attestations: write
+    uses: akitaonrails/rea-launcher-sdk/.github/workflows/launcher-release.yml@v0.1.0
+    with:
+      package: cmr4-launcher
+      artifact-pattern: CMR4Launcher-*
+      notes: generate

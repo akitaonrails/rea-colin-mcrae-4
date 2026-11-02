@@ -21,7 +21,9 @@ tar -xzf "$CACHE/dxvk-3.1.1.tar.gz" -C "$TMP/dxvk" \
 
 [ -s "$TMP/dgvoodoo/MS/x86/D3D9.dll" ]
 cp "$TMP/dgvoodoo/MS/x86/D3D9.dll" "$PKG/components/D3D9.dll"
-echo '6f0eae6d0fbe836490b1aa3361304d2398fdb5d815a929e126b5ae7b13b16e47  '"$PKG/components/D3D9.dll" | sha256sum -c --quiet
+. "$HERE/../sdk/packaging/pins.sh"
+PIN_FILE=$HERE/components.pins
+pin_verify "$PKG/components/D3D9.dll" "$(pin_sha dgvoodoo-d3d9)"
 [ -s "$TMP/xidi/Xidi-v4.3.1/Win32/dinput8.dll" ]
 cp "$TMP/xidi/Xidi-v4.3.1/Win32/dinput8.dll" "$PKG/components/dinput8.dll"
 for name in d3d11.dll dxgi.dll; do

@@ -27,7 +27,7 @@ cp "$ROOT/sdk/rea-play.sh" "$PKG/linux/rea-play.sh"
 chmod +x "$PKG/linux/cmr4-play"
 "$HERE/install-components.sh" "$PKG" "$CACHE"
 cp "$HOOK" "$PKG/components/cmr4close.dll"
-"$HERE/smoke-package.sh" "$PKG"
+sh "$ROOT/sdk/packaging/smoke-package.sh" "$PKG" "$HERE/package.allow"
 rm -f "$OUT/$NAME.zip"
 (cd "$OUT" && zip -qr "$NAME.zip" "$NAME")
 unzip -tq "$OUT/$NAME.zip"

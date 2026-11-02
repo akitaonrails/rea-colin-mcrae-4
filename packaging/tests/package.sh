@@ -1,46 +1,59 @@
 #!/bin/sh
-# Package allowlist smoke tests; no network, Wine, or game process.
+# Package allowlist and pin smoke tests; no network, Wine, or game process.
 set -eu
 HERE=$(dirname "$(readlink -f "$0")")
+ROOT=$HERE/../..
+SMOKE="sh $ROOT/sdk/packaging/smoke-package.sh"
+ALLOW=$HERE/../package.allow
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT HUP INT TERM
 PKG=$T/pkg
-mkdir -p "$PKG/components" "$PKG/linux" "$PKG/docs/images" "$PKG/licenses/dgVoodoo2" "$PKG/licenses/DXVK" "$PKG/licenses/Xidi/ThirdParty"
-for file in CMR4Launcher.exe README.md docs/ENHANCEMENTS.md docs/RESEARCH.md docs/RUNTIME_NOTES.md docs/images/game.png docs/images/launcher.png docs/images/launcher-picture.png THIRD_PARTY.md LICENSE-MIT LICENSE-APACHE \
-  components/D3D9.dll components/cmr4close.dll \
-  components/dinput8.dll components/d3d11.dll components/dxgi.dll linux/cmr4-play linux/rea-play.sh linux/README.md \
-  licenses/DXVK/LICENSE \
-  licenses/dgVoodoo2/README.md \
-  licenses/Xidi/LICENSE licenses/Xidi/README.md \
-  licenses/Xidi/ThirdParty/Boost_LICENSE licenses/Xidi/ThirdParty/Hookshot_LICENSE \
-  licenses/Xidi/ThirdParty/XstdBitSet_LICENSE; do
+# A package with every allowlisted file.
+awk '!/^[ \t]*(#|$)/ { print $1 }' "$ALLOW" | while IFS= read -r file; do
+  mkdir -p "$PKG/$(dirname "$file")"
   echo fixture > "$PKG/$file"
 done
 chmod +x "$PKG/linux/cmr4-play"
-"$HERE/../smoke-package.sh" "$PKG" >/dev/null
+$SMOKE "$PKG" "$ALLOW" >/dev/null
 echo "ok   complete allowlisted package passes"
+for required in linux/rea-play.sh components/cmr4close.dll licenses/Xidi/LICENSE; do
+  grep -qx "$required\( .*\)\{0,1\}" "$ALLOW" || { echo "$required is not allowlisted" >&2; exit 1; }
+done
+echo "ok   the play library, close hook and licences are shipped"
 mkdir -p "$PKG/Game"
 echo asset > "$PKG/Game/track.dat"
-if "$HERE/../smoke-package.sh" "$PKG" >/dev/null 2>&1; then
+if $SMOKE "$PKG" "$ALLOW" >/dev/null 2>&1; then
   echo "unexpected game content passed" >&2; exit 1
 fi
-rm "$PKG/Game/track.dat"
+rm -r "$PKG/Game"
 echo "ok   unexpected game content fails"
 echo not-a-game > "$PKG/cmr4.exe"
-if "$HERE/../smoke-package.sh" "$PKG" >/dev/null 2>&1; then
+if $SMOKE "$PKG" "$ALLOW" >/dev/null 2>&1; then
   echo "game executable name passed" >&2; exit 1
 fi
 rm "$PKG/cmr4.exe"
 echo "ok   game executable name fails"
+chmod -x "$PKG/linux/cmr4-play"
+if $SMOKE "$PKG" "$ALLOW" >/dev/null 2>&1; then
+  echo "non-executable helper passed" >&2; exit 1
+fi
+chmod +x "$PKG/linux/cmr4-play"
+echo "ok   the helper must be executable"
 rm "$PKG/components/dinput8.dll"
-if "$HERE/../smoke-package.sh" "$PKG" >/dev/null 2>&1; then
+if $SMOKE "$PKG" "$ALLOW" >/dev/null 2>&1; then
   echo "missing component passed" >&2; exit 1
 fi
 echo "ok   missing required component fails"
-# Every checksum-pinned download must name a fixed release, never a moving tag.
-sh -n "$HERE/../appimage/build.sh"
-if grep -n 'releases/download/continuous/' "$HERE/../appimage/build.sh" >&2; then
-  echo "AppImage build pins a moving release tag" >&2; exit 1
-fi
-echo "ok   AppImage downloads pin fixed releases"
+# Every pin parses; checksum-pinned downloads name fixed releases, never a
+# moving tag.
+. "$ROOT/sdk/packaging/pins.sh"
+PIN_FILE=$HERE/../components.pins
+for name in xidi dxvk dgvoodoo-d3d9; do pin_sha "$name" >/dev/null; done
+echo "ok   component pins parse"
+for pins in "$HERE/../components.pins" "$ROOT/sdk/packaging/appimage/tools.pins"; do
+  if grep -n 'releases/download/continuous/' "$pins" >&2; then
+    echo "$pins pins a moving release tag" >&2; exit 1
+  fi
+done
+echo "ok   downloads pin fixed releases"
 echo "all passed"
