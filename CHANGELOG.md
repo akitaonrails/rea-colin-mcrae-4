@@ -16,6 +16,9 @@ All notable changes to this project. The format follows
 
 ### Changed
 
+- CI builds with `--locked`, pins its actions by commit, fails when a
+  package artifact is missing, checks the tag against the crate version and
+  publishes `SHA256SUMS` with each release.
 - `.gitignore` also ignores `/dist/`, `/runtime-data/`, `/original-data/`
   and `/build/`, so local packages and game data can't be committed.
 
