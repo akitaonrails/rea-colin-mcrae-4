@@ -1,0 +1,86 @@
+# launcher.cfg: "resolution = 1920x1080\nfps_limit = 60\nvsync = on\n"
+# flags: []
+# known build: true; platform: Platform { wine: false, gamescope: false, output: None }; inherited WINEDLLOVERRIDES: None
+# screen: 3840x2160
+
+patch sets: widescreen
+game renders: 1440x1080
+wrappers installed: D3D9.dll, dinput8.dll
+wrappers taken out: d3d11.dll, dxgi.dll
+arguments: (none)
+prefer fast GPU: true
+gamepad profile setup: true
+
+[registry SOFTWARE\Codemasters\Colin McRae Rally 04]
+AUDIO_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
+CD_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
+INSTALL_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
+VIDEO_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
+Width = dword:1440
+Height = dword:1080
+LANGUAGE = string:"E" (if missing)
+Adapter = dword:0 (if missing)
+ADAPTER_PID = dword:0 (if missing)
+ADAPTER_VID = dword:0 (if missing)
+BitDepth = dword:1 (if missing)
+ZDepth = dword:1 (if missing)
+SHADERS = dword:1 (if missing)
+FSAA = dword:0 (if missing)
+Gamma = dword:1 (if missing)
+MOVIE_QUALITY = dword:0 (if missing)
+
+[winebus, seeded when absent]
+
+[environment]
+
+[file dgVoodoo.conf]
+[General]
+FullScreenOutput                    = default
+FullScreenMode                      = true
+ScalingMode                         = stretched
+
+[GeneralExt]
+FullscreenAttributes                = 
+FPSLimit                            = 60
+
+[DirectX]
+Resolution                          = h:1920, v:1080
+Filtering                           = appdriven
+Antialiasing                        = appdriven
+ForceVerticalSync                   = true
+dgVoodooWatermark                   = false
+
+[DirectXExt]
+ExtraEnumeratedResolutions          = 1440x1080@60
+
+[file Xidi.ini]
+[Mapper]
+Type = CMR04Gamepad
+
+[CustomMapper:CMR04Gamepad]
+Template = StandardGamepad
+StickLeftX = Axis(X)
+StickLeftY = Null
+TriggerRT = Axis(Y, -)
+TriggerLT = Axis(Y, +)
+
+[Properties]
+UseBuiltInProperties = yes
+DeadzonePercentStickLeft = 5
+DeadzonePercentStickRight = 5
+DeadzonePercentTriggerLT = 0
+DeadzonePercentTriggerRT = 0
+SaturationPercentStickLeft = 100
+SaturationPercentStickRight = 100
+SaturationPercentTriggerLT = 100
+SaturationPercentTriggerRT = 100
+
+[Log]
+Enabled = no
+Level = 1
+
+[Import]
+dinput8.dll = C:\Windows\system32\dinput8.dll
+
+[Workarounds]
+ActiveVirtualControllerMask = 0x01

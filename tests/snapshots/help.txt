@@ -1,0 +1,20 @@
+CMR4Launcher 0.2.0
+
+CMR4Launcher [options]
+
+  --game <folder>                        Game folder
+  --look original|widescreen|steam_deck  Look
+  --resolution <WxH>                     Resolution
+  --fps-limit <0-1000>                   Frame-rate cap
+  --vsync on|off                         VSync
+  --controller on|off                    Gamepad
+  --runtime <folder>                     Private copy folder
+  --check                                check the game and settings only
+  --no-window                            play with saved settings and flags
+  --settings                             only the settings window (Linux helper)
+  --linux                                started by the Linux helper (cmr4-play)
+  --help                                 show this help
+
+With no options the settings window opens. Options override launcher.cfg
+for one run; only --game is remembered there. The game folder is never
+modified.

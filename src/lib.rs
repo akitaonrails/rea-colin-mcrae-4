@@ -17,3 +17,6 @@ pub const GAME_EXE: &str = "cmr4.exe";
 
 #[cfg(test)]
 mod e2e;
+
+#[cfg(test)]
+mod snapshots;

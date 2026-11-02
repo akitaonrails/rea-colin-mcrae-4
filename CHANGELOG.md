@@ -70,6 +70,11 @@ All notable changes to this project. The format follows
   game's environment, patch sets), then carried out; `launcher.log` now
   records the components installed and taken out and the game's
   `WINEDLLOVERRIDES`. A disabled Play button tells screen readers why.
+- Golden snapshots (`tests/snapshots/`, `src/snapshots.rs`): `--help`, the
+  first-run `launcher.cfg`, and the full launch plan for each look and
+  three option combinations (native Windows, Wine on a second monitor
+  without the gamepad, gamescope with an unknown build), so an SDK update
+  can't change what the launcher writes unnoticed.
 - Tests: every option end to end (window control and flag → the same
   `launcher.cfg` key → dgVoodoo.conf, Xidi, the registry, the environment
   or the patch), headless GUI tests of every tab (`egui_kittest`, on the

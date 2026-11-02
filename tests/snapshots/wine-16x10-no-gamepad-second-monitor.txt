@@ -1,0 +1,57 @@
+# launcher.cfg: "resolution = 1920x1200\n"
+# flags: ["--controller", "off"]
+# known build: true; platform: Platform { wine: true, gamescope: false, output: Some(2) }; inherited WINEDLLOVERRIDES: Some("d3d9.dll=b;xinput1_3=n")
+# screen: 3840x2160
+
+patch sets: (none)
+game renders: 1920x1200
+wrappers installed: D3D9.dll, d3d11.dll, dxgi.dll
+wrappers taken out: dinput8.dll
+arguments: (none)
+prefer fast GPU: false
+gamepad profile setup: false
+
+[registry SOFTWARE\Codemasters\Colin McRae Rally 04]
+AUDIO_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
+CD_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
+INSTALL_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
+VIDEO_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
+Width = dword:1920
+Height = dword:1200
+LANGUAGE = string:"E" (if missing)
+Adapter = dword:0 (if missing)
+ADAPTER_PID = dword:0 (if missing)
+ADAPTER_VID = dword:0 (if missing)
+BitDepth = dword:1 (if missing)
+ZDepth = dword:1 (if missing)
+SHADERS = dword:1 (if missing)
+FSAA = dword:0 (if missing)
+Gamma = dword:1 (if missing)
+MOVIE_QUALITY = dword:0 (if missing)
+
+[winebus, seeded when absent]
+
+[environment]
+WINEDLLOVERRIDES=dsound,d3d9,d3d11,dxgi=n,b;mscoree=d;xinput1_3=n
+
+[file dgVoodoo.conf]
+[General]
+FullScreenOutput                    = 2
+FullScreenMode                      = true
+ScalingMode                         = stretched_ar
+
+[GeneralExt]
+FullscreenAttributes                = fake
+FPSLimit                            = 0
+
+[DirectX]
+Resolution                          = h:1920, v:1200
+Filtering                           = appdriven
+Antialiasing                        = appdriven
+ForceVerticalSync                   = false
+dgVoodooWatermark                   = false
+
+[DirectXExt]
+ExtraEnumeratedResolutions          = 1920x1200@60
+
+[file Xidi.ini: removed when it is the launcher's]

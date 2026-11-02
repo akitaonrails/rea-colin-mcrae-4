@@ -971,6 +971,16 @@ mod tests {
         .save_into("");
         assert!(filled.contains("\nvsync = on\n"));
         assert_eq!(filled.matches("vsync =").count(), 1);
+        // Placeholders with an example are filled in place too.
+        let filled = Settings {
+            resolution: Some(Resolution::Custom(2560, 1440)),
+            fps_limit: Some(30),
+            ..Settings::default()
+        }
+        .save_into("");
+        assert_eq!(filled.matches("resolution =").count(), 1, "{filled}");
+        assert_eq!(filled.matches("fps_limit =").count(), 1, "{filled}");
+        assert!(filled.contains("\nresolution = 2560x1440\n"));
     }
 
     #[test]
