@@ -4,6 +4,14 @@ All notable changes to this project. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.1] - 2026-11-02
+
+### Fixed
+
+- The --help golden snapshot no longer contains the version, which made
+  the v0.3.0 release build fail; v0.3.0 was tagged but never published,
+  so this release carries everything listed under 0.3.0.
+
 ## [0.3.0] - 2026-11-02
 
 ### Removed
