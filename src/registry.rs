@@ -20,6 +20,28 @@ pub const DEFAULT_DWORDS: [(&str, u32); 9] = [
     ("MOVIE_QUALITY", 0),
 ];
 
+/// Wine's bus driver: present pads to the game as XInput controllers, which
+/// Xidi then reads. Seeded once; a value the player set (for instance
+/// `Map Controllers = 0` to hide the pad from XInput) is kept.
+pub const WINEBUS_DEFAULTS: [(&str, u32); 1] = [("Map Controllers", 1)];
+
+/// Writes each default whose value is absent and leaves present ones alone.
+/// Returns whether anything was written.
+pub fn seed_missing<E>(
+    defaults: &[(&str, u32)],
+    mut has: impl FnMut(&str) -> Result<bool, E>,
+    mut write: impl FnMut(&str, u32) -> Result<(), E>,
+) -> Result<bool, E> {
+    let mut wrote = false;
+    for &(name, value) in defaults {
+        if !has(name)? {
+            write(name, value)?;
+            wrote = true;
+        }
+    }
+    Ok(wrote)
+}
+
 pub fn install_root(runtime: &std::path::Path) -> String {
     runtime
         .to_string_lossy()
@@ -130,6 +152,40 @@ mod tests {
             assert!(name.is_ascii());
         }
         assert_eq!(DEFAULT_DWORDS[8], ("MOVIE_QUALITY", 0));
+    }
+
+    #[test]
+    fn seeding_writes_only_absent_values_and_keeps_the_players() {
+        use std::collections::BTreeMap;
+        let mut key = BTreeMap::from([("Map Controllers".to_string(), 0u32)]);
+        let seed = |key: &mut BTreeMap<String, u32>, defaults: &[(&str, u32)]| {
+            let present: Vec<String> = key.keys().cloned().collect();
+            let mut written = Vec::new();
+            let wrote = seed_missing::<()>(
+                defaults,
+                |name| Ok(present.iter().any(|p| p == name)),
+                |name, value| {
+                    written.push((name.to_string(), value));
+                    Ok(())
+                },
+            )
+            .unwrap();
+            key.extend(written);
+            wrote
+        };
+        // A player's Map Controllers = 0 survives every launch.
+        assert!(!seed(&mut key, &WINEBUS_DEFAULTS));
+        assert_eq!(key["Map Controllers"], 0);
+        // A fresh prefix gets the default once.
+        let mut fresh = BTreeMap::new();
+        assert!(seed(&mut fresh, &WINEBUS_DEFAULTS));
+        assert_eq!(fresh["Map Controllers"], 1);
+        assert!(!seed(&mut fresh, &WINEBUS_DEFAULTS));
+        // Errors stop the seeding.
+        assert_eq!(
+            seed_missing(&DEFAULT_DWORDS, |_| Err("denied"), |_, _| Ok(())),
+            Err("denied")
+        );
     }
 
     #[test]

@@ -237,8 +237,8 @@ mod app {
 
         let (place, (width, height)) = win32::write_game_registry(game_mode, &runtime)?;
         if wine {
-            if settings.controller() {
-                win32::map_wine_controllers()?;
+            if settings.controller() && win32::map_wine_controllers()? {
+                log_line("Wine: winebus Map Controllers seeded (absent before)");
             }
         } else if let Err(error) = win32::prefer_fast_gpu(&runtime_exe) {
             log_line(&format!("warning: {error}"));

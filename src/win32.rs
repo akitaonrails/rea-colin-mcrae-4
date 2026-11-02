@@ -424,18 +424,24 @@ pub fn write_game_registry(
     if !has_value(&key, "LANGUAGE")? {
         write_string(&key, "LANGUAGE", "E")?;
     }
-    for (name, value) in registry::DEFAULT_DWORDS {
-        if !has_value(&key, name)? {
-            write_dword(&key, name, value)?;
-        }
-    }
+    registry::seed_missing(
+        &registry::DEFAULT_DWORDS,
+        |name| has_value(&key, name),
+        |name, value| write_dword(&key, name, value),
+    )?;
     Ok((place, (width, height)))
 }
 
-pub fn map_wine_controllers() -> Result<(), String> {
+/// Seeds Wine's `Map Controllers` when the prefix has no value yet; a value
+/// already there (the player's choice) is kept. Returns whether it wrote.
+pub fn map_wine_controllers() -> Result<bool, String> {
     let key = create_key(HKEY_LOCAL_MACHINE, WINEBUS_KEY, false)
         .map_err(|code| format!("cannot open Wine winebus key (error {code})"))?;
-    write_dword(&key, "Map Controllers", 1)
+    registry::seed_missing(
+        &registry::WINEBUS_DEFAULTS,
+        |name| has_value(&key, name),
+        |name, value| write_dword(&key, name, value),
+    )
 }
 
 /// Selects Windows' high-performance GPU without replacing an existing user choice.

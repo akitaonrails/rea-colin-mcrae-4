@@ -107,6 +107,15 @@ is excluded from evidence.
 - Linux exports both SDL background-event variables independently and keeps
   existing user choices.
 
+## Unreleased changes awaiting a game check
+
+Host tests and the Windows cross-build cover these; none has been exercised
+in the game yet.
+
+- **winebus `Map Controllers`** is now seeded only when absent (it was forced
+  to 1 every launch). Check that a fresh prefix still drives with the pad, and
+  that a prefix where it was set to 0 by hand keeps 0.
+
 ## Remaining unknowns
 
 - **Native Windows:** startup, dgVoodoo-to-system-D3D11 behavior, native GPU

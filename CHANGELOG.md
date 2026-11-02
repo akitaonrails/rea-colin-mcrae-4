@@ -8,6 +8,9 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- Wine: winebus `Map Controllers` is written only when the prefix has no
+  value, so a player's own setting is kept instead of being reset to 1 on
+  every launch.
 - The Controls tab no longer tells players to choose the controller and
   analogue pedals in the game's Options; the launcher does that for a
   profile whose controls were never set up.
