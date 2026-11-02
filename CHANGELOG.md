@@ -35,6 +35,13 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- An unknown `cmr4.exe` no longer stops the launch. Builds are identified
+  by SHA-256 (`src/edition.rs`); the widescreen fix is a patch table
+  applied only to the known 1.0.0.0 build (also when it already carries
+  the community fix) and verified against its expected hash. Any other
+  build runs unpatched, with the game's own view, and the window and log
+  say so in plain words with the code to report and a link to the new
+  "Unknown edition" issue form.
 - Settings window under Wine: Wine's own DPI setting (e.g. 144 or 192 in
   `winecfg`) is divided out of the zoom the window is created with, so it is
   no longer enlarged twice (2.25x/3x, taller than a 4K screen).

@@ -1,0 +1,47 @@
+name: Unknown edition
+description: The launcher says your cmr4.exe is a version it doesn't know yet.
+title: "Unknown edition: "
+labels: ["unknown edition"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks: this is how new editions get the widescreen fix. The game still runs without it meanwhile.
+        **Never attach cmr4.exe or any other game file.** The code (SHA-256) is all we need.
+  - type: input
+    id: sha256
+    attributes:
+      label: The code from the launcher (SHA-256 of cmr4.exe)
+      description: The 64-character code in the launcher's message, or the "cmr4.exe SHA-256" line of launcher.log.
+      placeholder: 7dca9f4cab16bc1a98df8871f3d20aec4cd931a818ea0899db86c83c1f712b41
+    validations:
+      required: true
+  - type: input
+    id: edition
+    attributes:
+      label: Where your copy comes from
+      description: For example "UK retail CD, patched to 1.01", "budget re-release", "Spanish DVD".
+    validations:
+      required: true
+  - type: input
+    id: details
+    attributes:
+      label: cmr4.exe size and version
+      description: Right-click cmr4.exe → Properties → Details (file version), and its size in bytes.
+  - type: input
+    id: version
+    attributes:
+      label: Launcher version
+      description: The first line of launcher.log, for example "CMR4Launcher 0.3.0".
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: launcher.log
+      description: |
+        Windows: %LOCALAPPDATA%\CMR4Launcher\launcher.log. AppImage/Wine: in the prefix (~/.local/share/cmr4-launcher/prefix/drive_c/users/<you>/AppData/Local/CMR4Launcher).
+        Remove personal paths before posting.
+      render: text
+    validations:
+      required: true

@@ -5,8 +5,8 @@
 pub mod components;
 pub mod config;
 pub mod display;
+pub mod edition;
 pub mod form;
-pub mod patch;
 pub mod profile;
 pub mod registry;
 pub mod runtime;

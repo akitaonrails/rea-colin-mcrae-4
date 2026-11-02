@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use cmr4_launcher::config::Resolution;
 use cmr4_launcher::form::{self, Form, Look, Tab};
-use cmr4_launcher::{GAME_EXE, patch};
+use cmr4_launcher::{GAME_EXE, edition};
 use rea_launcher::identify::validate_pe32;
 use rea_launcher_ui::eframe;
 use rea_launcher_ui::egui::{self, Align2, Color32, Key, TextureHandle};
@@ -102,7 +102,10 @@ pub fn show(settings_path: &Path, text: Option<&str>, linux: bool) -> Result<Out
 
 enum Check {
     Empty,
+    /// A known build, by name.
     Found(String),
+    /// A build the launcher doesn't know: playable, without the fix.
+    Unknown(String),
     Problem(String),
 }
 
@@ -128,10 +131,10 @@ fn check_game(folder: &str, widescreen: bool) -> Check {
             if let Err(error) = validate_pe32(&bytes) {
                 return Check::Problem(format!("{GAME_EXE}: {error}"));
             }
-            let mut patched = bytes.clone();
-            match patch::widescreen(&mut patched, widescreen) {
-                Ok(outcome) => Check::Found(format!("PE32 found; widescreen check: {outcome:?}")),
-                Err(error) => Check::Problem(error.to_string()),
+            let exe = edition::prepare(&bytes, widescreen);
+            match exe.edition {
+                Some(name) => Check::Found(format!("Found {name}.")),
+                None => Check::Unknown(edition::unknown_message(&exe.sha256)),
             }
         }
         Err(error) => Check::Problem(format!("Can't read {GAME_EXE}: {error}")),
@@ -190,7 +193,7 @@ impl<'a> Window<'a> {
     }
 
     fn ready(&self) -> bool {
-        matches!(self.check, Check::Found(_))
+        matches!(self.check, Check::Found(_) | Check::Unknown(_))
     }
 
     fn play(&mut self, ctx: &egui::Context) {
@@ -329,7 +332,9 @@ impl Window<'_> {
     fn status(&self, ui: &mut egui::Ui) {
         let (text, color) = match (&self.error, &self.check) {
             (Some(error), _) => (error.clone(), ERROR),
-            (None, Check::Found(_)) => ("Ready. Press Play or Enter.".to_string(), MUTED),
+            (None, Check::Found(_) | Check::Unknown(_)) => {
+                ("Ready. Press Play or Enter.".to_string(), MUTED)
+            }
             (None, _) => (
                 "First, show the launcher where the game is.".to_string(),
                 MUTED,
@@ -356,6 +361,7 @@ impl Window<'_> {
                 MUTED,
             ),
             Check::Found(name) => (name.clone(), INK),
+            Check::Unknown(message) => (message.clone(), ERROR),
             Check::Problem(problem) => (problem.clone(), ERROR),
         };
         ui.label(egui::RichText::new(note).font(body(13.0)).color(color));

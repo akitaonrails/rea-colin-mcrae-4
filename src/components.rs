@@ -572,7 +572,10 @@ mod tests {
         fs::write(runtime.join("D3D9.dll"), b"dgVoodoo 2.80").unwrap();
         fs::write(
             runtime.join(OWNERSHIP_FILE),
-            format!("{}\tD3D9.dll\n", crate::patch::sha256(b"dgVoodoo 2.80")),
+            format!(
+                "{}\tD3D9.dll\n",
+                rea_launcher::identify::hex(&rea_launcher::identify::sha256(b"dgVoodoo 2.80"))
+            ),
         )
         .unwrap();
         install(
@@ -592,7 +595,7 @@ mod tests {
         let ledger = fs::read_to_string(runtime.join(OWNERSHIP_FILE)).unwrap();
         assert!(ledger.contains(&format!(
             "{}\tD3D9.dll\n",
-            crate::patch::sha256(b"bundle D3D9.dll")
+            rea_launcher::identify::hex(&rea_launcher::identify::sha256(b"bundle D3D9.dll"))
         )));
         for path in [game, runtime, components] {
             fs::remove_dir_all(path).unwrap();

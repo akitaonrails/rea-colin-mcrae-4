@@ -11,7 +11,7 @@ mod app {
     use std::path::{Path, PathBuf};
 
     use cmr4_launcher::config::{self, Settings};
-    use cmr4_launcher::patch::{self, Outcome};
+    use cmr4_launcher::edition::{self, Prepared};
     use cmr4_launcher::{GAME_EXE, components, profile, registry, runtime};
     use rea_launcher::identify::validate_pe32;
     use rea_launcher::log::Log;
@@ -69,15 +69,14 @@ mod app {
         ))
     }
 
-    fn validate_game(game: &Path, widescreen: bool) -> Result<(String, Outcome), String> {
+    /// The game's `cmr4.exe`, identified, with the widescreen fix when
+    /// wanted and the build is known (an unknown build runs unpatched).
+    fn validate_game(game: &Path, widescreen: bool) -> Result<Prepared, String> {
         let path = game.join(GAME_EXE);
         let bytes =
             fs::read(&path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
         validate_pe32(&bytes).map_err(|error| format!("{}: {error}", path.display()))?;
-        let mut patched = bytes.clone();
-        let outcome = patch::widescreen(&mut patched, widescreen)
-            .map_err(|error| format!("{}: {error}", path.display()))?;
-        Ok((patch::sha256(&bytes), outcome))
+        Ok(edition::prepare(&bytes, widescreen))
     }
 
     /// The settings file's text, or None when there is none yet. A file that
@@ -187,10 +186,14 @@ mod app {
         log_line(&format!("runtime: {}", runtime.display()));
         log_line(&format!("settings: {settings:?}"));
 
-        let (digest, patch_outcome) = validate_game(&game, settings.widescreen())?;
-        log_line(&format!(
-            "cmr4.exe SHA-256: {digest}; patch: {patch_outcome:?}"
-        ));
+        let exe = validate_game(&game, settings.widescreen())?;
+        log_line(&exe.describe());
+        if exe.edition.is_none() {
+            log_line(&format!(
+                "warning: {}",
+                edition::unknown_message(&exe.sha256)
+            ));
+        }
         // Only --game is remembered from the command line. A resolution the
         // launcher picked from the screen is saved too, except inside
         // gamescope, whose output is cmr4-play's fallback size.
@@ -200,12 +203,14 @@ mod app {
             config::remember(&existing, &saved, &cli_values, &game, picked),
         )?;
         if cli.check {
-            let text = format!(
-                "Ready to play.\n\nGame folder: {}\ncmr4.exe SHA-256: {}\nWidescreen check: {:?}",
+            let mut text = format!(
+                "Ready to play.\n\nGame folder: {}\n{}",
                 game.display(),
-                digest,
-                patch_outcome
+                exe.describe()
             );
+            if exe.edition.is_none() {
+                text = format!("{text}\n\n{}", edition::unknown_message(&exe.sha256));
+            }
             log_line("check passed");
             message(&text, false);
             return Ok(0);
@@ -235,18 +240,19 @@ mod app {
             report.brought
         ));
 
+        // Always from the game's own bytes, so switching the fix off needs
+        // no restore step.
         let runtime_exe = runtime.join(GAME_EXE);
-        let mut bytes = fs::read(&runtime_exe)
-            .map_err(|error| format!("cannot read {}: {error}", runtime_exe.display()))?;
-        let outcome = patch::widescreen(&mut bytes, settings.widescreen())
-            .map_err(|error| format!("{}: {error}", runtime_exe.display()))?;
-        if matches!(outcome, Outcome::Patched | Outcome::Restored) {
-            fsx::write_atomic(&runtime_exe, &bytes)
+        if fs::read(&runtime_exe).ok().as_deref() != Some(exe.bytes.as_slice()) {
+            fsx::write_atomic(&runtime_exe, &exe.bytes)
                 .map_err(|error| format!("cannot write {error}"))?;
         }
         // gamescope exposes one output; elsewhere avoid a portrait primary monitor.
-        let game_mode = registry::game_mode(settings.resolution(), settings.widescreen());
+        let game_mode = registry::game_mode(settings.resolution(), exe.widescreen);
         let output = target.and_then(|t| t.output).filter(|_| !gamescope);
+        // An unknown build runs without the fix: dgVoodoo then keeps the
+        // game's own frame shape.
+        settings.widescreen = Some(exe.widescreen);
         components::install(
             &game,
             &runtime,
