@@ -687,11 +687,9 @@ impl Window<'_> {
         }
         ui.add_space(8.0);
         ui.label(
-            egui::RichText::new(
-                "In the game: Options \u{2192} Controllers, choose the controller and set Accel/brake to Analogue (Y axis). In this window: D-pad moves, A activates, LB/RB change tabs, Start plays.",
-            )
-            .font(font(13.0))
-            .color(MUTED),
+            egui::RichText::new(form::CONTROLS_NOTE)
+                .font(font(13.0))
+                .color(MUTED),
         );
     }
 

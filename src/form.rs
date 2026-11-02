@@ -232,6 +232,11 @@ pub fn pad_actions(before: u16, now: u16) -> Vec<PadAction> {
     .collect()
 }
 
+/// The Controls tab's note. `profile::choose_gamepad` selects the pad for a
+/// profile whose controls were never set up, so players need not visit the
+/// game's Options (choosing the controller there can freeze it under Wine).
+pub const CONTROLS_NOTE: &str = "For a profile whose controls were never set up, the launcher selects the pad and analogue pedals before the game starts; a profile you set up yourself is left as it is. In this window: D-pad moves, A activates, LB/RB change tabs, Start plays.";
+
 pub const WINDOW: (f32, f32) = (880.0, 640.0);
 
 pub fn window_zoom(screen: Option<(u32, u32)>, native: f32) -> f32 {
@@ -322,6 +327,15 @@ mod tests {
         assert_eq!(Tab::Play.step(-1), Tab::Controls);
         assert_eq!(Tab::Controls.step(1), Tab::Play);
         assert_eq!(Tab::Play.step(1), Tab::Picture);
+    }
+
+    #[test]
+    fn controls_note_does_not_send_players_to_the_game_options() {
+        // The launcher picks the pad itself (`profile`); the old note told
+        // players to pick it in Options, which can freeze the game under Wine.
+        assert!(!CONTROLS_NOTE.contains("Options"));
+        assert!(CONTROLS_NOTE.contains("never set up"));
+        assert!(CONTROLS_NOTE.contains("Start plays"));
     }
 
     #[test]

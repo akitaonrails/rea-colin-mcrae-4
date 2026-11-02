@@ -8,6 +8,9 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- The Controls tab no longer tells players to choose the controller and
+  analogue pedals in the game's Options; the launcher does that for a
+  profile whose controls were never set up.
 - AppImage build: the runtime is pinned to the dated type2-runtime release
   `20251108` instead of the `continuous` tag, which is rebuilt in place and
   would break the checksum pin.
