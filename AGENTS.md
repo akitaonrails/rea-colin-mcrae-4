@@ -19,8 +19,15 @@ the game.
 
 - Use Rust for launcher code. Keep `unsafe` and Win32 FFI in narrow modules;
   portable configuration, patching, and runtime planning stay host-testable.
-- The only widescreen patch is the tested 16:9 Low signature. Missing or
-  ambiguous signatures must fail safely and report SHA-256, never guess a site.
+- The only binary patch is the widescreen fix in `src/edition.rs`, a
+  `rea_launcher::patch::PatchSet` applied from pristine bytes to builds
+  identified by SHA-256, with its result hash. An unknown build is never
+  patched by guesswork: it runs unpatched and the player is asked to
+  report its SHA-256 (issue form "Unknown edition"). A new edition goes into
+  the table only with its digest and the patched digest measured on it.
+- The widescreen fix follows the resolution (16:9 only); there is no
+  separate switch (owner decision 2026-11-02: the switch overlapped the
+  resolution).
 - Preserve game-owned runtime data across source syncs. Do not overwrite user
   DLLs or other custom runtime files merely to install launcher components.
 - Keep third-party component payloads and downloaded archives out of this
@@ -38,6 +45,44 @@ the game.
   compilation. Do not claim registry, wrapper, controller, graphics, or gameplay
   behavior is verified until it has been exercised in the real target runtime.
 - Record exact verification commands and limitations with each milestone.
+
+## Standards and playbooks
+
+Binding: the SDK's
+[`docs/STANDARDS.md`](https://github.com/akitaonrails/rea-launcher-sdk/blob/main/docs/STANDARDS.md).
+For each kind of work, read its playbook in
+[`docs/playbooks/`](https://github.com/akitaonrails/rea-launcher-sdk/tree/main/docs/playbooks)
+(a local checkout is usually at `../rea-launcher-sdk`):
+
+- **Research community fixes first** (PCGamingWiki, GitHub, mod sites)
+  before reverse engineering; record them in `docs/RESEARCH.md` (project,
+  licence, maintained, decision).
+- **Community components** (pin, bundle, download on request, configure):
+  `community-components.md`.
+- **Binary patching** (find the one place, patch tables, three test
+  layers): `binary-patching.md`.
+- **Settings window:** any change to its look or layout goes through a
+  design skill (`frontend-design`, then a review against
+  `web-design-guidelines`), within the SDK theme; accessibility first
+  (contrast and text-size tests, focus, labels, disabled reasons,
+  keyboard and pad).
+- **GUI/CLI parity and option tests:** every option is declared once in
+  `config::OPTIONS`; every window control has a flag and a key and the
+  reverse (`assert_parity`); every option is tested end to end from
+  window control and flag to what `plan::plan` writes (`src/e2e.rs`).
+  An option reaches the window only after its effect was seen in the game.
+- **Headless testing:** host tests, `sdk/scripts/wine-test` for the
+  Windows target, `gamescope --backend headless` for game runs; never open
+  windows on the owner's desktop by default.
+- **Golden snapshots** (`tests/snapshots/`): a diff must match an intended
+  change or an SDK Migration item; never regenerate one blindly.
+- **Contribute back:** drafts only, in `docs/CONTRIBUTIONS.md`
+  (`contribute-back.md`); the owner posts.
+- **Credentials are never leaked:** never print, log, commit, pass on a
+  command line or hand to another agent anything like
+  `~/.config/rea/pcgamingwiki.txt`.
+- Public actions (push, tag, release, uploads, posts) need the owner's
+  go-ahead.
 
 ## Shared SDK
 

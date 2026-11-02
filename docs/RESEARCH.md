@@ -1,11 +1,50 @@
 # CMR04 research and component rationale
 
+## Community projects
+
+What the community already made for CMR04, and what the launcher does with
+it (surveyed 2026-11-02; PCGamingWiki read through Wayback snapshots).
+
+| Project | What it fixes | Licence | Maintained | Decision |
+|---|---|---|---|---|
+| AuToMaNiAk005's 16:9 widescreen fix ("16:9 Low") | Hor+ 16:9 view: one camera constant in `cmr4.exe` | none stated (a hex edit) | no (2000s fix) | **Reimplemented as data**: the same one-byte change is our `edition::WIDESCREEN` patch set, applied only to identified builds; credited |
+| Registry widescreen (PCGW) | Sets Width/Height to a 16:9 mode: Vert- (crops the view) | — (a setting) | — | Used for every non-16:9 shape (the game's own view); the launcher writes Width/Height |
+| dgVoodoo2 (Dege) | D3D9 → D3D11 wrapper: forced output size, scaling, fps cap, vsync, monitor | no licence text | yes, but 2.80 archive gone; 2.87.6 crashed CMR04 | **Bundled 2.80 `D3D9.dll`** from our `thirdparty` release (owner exception) |
+| DXVK | D3D11 → Vulkan under Wine/Proton | zlib | yes | **Bundled** 3.1.1 x32, Wine only |
+| Xidi | DirectInput from XInput pads with a custom mapping | BSD-3-Clause | yes | **Bundled** 4.3.1 with the `CMR04Gamepad` mapping |
+| DSOAL (+ OpenAL Soft) | DirectSound3D/EAX through OpenAL | LGPL-2.1+ | yes | **Kept when the player installed it** (runtime keeps any `.dll`; `dsound=n,b`); not bundled: the game works without it, and bundling an LGPL HRTF setup is a separate decision for the owner |
+| PCGW "force feedback restore module" | XInput rumble | unknown | unknown | Not used: Xidi covers input; rumble untested |
+| PCGW FOV camera hack | Wider in-car FOV | unknown | no | Not used: changes the look beyond Original/widescreen; no request |
+
+## Editions
+
+Builds are identified by SHA-256 (`src/edition.rs`); the widescreen patch
+set applies only to known builds and is verified against its result hash.
+
+| Build | Size | SHA-256 | Widescreen fix |
+|---|---|---|---|
+| `cmr4.exe` 1.0.0.0 (FileVersion), as installed | 3,756,032 | `7dca9f4cab16bc1a98df8871f3d20aec4cd931a818ea0899db86c83c1f712b41` | applied → `60e0267b…c0b2` |
+| the same with the community fix already applied | 3,756,032 | `60e0267bebb5894aa4e2f2b791ca9e338c9469433c9b9192c5772174c1bcc0b2` | accepted as it is; turned back for other shapes |
+
+PCGamingWiki says the community fix needs the 1.01 patch, while this
+build's version resource reads 1.0.0.0; which retail patch level it is has
+not been established (owner to check). Any other build is played
+unpatched, with the game's own view, and the player is asked to report its
+SHA-256 (issue form "Unknown edition").
+
+The patch table (from `patch::describe`):
+
+| File offset | Original | Patched | Note |
+|---|---|---|---|
+| `0x00077826` | `04 00 00 80 3F E8` | `04 00 00 40 3F E8` | camera horizontal factor 1.0 → 0.75 (16:9 Low) |
+
 ## Established recipe and executable boundary
 
 The launcher uses the tested CMR04 setup rather than generic CMR1 options:
 
-- `cmr4.exe` is PE32. The 16:9 Low patch replaces exactly one occurrence of
-  `04 00 00 80 3f e8` with `04 00 00 40 3f e8`, only in the private runtime.
+- `cmr4.exe` is PE32. The widescreen fix changes one camera constant
+  (`04 00 00 80 3f e8` → `04 00 00 40 3f e8` at file offset 0x077826),
+  only in the private runtime and only on an identified build.
 - **What the patch does** (function at 0x477820): every camera gets two
   numbers, a horizontal factor (the patched constant, 1.0 → 0.75) and the
   render's width/height. The 3D projection scales horizontally by the first
@@ -19,9 +58,10 @@ The launcher uses the tested CMR04 setup rather than generic CMR1 options:
 - The HUD is drawn on a fixed 640x480 grid (main loop scales by width/640 and
   height/480), so it always fills the screen and looks slightly wide at 16:9.
   Correcting it would need a second code patch; not done.
-- Width and Height are written every launch. Widescreen requires exact 16:9;
-  Original, 4:3, 16:10, and ultrawide use widescreen off (unpatched CMR04
-  keeps correct proportions at any aspect).
+- Width and Height are written every launch. The fix applies exactly when
+  the resolution is 16:9 (there is no separate switch since 0.3.0: it only
+  ever worked with 16:9); Original, 4:3, 16:10 and ultrawide run the
+  unpatched game, which keeps correct proportions at any aspect (Vert-).
 - The default is the largest exact 16:9 mode fitting the chosen monitor,
   capped at 3840x2160. Unknown screens use 1920x1080.
 - CMR04 requires install path strings and first-run defaults in its 32-bit
@@ -94,7 +134,42 @@ The exact sequence that determined the final policy:
 A screenshot from another session was not attributable to the failed run and
 was excluded from evidence.
 
-## Compatibility pins and narrow mirror
+## Old-game trouble spots
+
+Desk research and reading the executable's imports and strings; nothing
+here was run in the game for this survey. Checks still to do are in
+`RUNTIME_NOTES.md`.
+
+- **Timers and frame pacing:** the game times frames with
+  `QueryPerformanceCounter` (imported), which is stable on modern CPUs.
+  The only frame-rate tools are dgVoodoo's `FPSLimit` and
+  `ForceVerticalSync` (the `fps_limit` and `vsync` options); their effect
+  on pacing and physics has **not been checked in the game**.
+- **Multi-core:** `cmr4.exe` imports `SetProcessAffinityMask` and links
+  Intel's OpenMP runtime (`__kmp_runtime_initialize`), so it manages its
+  own threads/affinity. No multi-core problem was seen in the Wine runs;
+  the launcher sets no affinity.
+- **DirectSound3D / EAX:** the game uses DirectSound and ships EAX reverb
+  presets (`EAX_%i`, `Data/Textures/EAXSB.big`). Wine's and modern
+  Windows' DirectSound have no EAX, so EAX effects need DSOAL. The launcher
+  keeps a player's own DSOAL `dsound.dll` (and `dsoal-aldrv.dll`) in the
+  runtime and prefers native `dsound` under Wine; it does not bundle DSOAL.
+- **CD audio:** none known; the game needs only `CD_PATH` in the registry,
+  which the launcher points at the runtime. No disc check was met with the
+  tested build.
+- **Intro videos:** 20 WMV files in `Data/Videos`. They played under Wine
+  11 (the close hook had to ignore the intro window's `WM_CLOSE`); native
+  Windows plays WMV itself. A Wine build without GStreamer's WMV support
+  would skip them; not seen.
+- **Resolution and aspect tables:** the game takes any Width/Height from
+  the registry; dgVoodoo enumerates the forced mode
+  (`ExtraEnumeratedResolutions`). The in-game Advanced Graphics menu
+  rewrote the resolution and hung (avoid it).
+- **Focus loss:** under raw Wine the game runs borderless
+  (`FullscreenAttributes = fake`), so Alt+Tab doesn't change modes. What
+  the game does when it loses focus (pause, audio) was not checked.
+
+## Compatibility pins and the hosted archive
 
 `packaging/components.pins` records official downloads. Archives are cached,
 SHA-256 checked, and exact members are installed. No compatibility binary is
@@ -103,9 +178,11 @@ taken from the installed Codemasters game.
 ### dgVoodoo2 2.80
 
 The official v2.8 release has only the unrelated dgVoodoo API archive; the
-full 2.80 binary distribution is unavailable from Dege. The documented narrow
-exception is `packaging/mirror/dgVoodoo2_80.zip`, containing only the tested
-third-party `MS/x86/D3D9.dll` and no game data:
+full 2.80 binary distribution is unavailable from Dege. The documented
+exception is `dgVoodoo2_80.zip` in this repository's `thirdparty` release
+(pin `dgvoodoo`; until 2026-11-02 it was committed under
+`packaging/mirror/`), containing only the tested third-party
+`MS/x86/D3D9.dll` and no game data:
 
 - DLL SHA-256: `6f0eae6d0fbe836490b1aa3361304d2398fdb5d815a929e126b5ae7b13b16e47`
 - ZIP SHA-256: `cec7e2c8eeaec0065cc8f41d8e0f176ae28d55074c4295ce3670589dc9f29d30`

@@ -5,10 +5,11 @@ README.md
 THIRD_PARTY.md
 LICENSE-MIT
 LICENSE-APACHE
+docs/CONTRIBUTIONS.md
 docs/ENHANCEMENTS.md
 docs/RESEARCH.md
 docs/RUNTIME_NOTES.md
-docs/images/game.png
+docs/images/game.jpg
 docs/images/launcher-picture.png
 docs/images/launcher.png
 components/D3D9.dll

@@ -51,12 +51,12 @@ body:
     id: settings
     attributes:
       label: Settings used
-      description: Resolution, widescreen, FPS limit, VSync, and controller. Do not include game or runtime paths.
+      description: Look, resolution, frame-rate cap, VSync and Gamepad. Do not include game or runtime paths.
   - type: textarea
     id: problems
     attributes:
       label: What went wrong, if anything?
-      description: What you did, expected, and observed. If validation failed, include only the SHA-256, never the executable.
+      description: What you did, expected, and observed. If the launcher showed a version code (SHA-256), include it, never the executable.
   - type: textarea
     id: log
     attributes:

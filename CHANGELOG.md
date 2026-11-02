@@ -29,6 +29,16 @@ All notable changes to this project. The format follows
 
 ### Changed
 
+- Docs: README rewritten for this release (download links that don't
+  name an old version, where saves live and how to uninstall, the
+  generated `--help`, developer checks including `wine-test` and
+  `cargo deny`, Built on rea-launcher-sdk, Contributing, Credits);
+  THIRD_PARTY lists the SDK, appimagetool, the community widescreen fix,
+  the README screenshots and video, and the verified photo source;
+  `docs/RESEARCH.md` has the community-project table, the edition table
+  and a survey of old-game trouble spots; `docs/CONTRIBUTIONS.md` holds
+  the CMR04 drafts for PCGamingWiki; AGENTS.md points to the SDK's
+  standards and playbooks. The game screenshot is a JPEG (408 KB).
 - Packaging: `dgVoodoo2_80.zip` is no longer in Git; it is fetched from
   the repository's `thirdparty` release, pinned by SHA-256 (the owner
   uploads it once; see `packaging/mirror/README.md`). The package is

@@ -92,12 +92,13 @@ is excluded from evidence.
 
 - Only the tested dgVoodoo2 2.80 `D3D9.dll` is shipped, with SHA-256
   `6f0eae6d0fbe836490b1aa3361304d2398fdb5d815a929e126b5ae7b13b16e47`.
-  Provenance is in `packaging/mirror/README.md`. D3D8/D3DImm/DDraw are not
+  Provenance is in `packaging/mirror/README.md`; the archive now lives in
+  the repository's `thirdparty` release. D3D8/D3DImm/DDraw are not
   installed, and the watermark is disabled.
 - DXVK 3.1.1 x32 `d3d11.dll` and `dxgi.dll` install only under Wine/Proton.
 - Default resolution is the largest exact 16:9 fit to the active landscape
   screen, capped at 3840x2160; unknown screens use 1920x1080. Explicit custom
-  values persist. Other aspect ratios require widescreen off.
+  values persist. The widescreen fix follows the resolution (16:9 only).
 - Raw Wine uses borderless dgVoodoo fullscreen. Native Windows and gamescope
   use normal fullscreen. A portrait primary monitor is avoided with dgVoodoo
   `FullScreenOutput`. Widescreen renders 4:3 and is stretched to 16:9;
@@ -138,6 +139,39 @@ in the game yet.
   on a 4K screen: it must fit the screen at about 1.5x and be fully drawn;
   at 96 DPI it must still open at 1.5x.
 
+### rea-launcher-sdk v0.2.0 pass (2026-11-02)
+
+Host tests, the GUI tests (headless, host and Wine) and the Windows build
+cover these; none has been run in the game yet.
+
+- **Frame-rate cap and VSync have never been checked in the game.** Both
+  only write dgVoodoo's `FPSLimit` / `ForceVerticalSync`. Check with an FPS
+  overlay that 30/60/144 cap the game, that VSync removes tearing, and
+  that a cap doesn't change car physics or the stage timer. Until then
+  they stay as they were (recommendation to the owner in the pass report).
+- **Widescreen follows the resolution.** A 16:9 resolution always applies
+  the fix (rendering 4:3, stretched); 4:3/16:10/ultrawide and Original run
+  unpatched. Check one 16:9 and one 16:10 stage; check that a v0.2.0
+  `launcher.cfg` with `widescreen = off` and a 16:9 resolution now plays
+  with the widescreen view.
+- **Unknown builds play unpatched.** With an exe the launcher doesn't know
+  (any byte changed outside the fix), check that the window says so with
+  the Report button, the log has the SHA-256, and the game starts with the
+  game's own view and `ScalingMode = stretched_ar`.
+- **The source exe already carrying the fix** (`60e0267b…`, the owner's
+  earlier copies): the launcher now rebuilds the runtime exe from the
+  identified pristine bytes each launch. Check that 16:9 still plays
+  patched and Original unpatched from such a source.
+- **`--look`** (original, widescreen, steam_deck) with `--no-window`.
+- **Windows console:** `CMR4Launcher.exe --help` and `--check` from
+  `cmd.exe` print in the terminal; a double-click with a bad
+  `launcher.cfg` still shows a dialog.
+- **Settings window:** the reworked Picture tab, the Widescreen look card
+  and Ctrl+Tab between tabs were only tested headless; look at them once
+  in a real window under Wine and on Windows (the screenshots in
+  `docs/images/launcher*.png` predate the rework).
+- **`launcher.log`** starts afresh past 1 MiB (it never did before).
+
 ## Remaining unknowns
 
 - **Native Windows:** startup, dgVoodoo-to-system-D3D11 behavior, native GPU
@@ -151,8 +185,12 @@ in the game yet.
   swapchain observations are established.
 - **Protected retail media:** compatibility remains unknown. Older secondary
   reports indicate it may not run under Wine; there is no project result.
-- **Executable variants:** original unpatched PE32, already patched source
-  restoration, and protected-edition coverage remain to be exercised.
+- **Executable variants:** only the 1.0.0.0 build (and its patched form)
+  is identified; other retail, budget, regional and patched (1.01?)
+  builds are unknown and run unpatched until reported.
+- **Old-game trouble spots** surveyed in `RESEARCH.md` but not run: EAX
+  without DSOAL, behaviour on focus loss, WMV intros on a Wine without
+  GStreamer.
 
 ## Evidence for future reports
 

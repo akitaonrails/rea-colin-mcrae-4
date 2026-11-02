@@ -179,22 +179,10 @@ pub const REMOVED: &[&str] = &["widescreen"];
 
 /// The launcher's own flags that take no value, with their `--help` text.
 pub const SWITCHES: [(&str, &str); 4] = [
-    (
-        "--check",
-        "check the game and settings, write launcher.log; start nothing",
-    ),
-    (
-        "--no-window",
-        "play with the saved settings and these flags, no window",
-    ),
-    (
-        "--settings",
-        "only show the settings window (the Linux helper uses it)",
-    ),
-    (
-        "--linux",
-        "the window was started by the Linux helper (cmr4-play)",
-    ),
+    ("--check", "check the game and settings only"),
+    ("--no-window", "play with saved settings and flags"),
+    ("--settings", "only the settings window (Linux helper)"),
+    ("--linux", "started by the Linux helper (cmr4-play)"),
 ];
 
 /// The spelling the table takes: `fps_limit = off` (what the window and
@@ -418,17 +406,20 @@ pub fn usage() -> String {
         env!("CARGO_PKG_VERSION")
     );
     out.push_str(&spec::usage(OPTIONS, KeyStyle::Underscore));
-    let width = SWITCHES
+    // The switches line up with the option lines above.
+    let width = OPTIONS
         .iter()
-        .map(|(flag, _)| flag.len())
+        .map(|o| o.flag_name(KeyStyle::Underscore).len() + 1 + o.placeholder().len())
+        .chain(SWITCHES.iter().map(|(flag, _)| flag.len()))
         .max()
         .unwrap_or(0);
     for (flag, text) in SWITCHES.iter().chain(&[("--help", "show this help")]) {
         out.push_str(&format!("  {flag:width$}  {text}\n"));
     }
     out.push_str(
-        "\nWith no options the settings window opens. Options override launcher.cfg for one\n\
-         run; only --game is remembered there. The original game folder is never modified.\n",
+        "\nWith no options the settings window opens. Options override launcher.cfg\n\
+         for one run; only --game is remembered there. The game folder is never\n\
+         modified.\n",
     );
     out
 }
