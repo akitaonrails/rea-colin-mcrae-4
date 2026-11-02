@@ -16,7 +16,7 @@ done
 chmod +x "$PKG/linux/cmr4-play"
 $SMOKE "$PKG" "$ALLOW" >/dev/null
 echo "ok   complete allowlisted package passes"
-for required in linux/rea-play.sh components/cmr4close.dll licenses/Xidi/LICENSE; do
+for required in linux/rea-play.sh components/rea_close_hook.dll licenses/Xidi/LICENSE; do
   grep -qx "$required\( .*\)\{0,1\}" "$ALLOW" || { echo "$required is not allowlisted" >&2; exit 1; }
 done
 echo "ok   the play library, close hook and licences are shipped"

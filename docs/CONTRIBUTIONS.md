@@ -66,7 +66,7 @@ If it does, this is "already documented" and the line is unnecessary.
 
 ```wikitext
 ===Game cannot be closed with Alt+F4 or the window's close button===
-{{ii}} The game's window procedure ignores close requests and its main loop ignores <code>WM_QUIT</code>, so Alt+F4, the close button (and a window manager's close action under Linux) do nothing. Quit from the main menu, or end {{file|cmr4.exe}} with Task Manager.<ref>{{Refcheck|user=OWNER|date=2026-11-XX|comment=Observed under Wine; analysis and a close hook: https://github.com/akitaonrails/rea-colin-mcrae-4/tree/master/close-hook}}</ref>
+{{ii}} The game's window procedure ignores close requests and its main loop ignores <code>WM_QUIT</code>, so Alt+F4, the close button (and a window manager's close action under Linux) do nothing. Quit from the main menu, or end {{file|cmr4.exe}} with Task Manager.<ref>{{Refcheck|user=OWNER|date=2026-11-XX|comment=Observed under Wine; analysis and a close hook: https://github.com/akitaonrails/rea-launcher-sdk/tree/main/crates/rea-launcher-close-hook}}</ref>
 ```
 
 Status: observed under Wine (Super+W did nothing before the hook). The

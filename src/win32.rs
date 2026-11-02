@@ -4,8 +4,11 @@
 
 use std::path::Path;
 
+use cmr4_launcher::components::CLOSE_HOOK_CONFIG;
 use cmr4_launcher::display;
 use cmr4_launcher::registry::{self, KEY, RegValue, RegWrite};
+use cmr4_launcher::window::TITLE;
+use rea_launcher_win32::instance::{self, Guard, Window};
 use rea_launcher_win32::process::Launch;
 use rea_launcher_win32::reg::Key;
 use rea_launcher_win32::{display as screens, wine};
@@ -73,11 +76,19 @@ pub fn inherited_overrides() -> Option<String> {
         .map(|value| value.to_string_lossy().into_owned())
 }
 
+/// Takes the launcher's single-instance mutex. When another launcher holds
+/// it, brings that launcher's window (or the game's, of the same title)
+/// forward and returns whether there was one.
+pub fn single_instance(name: &str) -> Result<Guard, bool> {
+    instance::single(name).map_err(|running| running.bring_to_front(Window::Title(TITLE)))
+}
+
 /// Starts the game and waits for it. Under Wine the game's own environment
 /// carries the DLL overrides, so it works without the Linux helper. CMR04
 /// ignores WM_CLOSE and has no OS-level quit path, so Alt+F4 and the
-/// compositor's close action do nothing: the close-hook DLL, hooked into the
-/// game's main thread, ends the process on those requests.
+/// compositor's close action do nothing: the SDK's close-hook DLL, hooked
+/// into the game's main thread and configured by `REA_CLOSE_HOOK`
+/// ([`CLOSE_HOOK_CONFIG`]), ends the process on those requests.
 pub fn run_game(
     exe: &Path,
     workdir: &Path,
@@ -93,7 +104,7 @@ pub fn run_game(
     for (name, value) in env {
         launch = launch.env(name, value);
     }
-    let game = launch.spawn()?;
+    let game = launch.env(rea_close_hook::ENV, CLOSE_HOOK_CONFIG).spawn()?;
     let _hook = match game.message_hook(close_hook, c"close_hook") {
         Ok(hook) => {
             log("close hook installed (Alt+F4 and window close end the game)");
@@ -105,4 +116,20 @@ pub fn run_game(
         }
     };
     game.wait()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_second_launcher_finds_the_first_one_and_can_start_after_it() {
+        // A name of its own, so a launcher running on this machine is not
+        // disturbed. No window has that title: nothing is brought forward.
+        let name = "CMR4Launcher-test-single-instance";
+        let first = single_instance(name).unwrap();
+        assert!(!single_instance(name).unwrap_err());
+        drop(first);
+        assert!(single_instance(name).is_ok());
+    }
 }

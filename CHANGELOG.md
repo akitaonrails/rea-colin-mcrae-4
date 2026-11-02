@@ -19,6 +19,9 @@ All notable changes to this project. The format follows
 
 ### Added
 
+- One launcher at a time. Starting a second `CMR4Launcher.exe` brings the
+  open settings window to the front, or, while the game is running, says
+  so and doesn't start a second copy.
 - `--look original|widescreen|steam_deck` (and `look =` in
   `launcher.cfg`): sets a look's values for one run, like the window's
   look cards. Values set explicitly next to it win.
@@ -38,6 +41,11 @@ All notable changes to this project. The format follows
   switches in `--help`, Ctrl+Tab/Ctrl+PageDown tab switching, the chip
   rows' and Play's screen-reader text. `--help`, `launcher.cfg` and the
   window are unchanged.
+- The close hook is now the SDK's `rea_close_hook.dll`
+  (`rea-launcher-close-hook`, set to `class=PC_CMR4;strategy=terminate`)
+  instead of our own `cmr4close.dll`. It behaves the same: Alt+F4 or
+  closing the game's window ends the game, and the intro movies are left
+  alone.
 - Agent instructions: `CLAUDE.md` imports `AGENTS.md` and the SDK's
   vendored `sdk/docs/STANDARDS.md`; `AGENTS.md` keeps only CMR04's own
   rules and owner decisions and points to the standards and playbooks.

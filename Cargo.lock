@@ -275,15 +275,9 @@ name = "cmr4-launcher"
 version = "0.2.0"
 dependencies = [
  "rea-launcher",
+ "rea-launcher-close-hook",
  "rea-launcher-ui",
  "rea-launcher-win32",
-]
-
-[[package]]
-name = "cmr4close"
-version = "0.2.0"
-dependencies = [
- "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1905,6 +1899,14 @@ version = "0.3.0"
 source = "git+https://github.com/akitaonrails/rea-launcher-sdk?tag=v0.3.0#79d4abe605587acf2b7724d85866610144e7d87a"
 dependencies = [
  "sha2",
+]
+
+[[package]]
+name = "rea-launcher-close-hook"
+version = "0.3.0"
+source = "git+https://github.com/akitaonrails/rea-launcher-sdk?tag=v0.3.0#79d4abe605587acf2b7724d85866610144e7d87a"
+dependencies = [
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

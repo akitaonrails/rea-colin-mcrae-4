@@ -76,7 +76,8 @@ The launcher uses the tested CMR04 setup rather than generic CMR1 options:
 - **Closing:** the window procedure (0x501EF0) returns 0 for `WM_CLOSE` and
   swallows Alt-key presses other than Tab/Enter; the main loop (0x503000)
   ignores `WM_QUIT`. The launcher installs a `WH_GETMESSAGE` hook from
-  `cmr4close.dll` on the game's main thread that ends the process on
+  the SDK's `rea_close_hook.dll` (`REA_CLOSE_HOOK=class=PC_CMR4;strategy=terminate`;
+  CMR4's own `cmr4close.dll` until 0.3.0) on the game's main thread that ends the process on
   `SC_CLOSE` or Alt+F4 aimed at the `PC_CMR4` window. Plain `WM_CLOSE` is
   ignored because the intro movie's window receives one on the same thread.
 - **Gamepad:** CMR04 reads a DirectInput joystick, requests X/Y/Z/RX/RY/RZ, a

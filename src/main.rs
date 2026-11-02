@@ -12,6 +12,7 @@ mod app {
 
     use cmr4_launcher::config::{self, Settings};
     use cmr4_launcher::edition::{self, Prepared};
+    use cmr4_launcher::instance::{self, SecondStart};
     use cmr4_launcher::{GAME_EXE, components, plan, profile, runtime};
     use rea_launcher::identify::validate_pe32;
     use rea_launcher::log::Log;
@@ -129,6 +130,16 @@ mod app {
             message(&config::usage(), false);
             return Ok(0);
         }
+        // Held until the game has exited: a second start brings this
+        // window forward, or refuses to play while the game runs.
+        let _instance = match win32::single_instance(instance::NAME) {
+            Ok(guard) => guard,
+            Err(window_found) => {
+                let second = SecondStart::new(window_found);
+                log_line(second.log_line());
+                return second.outcome().map_err(str::to_owned);
+            }
+        };
         let wine = win32::is_wine();
         let gamescope = std::env::var_os("GAMESCOPE_WAYLAND_DISPLAY").is_some();
         let settings_path = settings_path();

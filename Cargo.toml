@@ -7,8 +7,6 @@ license = "MIT OR Apache-2.0"
 description = "Runs the user's own copy of Colin McRae Rally 04 on modern Windows and under Proton/Wine"
 
 [workspace]
-members = ["close-hook"]
-default-members = [".", "close-hook"]
 
 [[bin]]
 name = "CMR4Launcher"
@@ -19,6 +17,10 @@ rea-launcher = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag =
 # The settings window's drawing is portable (src/window.rs), so its GUI
 # tests run headless on the host as well as under Wine.
 rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.0" }
+# The close hook DLL shipped in components/ (built with
+# `cargo build -p rea-launcher-close-hook`); its parser checks our
+# configuration in the host tests.
+rea-launcher-close-hook = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.0" }
 
 [target.'cfg(windows)'.dependencies]
 rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.3.0" }

@@ -19,9 +19,18 @@ use crate::registry;
 pub const DGVOODOO_DLLS: [&str; 1] = ["D3D9.dll"];
 pub const DXVK_DLLS: [&str; 2] = ["d3d11.dll", "dxgi.dll"];
 pub const XIDI_DLL: &str = "dinput8.dll";
-/// Launcher-built hook that lets Alt+F4 and window close end the game.
-/// It is loaded from the package and never copied into the runtime.
-pub const CLOSE_HOOK_DLL: &str = "cmr4close.dll";
+/// The SDK's close hook (`rea-launcher-close-hook`), which lets Alt+F4
+/// and window close end the game. It is loaded from the package and never
+/// copied into the runtime.
+pub const CLOSE_HOOK_DLL: &str = "rea_close_hook.dll";
+/// Its configuration, set on the game as `REA_CLOSE_HOOK`: CMR04's window
+/// procedure swallows `WM_CLOSE` and its loop ignores `WM_QUIT`, and the
+/// game has no clean shutdown path to call, so a close request (the
+/// window's close / the compositor's, which Wine turns into `SC_CLOSE`, or
+/// Alt+F4) for its main window `PC_CMR4` ends the process at once. A plain
+/// `WM_CLOSE` is left alone: the intro movies' window is closed with it on
+/// the same thread.
+pub const CLOSE_HOOK_CONFIG: &str = "class=PC_CMR4;strategy=terminate";
 const OWNERSHIP_FILE: &str = ".cmr4-launcher-components";
 
 /// Xidi's view of the pad, following the CMR3 launcher's rally mapper.
@@ -116,7 +125,7 @@ pub fn describe(components: &Path) -> Vec<String> {
         "D3D9.dll" => "dgVoodoo2 2.80",
         "d3d11.dll" | "dxgi.dll" => "DXVK 3.1.1",
         XIDI_DLL => "Xidi 4.3.1",
-        CLOSE_HOOK_DLL => "close hook",
+        CLOSE_HOOK_DLL => "rea-launcher-close-hook",
         _ => "",
     };
     DGVOODOO_DLLS
@@ -544,8 +553,31 @@ mod tests {
                 .iter()
                 .any(|l| l.starts_with("dinput8.dll: ") && l.ends_with("(Xidi 4.3.1)"))
         );
-        assert_eq!(lines[4], "cmr4close.dll: not bundled");
+        assert_eq!(lines[4], "rea_close_hook.dll: not bundled");
         fs::remove_dir_all(components).unwrap();
+    }
+
+    #[test]
+    fn the_close_hook_ends_the_game_on_close_and_alt_f4_only() {
+        use rea_close_hook::msg::{
+            ALT_DOWN, SC_CLOSE, VK_F4, WM_CLOSE, WM_SYSCOMMAND, WM_SYSKEYDOWN,
+        };
+        use rea_close_hook::{Config, Strategy};
+        let config = Config::parse(CLOSE_HOOK_CONFIG).unwrap();
+        assert_eq!(config.strategy, Strategy::Terminate);
+        assert_eq!(config.code, 0);
+        assert!(config.is_game_class("PC_CMR4"));
+        assert!(!config.is_game_class("MoviePlayer"));
+        let requests = config.requests;
+        assert!(requests.matches(WM_SYSCOMMAND, SC_CLOSE, 0));
+        // The low four bits of SC_* are reserved and may be set.
+        assert!(requests.matches(WM_SYSCOMMAND, SC_CLOSE | 0x2, 0));
+        assert!(requests.matches(WM_SYSKEYDOWN, VK_F4, ALT_DOWN | 1));
+        assert!(!requests.matches(WM_SYSKEYDOWN, VK_F4, 1)); // F4 without Alt
+        assert!(!requests.matches(WM_SYSKEYDOWN, 0x09, ALT_DOWN)); // Alt+Tab
+        assert!(!requests.matches(WM_SYSCOMMAND, 0xF140, 0)); // SC_SCREENSAVE
+        // The intro movies' window is closed with WM_CLOSE: never the game.
+        assert!(!requests.matches(WM_CLOSE, 0, 0));
     }
 
     #[test]

@@ -31,7 +31,7 @@ the launcher does about it.
   through Vulkan on your graphics card.
 - **Closing the game does nothing.** CMR04 ignores Alt+F4 and window-close
   requests (Super+W in Hyprland), so it had to be killed. A small hook
-  built from this repository (`cmr4close.dll`) now ends it when you press
+  (`rea_close_hook.dll`, from rea-launcher-sdk) now ends it when you press
   Alt+F4 or close its window.
 
 **Picture**
@@ -339,8 +339,9 @@ personal paths before posting it.
 
 ## For developers
 
-The workspace builds the launcher and the close hook (`close-hook/`, producing
-`cmr4close.dll`). The toolchain is Rust plus `mingw-w64` for the 32-bit Windows
+The workspace builds the launcher; `packaging/build-windows.sh` also builds
+the SDK's close hook (`cargo build -p rea-launcher-close-hook`, producing
+`rea_close_hook.dll`). The toolchain is Rust plus `mingw-w64` for the 32-bit Windows
 target, Wine for the Windows-target tests, and `cargo-deny`; the
 [`gaming` distrobox](https://github.com/akitaonrails/distrobox-gaming) has
 them all.

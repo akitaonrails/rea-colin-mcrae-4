@@ -172,6 +172,34 @@ cover these; none has been run in the game yet.
   `docs/images/launcher*.png` predate the rework).
 - **`launcher.log`** starts afresh past 1 MiB (it never did before).
 
+### rea-launcher-sdk v0.3.0 bump (2026-11-02)
+
+Host tests, the Windows-target tests under Wine and the release build
+cover these; none has been run with the game yet.
+
+- **Linked with LLD.** GNU ld had left kernel32 imports of the exe
+  unresolved; `check-imports.sh` now reports none. Start the packaged
+  launcher once on Windows and once under Wine and play a stage.
+- **Close hook from the SDK** (`rea_close_hook.dll`,
+  `REA_CLOSE_HOOK=class=PC_CMR4;strategy=terminate`, replacing
+  `cmr4close.dll`). Check every way of quitting with the real game,
+  headless (`gamescope --backend headless`), and that nothing is left
+  afterwards (no `cmr4.exe`, launcher, `wineserver` or gamescope):
+  - Alt+F4 in a stage and in the menus;
+  - the window's close / the compositor's close (Super+W), which Wine
+    turns into `SC_CLOSE`;
+  - the intro movies still play to the end and can be skipped without
+    ending the game (they are closed with `WM_CLOSE`);
+  - the game's own Quit;
+  - `cmr4-play stop`, Ctrl+C / SIGTERM to `cmr4-play`, Steam's Stop, and
+    closing gamescope.
+- **One launcher at a time.** A second `CMR4Launcher.exe` while the
+  settings window is open must bring that window forward and exit; while
+  the game runs it must say the game is already running and not start a
+  second copy. Check on Windows and under Wine (without `cmr4-play`, whose
+  session lock covers Linux). The launcher has no stop path of its own
+  (it waits for the game), so `Running::close_gracefully` is not used.
+
 ## Remaining unknowns
 
 - **Native Windows:** startup, dgVoodoo-to-system-D3D11 behavior, native GPU
