@@ -29,6 +29,10 @@ All notable changes to this project. The format follows
 
 ### Changed
 
+- Packaging: `dgVoodoo2_80.zip` is no longer in Git; it is fetched from
+  the repository's `thirdparty` release, pinned by SHA-256 (the owner
+  uploads it once; see `packaging/mirror/README.md`). The package is
+  unchanged.
 - One option table (`config::OPTIONS`) declares every setting once: the
   `launcher.cfg` parser, the flags, `--help` (now listing `--settings` and
   `--linux` too) and the first-run template come from it, and a test

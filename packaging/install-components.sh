@@ -11,8 +11,9 @@ trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 mkdir -p "$TMP/dgvoodoo" "$TMP/xidi" "$TMP/dxvk" "$PKG/components" \
   "$PKG/licenses/dgVoodoo2" "$PKG/licenses/Xidi/ThirdParty" "$PKG/licenses/DXVK"
 
-# Tested 2.80 mirror: no network, one member, and a required DLL digest.
-unzip -q "$HERE/mirror/dgVoodoo2_80.zip" 'MS/x86/D3D9.dll' -d "$TMP/dgvoodoo"
+# The tested 2.80 archive (our thirdparty release): one member, and a
+# required DLL digest.
+unzip -q "$CACHE/dgVoodoo2_80.zip" 'MS/x86/D3D9.dll' -d "$TMP/dgvoodoo"
 unzip -q "$CACHE/Xidi-v4.3.1.zip" \
   'Xidi-v4.3.1/Win32/dinput8.dll' 'Xidi-v4.3.1/LICENSE' 'Xidi-v4.3.1/README.md' \
   'Xidi-v4.3.1/ThirdParty/*' -d "$TMP/xidi"

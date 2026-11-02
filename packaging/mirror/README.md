@@ -1,4 +1,4 @@
-# dgVoodoo2 2.80 narrow compatibility mirror
+# dgVoodoo2 2.80: the one archive we host
 
 `dgVoodoo2_80.zip` contains only `MS/x86/D3D9.dll`, the dgVoodoo2 2.80
 compatibility DLL used by the working CMR04 recipe. It is not a Codemasters
@@ -14,9 +14,26 @@ Controlled CMR04 tests found that 2.87.6 still crashed even with registry
 paths and forced D3D11. The tested 2.80 DLL plus DXVK reached the 4K title and
 3D attract demo after install paths were seeded. Dege's v2.8 release exposes
 only the unrelated dgVoodoo API archive, not the full 2.80 binary distribution.
-This single-file repository mirror is therefore necessary to make the tested
-runtime reproducible without an untrusted third-party download.
 
-This file is also the dgVoodoo notice included in packages. It is repository
-text and does not require a network download. All other compatibility payloads
-continue to use official pinned downloads and SHA-256 verification.
+dgVoodoo2 ships no licence text. Hosting this one DLL is the owner's
+recorded exception (`THIRD_PARTY.md`, `AGENTS.md`). Where it lives:
+
+- **Not in Git.** Until 2026-11-02 the zip was committed here
+  (`packaging/mirror/dgVoodoo2_80.zip`); it was removed going forward and
+  history was not rewritten.
+- **In the repository's `thirdparty` release**, pinned by SHA-256 in
+  `packaging/components.pins` (`dgvoodoo`) and fetched at package time by
+  `packaging/fetch-components.sh`.
+
+The owner creates that release once (not as "latest") from the last commit
+that had the file:
+
+```sh
+git show 0d1eeb4:packaging/mirror/dgVoodoo2_80.zip > /tmp/dgVoodoo2_80.zip
+sha256sum /tmp/dgVoodoo2_80.zip   # cec7e2c8…9d30
+gh release create thirdparty --latest=false --title "Third-party files" \
+  --notes "Pinned third-party files the launcher packages (see packaging/mirror/README.md)." \
+  /tmp/dgVoodoo2_80.zip
+```
+
+This file is also the dgVoodoo notice included in packages.

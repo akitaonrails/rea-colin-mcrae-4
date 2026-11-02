@@ -1,10 +1,12 @@
 # Third-party notices
 
-Compatibility binaries are fetched from the official pinned URLs in
-`packaging/components.pins`; those archives are not committed. The sole
-intentional exception is the documented `packaging/mirror/dgVoodoo2_80.zip`
-containing only the tested dgVoodoo2 2.80 D3D9 compatibility DLL. Phase 3
-packaging preserves these notices and the component license files in each package.
+Compatibility binaries are fetched at package time from the pinned URLs in
+`packaging/components.pins` and checked by SHA-256; no archive is committed.
+The one archive we host is `dgVoodoo2_80.zip` (only the tested dgVoodoo2
+2.80 `D3D9.dll`) in this repository's `thirdparty` release: dgVoodoo2 has
+no licence text and its 2.80 archive is gone upstream, so hosting it is the
+owner's recorded exception (see `packaging/mirror/README.md`). Packages
+carry these notices and the components' licence files.
 
 ## Compiled into CMR4Launcher.exe
 

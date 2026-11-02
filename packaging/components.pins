@@ -8,6 +8,10 @@ xidi https://github.com/samuelgr/Xidi/releases/download/v4.3.1/Xidi-v4.3.1.zip 7
 # DXVK 3.1.1 (zlib): x32/d3d11.dll and x32/dxgi.dll.
 dxvk https://github.com/doitsujin/dxvk/releases/download/v3.1.1/dxvk-3.1.1.tar.gz 40565b4a724aadc4433fa4e010b4b23916d9b1f1baeee64e17186db94f54e608
 
-# dgVoodoo2 2.80 MS/x86/D3D9.dll, from packaging/mirror/dgVoodoo2_80.zip (see
-# packaging/mirror/README.md: the sole mirror exception).
+# dgVoodoo2 2.80: only MS/x86/D3D9.dll, in our own "thirdparty" release.
+# The upstream 2.80 archive is gone and dgVoodoo2 has no licence text, so
+# this is the owner's recorded exception (THIRD_PARTY.md); not marked
+# "mirror", which is for licences that allow republishing.
+# See packaging/mirror/README.md.
+dgvoodoo https://github.com/akitaonrails/rea-colin-mcrae-4/releases/download/thirdparty/dgVoodoo2_80.zip cec7e2c8eeaec0065cc8f41d8e0f176ae28d55074c4295ce3670589dc9f29d30
 dgvoodoo-d3d9 - 6f0eae6d0fbe836490b1aa3361304d2398fdb5d815a929e126b5ae7b13b16e47

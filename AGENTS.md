@@ -27,10 +27,11 @@ the game.
   repository. Packaging fetches exact members from official pinned URLs with
   SHA-256 verification into a cache. Record every pin, license, and source in
   `packaging/components.pins` and `THIRD_PARTY.md`.
-- Sole mirror exception: `packaging/mirror/dgVoodoo2_80.zip` may contain only
-  the tested dgVoodoo2 2.80 `MS/x86/D3D9.dll` documented in
-  `packaging/mirror/README.md`. No other mirror or compatibility payload is
-  allowed; the official 2.80 full archive is unavailable and 2.87.6 failed.
+- Sole hosting exception (owner decision): `dgVoodoo2_80.zip`, holding only
+  the tested dgVoodoo2 2.80 `MS/x86/D3D9.dll`, lives in this repository's
+  `thirdparty` release (pin `dgvoodoo`), never in Git; see
+  `packaging/mirror/README.md`. No other licence-less payload is allowed;
+  the official 2.80 full archive is unavailable and 2.87.6 failed.
 - Build packages only in CI output directories or `.work/`, never the repo root.
   Package smoke checks must reject unlisted files and every game asset.
 - Host tests and a Windows cross-build establish only portable logic and
