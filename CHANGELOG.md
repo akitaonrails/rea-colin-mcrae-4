@@ -8,6 +8,10 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- Game and runtime folders on drives that can't be canonicalized (Windows
+  RAM disks, `subst` drives, some FUSE/network filesystems: "Incorrect
+  function") are normalised lexically instead of refusing to launch; a
+  missing game folder is still an error.
 - `cmr4-play stop` also runs `wineserver -k` for the launcher's private
   prefix after ending the session group, so Wine processes outside the group
   (or left by a crashed launcher) end too.

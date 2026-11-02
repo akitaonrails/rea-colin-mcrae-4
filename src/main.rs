@@ -170,14 +170,14 @@ mod app {
         config::validate_picture(&settings)?;
         log_line(&format!("resolution: {}", settings.resolution().value()));
         let game = find_game(&settings)?;
-        let game = fs::canonicalize(&game)
+        let cwd = std::env::current_dir().map_err(|error| format!("current directory: {error}"))?;
+        let game = runtime::canonical_existing(&game, &cwd)
             .map_err(|error| format!("game folder {}: {error}", game.display()))?;
         let game = runtime::simplify_extended_length(&game);
         let runtime = settings
             .runtime
             .clone()
             .unwrap_or_else(|| home().join("CMR4"));
-        let cwd = std::env::current_dir().map_err(|error| format!("current directory: {error}"))?;
         let runtime = runtime::resolve(&runtime, &cwd)?;
         let runtime = runtime::simplify_extended_length(&runtime);
         settings.game = Some(game.clone());

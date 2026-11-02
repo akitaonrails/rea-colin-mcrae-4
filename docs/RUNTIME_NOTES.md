@@ -131,6 +131,9 @@ in the game yet.
 - **Atomic writes on Windows** retry a denied rename 5 × 100 ms (antivirus
   holding the fresh patched `cmr4.exe`). Check a first launch on Windows with
   Defender active.
+- **Folders that can't be canonicalized** (RAM disk, `subst`) now fall back
+  to lexical normalisation. Check a game or runtime folder on such a drive on
+  Windows.
 
 ## Remaining unknowns
 

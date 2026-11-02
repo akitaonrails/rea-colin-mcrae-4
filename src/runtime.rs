@@ -170,8 +170,32 @@ pub fn resolve(path: &Path, cwd: &Path) -> Result<PathBuf, String> {
                     .parent()
                     .ok_or_else(|| format!("cannot resolve {}: {error}", path.display()))?;
             }
-            Err(error) => return Err(format!("cannot resolve {}: {error}", path.display())),
+            // Windows RAM disks, subst drives and some FUSE/network
+            // filesystems can't produce a final path ("Incorrect function"):
+            // use the absolute path, normalised lexically, rather than refuse.
+            Err(_) => return Ok(normalize(&absolute)),
         }
+    }
+}
+
+/// Canonicalizes an existing folder (the game). On filesystems that can't
+/// canonicalize (see `resolve`) an existing path is normalised lexically;
+/// a missing one is still an error.
+pub fn canonical_existing(path: &Path, cwd: &Path) -> io::Result<PathBuf> {
+    canonical_existing_with(path, cwd, |path| fs::canonicalize(path))
+}
+
+fn canonical_existing_with(
+    path: &Path,
+    cwd: &Path,
+    canonicalize: impl Fn(&Path) -> io::Result<PathBuf>,
+) -> io::Result<PathBuf> {
+    let absolute = cwd.join(path);
+    match canonicalize(&absolute) {
+        Err(error) if error.kind() != io::ErrorKind::NotFound && absolute.exists() => {
+            Ok(normalize(&absolute))
+        }
+        other => other,
     }
 }
 
@@ -220,7 +244,7 @@ fn check_separate_from(game: &Path, runtime: &Path, cwd: &Path) -> Result<(), St
     } else {
         cwd.join(game)
     };
-    let game = fs::canonicalize(&absolute_game)
+    let game = canonical_existing(&absolute_game, cwd)
         .map_err(|error| format!("game folder {}: {error}", game.display()))?;
     let runtime = resolve(runtime, cwd)?;
     if runtime.starts_with(&game) || game.starts_with(&runtime) {
@@ -498,6 +522,34 @@ mod tests {
         assert!(!game.join("new-runtime").exists());
         fs::remove_file(alias).unwrap();
         fs::remove_dir_all(game).unwrap();
+    }
+
+    #[test]
+    fn paths_that_cannot_be_canonicalized_fall_back_to_lexical_normalisation() {
+        let dir = temp("no-final-path");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("file"), b"x").unwrap();
+        // A non-NotFound canonicalize error (here "not a directory"; on
+        // Windows RAM disks "Incorrect function") no longer stops the launch.
+        let odd = dir.join("file").join("sub").join("..").join("runtime");
+        assert_eq!(
+            resolve(&odd, Path::new("/")).unwrap(),
+            dir.join("file").join("runtime")
+        );
+        let incorrect_function = |_: &Path| Err(io::Error::from_raw_os_error(1));
+        assert_eq!(
+            canonical_existing_with(Path::new("./."), &dir, incorrect_function).unwrap(),
+            dir
+        );
+        // A missing game folder is still an error, whatever the filesystem.
+        assert!(canonical_existing_with(Path::new("gone"), &dir, incorrect_function).is_err());
+        let not_found = |_: &Path| Err(io::Error::from(io::ErrorKind::NotFound));
+        assert!(canonical_existing_with(Path::new("."), &dir, not_found).is_err());
+        assert_eq!(
+            canonical_existing(Path::new("."), &dir).unwrap(),
+            fs::canonicalize(&dir).unwrap()
+        );
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
