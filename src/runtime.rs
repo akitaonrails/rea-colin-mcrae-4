@@ -210,7 +210,9 @@ mod tests {
         let game = temp("overlap");
         fs::create_dir_all(&game).unwrap();
         let resolved = game_folder(Path::new("."), &game).unwrap();
-        assert_eq!(resolved, fs::canonicalize(&game).unwrap());
+        // Drive form on Windows (no `\\?\` prefix): what CMR04 accepts.
+        let real = paths::simplify_extended_length(&fs::canonicalize(&game).unwrap());
+        assert_eq!(resolved, real);
         assert!(game_folder(Path::new("gone"), &game).is_err());
         assert!(paths::check_separate(&resolved, &resolved.join("runtime")).is_err());
         assert!(paths::check_separate(&resolved, &temp("elsewhere")).is_ok());
