@@ -241,6 +241,43 @@ fn make_writable(path: &Path) -> io::Result<()> {
     fs::set_permissions(path, permissions)
 }
 
+/// Where a replacement for `path` is prepared: beside it, so the final
+/// rename stays on one volume.
+fn temp_beside(path: &Path) -> PathBuf {
+    let mut name = std::ffi::OsString::from(".");
+    name.push(path.file_name().unwrap_or_default());
+    name.push(".cmr4-new");
+    path.with_file_name(name)
+}
+
+/// Replaces `path` with `bytes` through a temp file and a rename, so a crash
+/// or a full disk mid-write leaves the old file whole instead of a torn one.
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+        fs::create_dir_all(dir)?;
+    }
+    let tmp = temp_beside(path);
+    let _ = fs::remove_file(&tmp);
+    let result = fs::File::create(&tmp)
+        .and_then(|mut file| {
+            io::Write::write_all(&mut file, bytes)?;
+            file.sync_all()
+        })
+        .and_then(|()| match fs::rename(&tmp, path) {
+            // Windows refuses to rename over a read-only file: make it
+            // writable (it is the launcher's own copy), then rename.
+            Err(error) if error.kind() == io::ErrorKind::PermissionDenied && path.exists() => {
+                make_writable(path)?;
+                fs::rename(&tmp, path)
+            }
+            other => other,
+        });
+    if result.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    result
+}
+
 /// Copies new files and changed non-persistent source files. It never deletes
 /// runtime-only files and never overwrites persistent game-owned data.
 pub fn sync(game: &Path, runtime: &Path) -> io::Result<usize> {
@@ -266,7 +303,7 @@ pub fn sync(game: &Path, runtime: &Path) -> io::Result<usize> {
         let file = fs::OpenOptions::new().write(true).open(&to)?;
         file.set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(stamp.mtime))?;
     }
-    fs::write(manifest_path, format_manifest(&plan.manifest))?;
+    write_atomic(&manifest_path, format_manifest(&plan.manifest).as_bytes())?;
     Ok(plan.copy.len())
 }
 
@@ -439,5 +476,30 @@ mod tests {
         assert!(!game.join("new-runtime").exists());
         fs::remove_file(alias).unwrap();
         fs::remove_dir_all(game).unwrap();
+    }
+
+    #[test]
+    fn write_atomic_replaces_whole_files_and_leaves_no_temp() {
+        let dir = temp("atomic");
+        let path = dir.join("sub").join("OPTIONS");
+        write_atomic(&path, b"first").unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"first");
+        // A read-only previous copy (as copied from read-only media) is replaced.
+        let mut permissions = fs::metadata(&path).unwrap().permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(&path, permissions).unwrap();
+        write_atomic(&path, b"second, longer").unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"second, longer");
+        let names: Vec<_> = fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(names, ["OPTIONS"]);
+        // A failed write leaves the old file whole: the temp name is taken
+        // by a directory, so the new content can't be prepared.
+        fs::create_dir_all(temp_beside(&path).join("blocker")).unwrap();
+        assert!(write_atomic(&path, b"torn").is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"second, longer");
+        fs::remove_dir_all(dir).unwrap();
     }
 }

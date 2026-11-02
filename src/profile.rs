@@ -109,7 +109,8 @@ pub fn choose_gamepad_in(
     if !choose_gamepad(&mut profile, vendor, product) {
         return Ok(false);
     }
-    std::fs::write(path, profile)?;
+    // Whole or not at all: a torn OPTIONS would lose every player's profile.
+    crate::runtime::write_atomic(path, &profile)?;
     Ok(true)
 }
 

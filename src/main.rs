@@ -210,7 +210,7 @@ mod app {
         let outcome = patch::widescreen(&mut bytes, settings.widescreen())
             .map_err(|error| format!("{}: {error}", runtime_exe.display()))?;
         if matches!(outcome, Outcome::Patched | Outcome::Restored) {
-            fs::write(&runtime_exe, &bytes)
+            runtime::write_atomic(&runtime_exe, &bytes)
                 .map_err(|error| format!("cannot write {}: {error}", runtime_exe.display()))?;
         }
         // gamescope exposes one output; elsewhere avoid a portrait primary monitor.

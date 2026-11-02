@@ -8,6 +8,9 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- The game's `OPTIONS` save, the patched `cmr4.exe`, `dgVoodoo.conf`,
+  `Xidi.ini` and the launcher's own bookkeeping files are written to a temp
+  file and renamed into place, so a crash or full disk can't leave them torn.
 - Wine: winebus `Map Controllers` is written only when the prefix has no
   value, so a player's own setting is kept instead of being reset to 1 on
   every launch.

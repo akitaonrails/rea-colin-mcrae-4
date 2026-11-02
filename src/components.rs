@@ -153,7 +153,7 @@ fn write_ownership(runtime: &Path, ownership: &Ownership) -> Result<(), String> 
         .iter()
         .map(|(name, digest)| format!("{digest}\t{name}\n"))
         .collect();
-    fs::write(runtime.join(OWNERSHIP_FILE), text)
+    crate::runtime::write_atomic(&runtime.join(OWNERSHIP_FILE), text.as_bytes())
         .map_err(|error| format!("cannot record component ownership: {error}"))
 }
 
@@ -301,15 +301,15 @@ pub fn install(
     } else {
         disable_dxvk(game, runtime, &mut ownership)?;
     }
-    fs::write(
-        runtime.join("dgVoodoo.conf"),
-        dgvoodoo_conf(settings, wine, gamescope, output),
+    crate::runtime::write_atomic(
+        &runtime.join("dgVoodoo.conf"),
+        dgvoodoo_conf(settings, wine, gamescope, output).as_bytes(),
     )
     .map_err(|error| format!("cannot write dgVoodoo.conf: {error}"))?;
 
     if settings.controller() {
         install_wrapper(game, runtime, components, XIDI_DLL, &mut ownership)?;
-        fs::write(runtime.join("Xidi.ini"), XIDI_CONF)
+        crate::runtime::write_atomic(&runtime.join("Xidi.ini"), XIDI_CONF.as_bytes())
             .map_err(|error| format!("cannot write Xidi.ini: {error}"))?;
     } else {
         disable_xidi(game, runtime, &mut ownership)?;
