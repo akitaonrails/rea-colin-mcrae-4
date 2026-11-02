@@ -38,6 +38,9 @@ All notable changes to this project. The format follows
   switches in `--help`, Ctrl+Tab/Ctrl+PageDown tab switching, the chip
   rows' and Play's screen-reader text. `--help`, `launcher.cfg` and the
   window are unchanged.
+- Agent instructions: `CLAUDE.md` imports `AGENTS.md` and the SDK's
+  vendored `sdk/docs/STANDARDS.md`; `AGENTS.md` keeps only CMR04's own
+  rules and owner decisions and points to the standards and playbooks.
 - Docs: README rewritten for this release (download links that don't
   name an old version, where saves live and how to uninstall, the
   generated `--help`, developer checks including `wine-test` and
