@@ -32,6 +32,12 @@ All notable changes to this project. The format follows
 
 ### Changed
 
+- A `cmr4.exe` the launcher doesn't know (anything but 1.0.0.0, plain or
+  with the community 16:9 fix) no longer gets the widescreen fix: the
+  launcher only patches builds it has identified by SHA-256 (rea launcher
+  standard: no patching by guesswork). The game still runs with its own
+  view, and the message now says so and asks for the code so we can add
+  that build.
 - Updated rea-launcher-sdk to v0.3.2 (crates, vendored `sdk/` with the
   SDK's standards and playbooks in `sdk/docs/`, CI workflows). The Linux
   helper now reads `display_mode`, the resolution and the scaler in any

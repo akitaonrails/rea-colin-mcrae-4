@@ -88,7 +88,7 @@ impl Prepared {
 /// The plain-language note for an unknown build, with the report link.
 pub fn unknown_message(sha256: &str) -> String {
     format!(
-        "This cmr4.exe is a version the launcher doesn't know yet, so the game runs without the widescreen fix (the picture keeps the game's own view). Please report it so it can be added: {ISSUE_URL} (include this code: {sha256})."
+        "This cmr4.exe is a version the launcher doesn't know yet. The game still runs, with its own view: the launcher applies the widescreen fix only to builds it has checked. Send us the code below and we'll add your build: {ISSUE_URL} (code: {sha256})."
     )
 }
 
@@ -165,6 +165,10 @@ mod tests {
         let message = unknown_message("abc");
         assert!(message.contains(ISSUE_URL) && message.contains("abc"));
         assert!(!message.contains("signature"));
+        // Unknown builds lose the widescreen fix by design (STANDARDS
+        // non-negotiable 7); the message says so and how to get it.
+        assert!(message.contains("widescreen fix only to builds it has checked"));
+        assert!(message.contains("we'll add your build"));
     }
 
     #[test]
