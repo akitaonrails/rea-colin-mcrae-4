@@ -16,6 +16,8 @@ All notable changes to this project. The format follows
 
 ### Changed
 
+- A golden fixture (`tests/fixtures/xidi.ini`) pins the generated
+  `Xidi.ini` byte for byte.
 - CI builds with `--locked`, pins its actions by commit, fails when a
   package artifact is missing, checks the tag against the crate version and
   publishes `SHA256SUMS` with each release.

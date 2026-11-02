@@ -552,6 +552,39 @@ mod tests {
         assert!(!XIDI_CONF.contains("Append"));
     }
 
+    /// The exact Xidi.ini verified in the game on 2026-11-02 (see
+    /// docs/RUNTIME_NOTES.md). Any change to the mapping must update the
+    /// fixture on purpose and be checked in the game again.
+    const XIDI_GOLDEN: &str = include_str!("../tests/fixtures/xidi.ini");
+
+    #[test]
+    fn generated_xidi_ini_matches_the_golden_fixture() {
+        assert_eq!(XIDI_CONF, XIDI_GOLDEN);
+        let game = temp("golden-game");
+        let runtime = temp("golden-runtime");
+        let components = temp("golden-components");
+        fs::create_dir_all(&game).unwrap();
+        fs::create_dir_all(&runtime).unwrap();
+        write_components(&components);
+        install(
+            &game,
+            &runtime,
+            &components,
+            &Settings::default(),
+            true,
+            false,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            fs::read_to_string(runtime.join("Xidi.ini")).unwrap(),
+            XIDI_GOLDEN
+        );
+        for path in [game, runtime, components] {
+            fs::remove_dir_all(path).unwrap();
+        }
+    }
+
     #[test]
     fn missing_components_fail_clearly_and_check_can_skip_them() {
         let components = temp("missing");
