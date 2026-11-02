@@ -6,6 +6,11 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `THIRD_PARTY.md` lists Xidi under its real licence, BSD-3-Clause (the
+  upstream `LICENSE` was already shipped in `licenses/Xidi/`).
+
 ### Changed
 
 - `.gitignore` also ignores `/dist/`, `/runtime-data/`, `/original-data/`
