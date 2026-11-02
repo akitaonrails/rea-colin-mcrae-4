@@ -144,8 +144,9 @@ mod app {
         let _instance = match win32::single_instance(instance::NAME) {
             Ok(guard) => guard,
             Err(_) => {
-                let second =
-                    SecondStart::new(win32::bring_launcher_forward(&win32::launcher_exe_name()));
+                let second = SecondStart::for_run(cli.check, || {
+                    win32::bring_launcher_forward(&win32::launcher_exe_name())
+                });
                 log_line(second.log_line());
                 return second.outcome().map_err(str::to_owned);
             }

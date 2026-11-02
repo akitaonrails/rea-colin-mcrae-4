@@ -26,6 +26,10 @@ pub fn is_launcher_window(title: &str, process_image: &str, launcher_exe: &str) 
     title == TITLE && name.eq_ignore_ascii_case(launcher_exe)
 }
 
+/// What `--check` says while another launcher is open: it would check
+/// against a runtime the other one may be changing.
+pub const ALREADY_OPEN: &str = "The Colin McRae Rally 04 launcher is already open (its window, or the game). Close it, then run the check again.";
+
 /// What a second start does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SecondStart {
@@ -33,6 +37,9 @@ pub enum SecondStart {
     Focused,
     /// No window to show: the game is running. Say so and refuse to play.
     GameRunning,
+    /// An action flag (`--check`): reported, non-zero exit, and nothing
+    /// brought forward, so a script never reads it as success.
+    ActionRefused,
 }
 
 impl SecondStart {
@@ -46,11 +53,23 @@ impl SecondStart {
         }
     }
 
+    /// A second start of a run with `--check` (`action`) or without:
+    /// `focus` brings the running launcher's window forward and says
+    /// whether there was one; an action never calls it.
+    pub fn for_run(action: bool, focus: impl FnOnce() -> bool) -> SecondStart {
+        if action {
+            SecondStart::ActionRefused
+        } else {
+            SecondStart::new(focus())
+        }
+    }
+
     /// The line for `launcher.log`.
     pub fn log_line(self) -> &'static str {
         match self {
             SecondStart::Focused => "another launcher is running: brought its window forward",
             SecondStart::GameRunning => "another launcher is running the game: Play refused",
+            SecondStart::ActionRefused => "another launcher is running: --check refused",
         }
     }
 
@@ -59,6 +78,7 @@ impl SecondStart {
         match self {
             SecondStart::Focused => Ok(0),
             SecondStart::GameRunning => Err(GAME_RUNNING),
+            SecondStart::ActionRefused => Err(ALREADY_OPEN),
         }
     }
 }
@@ -76,6 +96,20 @@ mod tests {
         assert_eq!(running, SecondStart::GameRunning);
         assert_eq!(running.outcome(), Err(GAME_RUNNING));
         assert!(running.log_line().contains("Play refused"));
+    }
+
+    #[test]
+    fn check_while_another_launcher_is_open_fails_without_focusing_it() {
+        let second = SecondStart::for_run(true, || panic!("an action must not focus a window"));
+        assert_eq!(second, SecondStart::ActionRefused);
+        // Non-zero (main exits 1 on Err) with a message, never a silent 0.
+        assert_eq!(second.outcome(), Err(ALREADY_OPEN));
+        assert!(second.log_line().contains("--check refused"));
+        assert_eq!(SecondStart::for_run(false, || true), SecondStart::Focused);
+        assert_eq!(
+            SecondStart::for_run(false, || false),
+            SecondStart::GameRunning
+        );
     }
 
     #[test]

@@ -160,6 +160,9 @@ All notable changes to this project. The format follows
   game's own window, counted as the launcher: the second start exited
   without a word. It now accepts only a window of the launcher's own
   program (`CMR4Launcher.exe`), and otherwise says the game is running.
+- `--check` while another launcher (or the game it started) is open now
+  says so and exits with 1, instead of bringing that window forward and
+  exiting 0, which a script read as a passed check.
 - The Windows build is linked with LLD (`.cargo/config.toml`, i686 and
   x86_64). GNU ld 2.47 left some kernel32 imports of `CMR4Launcher.exe`
   outside every import descriptor, so the launcher could crash on its

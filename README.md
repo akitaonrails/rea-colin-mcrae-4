@@ -224,7 +224,7 @@ The launcher's own switches:
 
 | Switch | What it does |
 | --- | --- |
-| `--check` | Checks the game and the settings without playing; the result goes to `launcher.log` and the terminal (or a dialog). |
+| `--check` | Checks the game and the settings without playing; the result goes to `launcher.log` and the terminal (or a dialog). Fails (exit 1) while another launcher is open. |
 | `--no-window` | Plays with the saved settings and the flags given. |
 | `--settings` | Opens only the settings window (the Linux helper uses it). |
 | `--linux` | Says the Linux helper (`cmr4-play`) started the launcher. |
