@@ -197,19 +197,20 @@ pub fn should_remember_game(saved: Option<&Path>, cli: Option<&Path>) -> bool {
 /// What a launch writes back into the settings file `text`, keeping every
 /// other line; None when nothing changes. Two values are remembered:
 /// - the game folder, as `should_remember_game` decides;
-/// - the resolution the launcher picked from the screen, when neither the
-///   file nor a `--resolution` flag set one (so `cmr4-play` sizes gamescope
-///   to it next time). A flag's value is never saved.
+/// - `picked`, the resolution the launcher picked from the screen, when
+///   neither the file nor a `--resolution` flag set one. The caller passes
+///   None inside gamescope, whose output is only `cmr4-play`'s 1024x768
+///   fallback and would be saved for good. A flag's value is never saved.
 pub fn remember(
     text: &str,
     saved: &Settings,
     cli: &Settings,
     game: &Path,
-    picked: Resolution,
+    picked: Option<Resolution>,
 ) -> Option<String> {
     let game_changed = should_remember_game(saved.game.as_deref(), cli.game.as_deref());
-    let auto_resolution = saved.resolution.is_none() && cli.resolution.is_none();
-    if !game_changed && !auto_resolution {
+    let auto_resolution = picked.filter(|_| saved.resolution.is_none() && cli.resolution.is_none());
+    if !game_changed && auto_resolution.is_none() {
         return None;
     }
     let mut out = if text.trim().is_empty() {
@@ -220,7 +221,7 @@ pub fn remember(
     if game_changed {
         out = set_key(&out, "game", &game.display().to_string());
     }
-    if auto_resolution {
+    if let Some(picked) = auto_resolution {
         out = set_key(&out, "resolution", &picked.value());
     }
     Some(out)
@@ -697,7 +698,7 @@ mod tests {
         .settings;
         let (saved, _) = Settings::parse_file(file);
         let game = Path::new(r"D:\CMR4");
-        let text = remember(file, &saved, &cli, game, Resolution::Original).unwrap();
+        let text = remember(file, &saved, &cli, game, Some(Resolution::Original)).unwrap();
         assert_eq!(
             text,
             "# mine\nresolution = 1920x1080\nvsync = on\ngame = D:\\CMR4\n"
@@ -710,7 +711,7 @@ mod tests {
             game: read.game.clone(),
             ..Settings::default()
         };
-        let picked = Resolution::Custom(3840, 2160);
+        let picked = Some(Resolution::Custom(3840, 2160));
         assert_eq!(
             remember(&text, &read, &Settings::default(), game, picked),
             None
@@ -727,7 +728,7 @@ mod tests {
         let game = Path::new(r"D:\CMR4");
         let file = "game = D:\\CMR4\n# my comment\n";
         let (saved, _) = Settings::parse_file(file);
-        let picked = Resolution::Custom(2560, 1440);
+        let picked = Some(Resolution::Custom(2560, 1440));
         // Auto-picked: the file had none and no flag set one.
         let text = remember(file, &saved, &Settings::default(), game, picked).unwrap();
         assert_eq!(
@@ -737,7 +738,13 @@ mod tests {
         // --resolution: a one-run override, never saved.
         let flag = args(&["--resolution", "1920x1080"]).unwrap().settings;
         assert_eq!(
-            remember(file, &saved, &flag, game, Resolution::Custom(1920, 1080)),
+            remember(
+                file,
+                &saved,
+                &flag,
+                game,
+                Some(Resolution::Custom(1920, 1080))
+            ),
             None
         );
         // A first launch with a flag remembers only the game folder.
@@ -746,7 +753,7 @@ mod tests {
             &Settings::default(),
             &flag,
             game,
-            Resolution::Custom(1920, 1080),
+            Some(Resolution::Custom(1920, 1080)),
         )
         .unwrap();
         assert!(fresh.starts_with("# Colin McRae Rally 04 launcher settings."));
@@ -755,7 +762,15 @@ mod tests {
         assert_eq!(read.resolution, None);
         // A first launch without flags also keeps the picked resolution.
         let auto = remember("", &Settings::default(), &Settings::default(), game, picked).unwrap();
-        assert_eq!(Settings::parse_file(&auto).0.resolution, Some(picked));
+        assert_eq!(Settings::parse_file(&auto).0.resolution, picked);
+        // Inside gamescope (picked = None) only the game folder is saved:
+        // its output is cmr4-play's fallback, not the player's screen.
+        assert_eq!(
+            remember(file, &saved, &Settings::default(), game, None),
+            None
+        );
+        let nested = remember("", &Settings::default(), &Settings::default(), game, None).unwrap();
+        assert_eq!(Settings::parse_file(&nested).0.resolution, None);
     }
 
     #[test]

@@ -8,9 +8,9 @@ resolution for both nested and output size, fullscreen fit, and the fixed `nis`
 filter. There is no scaler setting. Without gamescope it launches directly.
 
 Gamescope's size comes from `resolution` in the prefix's `launcher.cfg`. When
-that is `original`, missing or invalid it uses 1024x768, so the first `--play`
-before any settings were saved starts small (the launcher then saves the
-resolution it picked for the next run); open the settings window once first.
+that is `original`, missing or invalid it uses 1024x768, so `--play` before
+any settings were saved starts small every time (inside gamescope the
+launcher doesn't save the size it sees); open the settings window once first.
 
 ```sh
 linux/cmr4-play          # settings window through Wine, then game

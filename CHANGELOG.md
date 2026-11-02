@@ -22,8 +22,8 @@ All notable changes to this project. The format follows
   remembered in `launcher.cfg` (when it has none, or `--game` names another).
   Before, every flag (and the resolved runtime) was saved. A resolution the
   launcher picks from the screen, when neither the file nor `--resolution`
-  sets one, is still saved, so `cmr4-play --play` sizes gamescope to it from
-  the second run on.
+  sets one, is still saved, except inside gamescope: there the screen is
+  `cmr4-play`'s 1024x768 fallback, which would otherwise be kept for good.
 - A `launcher.cfg` that exists but can't be read stops the launch with an
   error instead of being replaced by defaults.
 - The game's `OPTIONS` save, the patched `cmr4.exe`, `dgVoodoo.conf`,

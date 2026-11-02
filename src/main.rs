@@ -194,12 +194,13 @@ mod app {
         log_line(&format!(
             "cmr4.exe SHA-256: {digest}; patch: {patch_outcome:?}"
         ));
-        // Only --game is remembered from the command line; a resolution the
-        // launcher picked from the screen is saved so cmr4-play can size
-        // gamescope to it next time.
+        // Only --game is remembered from the command line. A resolution the
+        // launcher picked from the screen is saved too, except inside
+        // gamescope, whose output is cmr4-play's fallback size.
+        let picked = (!gamescope).then(|| settings.resolution());
         remember(
             &settings_path,
-            config::remember(&existing, &saved, &cli_values, &game, settings.resolution()),
+            config::remember(&existing, &saved, &cli_values, &game, picked),
         )?;
         if cli.check {
             let text = format!(

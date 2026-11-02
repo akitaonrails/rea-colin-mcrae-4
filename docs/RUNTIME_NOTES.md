@@ -118,9 +118,9 @@ in the game yet.
 - **`launcher.cfg` writing** keeps comments and unknown lines, and command-line
   runs remember only `--game`. Check that Play in the window under Wine and on
   Windows still saves every picture value, and that `cmr4-play --play` after a
-  window save keeps using the saved resolution for gamescope, and that a first
-  `--play` with no saved resolution stores the one it picked (a
-  `--resolution` flag is never stored).
+  window save keeps using the saved resolution for gamescope. Outside
+  gamescope a first run with no saved resolution stores the one it picked;
+  inside gamescope it stores none (a `--resolution` flag is never stored).
 - **First run on a Steam Deck** now opens on the Steam Deck look (1280x800,
   widescreen off, 60 fps) instead of 4K (1280x720 widescreen). The look itself
   is unchanged; check that the window sees the Deck's 1280x800 screen in

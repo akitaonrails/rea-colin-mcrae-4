@@ -230,7 +230,8 @@ With no arguments the settings window opens. Any option skips the window and
 launches directly. Options apply to that run only; the one remembered in
 `launcher.cfg` is the game folder (`--game`). When neither the file nor
 `--resolution` sets a resolution, the one the launcher picks from the screen
-is saved too.
+is saved too, except inside gamescope, where the screen is only gamescope's
+own size.
 
 ```text
 CMR4Launcher [options]
