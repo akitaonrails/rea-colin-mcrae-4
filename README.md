@@ -37,9 +37,9 @@ analogue triggers. Click to watch (2⅓ minutes, with sound).*
 
 ## Screenshots
 
-| Play | Picture |
-| --- | --- |
-| ![The Play tab with the game folder, the four looks and the private copy folder](docs/images/launcher-play.jpg) | ![The Picture tab with the resolutions, the frame-rate cap and VSync](docs/images/launcher-picture.jpg) |
+| Play | Picture | Controls |
+| --- | --- | --- |
+| ![The Play tab with the game folder, the four looks and the private copy folder](docs/images/launcher-play.jpg) | ![The Picture tab with the resolutions, the frame-rate cap and VSync](docs/images/launcher-picture.jpg) | ![The Controls tab with the gamepad switch and what the game sees](docs/images/launcher-controls.jpg) |
 
 ![Colin McRae Rally 04 in a stage at 16:9, driven with a gamepad](docs/images/gameplay.jpg)
 

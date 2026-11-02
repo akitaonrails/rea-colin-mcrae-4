@@ -169,7 +169,8 @@ cover these; none has been run in the game yet.
 - **Settings window:** the reworked Picture tab, the Widescreen look card
   and Ctrl+Tab between tabs were only tested headless; look at them once
   in a real window under Wine and on Windows (the screenshots in
-  `docs/images/launcher*.jpg` predate the rework).
+  `docs/images/launcher-*.jpg` were retaken on 2026-11-02 from this build,
+  headless: Xvfb at 3840x2160, Wine at 96 DPI, window at 1.5x).
 - **`launcher.log`** starts afresh past 1 MiB (it never did before).
 
 ### rea-launcher-sdk v0.3.0 bump (2026-11-02)
