@@ -131,11 +131,7 @@ mod app {
                 }
             }
             log_line("settings window opened");
-            match ui::show(
-                &settings_path,
-                existing.as_deref().unwrap_or_default(),
-                cli.linux,
-            ) {
+            match ui::show(&settings_path, existing.as_deref(), cli.linux) {
                 Ok(ui::Outcome::Play) => {
                     log_line("settings window: Play");
                     if cli.settings_window {

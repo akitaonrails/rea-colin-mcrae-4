@@ -35,7 +35,7 @@ pub enum Outcome {
     Closed,
 }
 
-pub fn show(settings_path: &Path, text: &str, linux: bool) -> Result<Outcome, String> {
+pub fn show(settings_path: &Path, text: Option<&str>, linux: bool) -> Result<Outcome, String> {
     let mut outcome = Outcome::Closed;
     let wine = win32::is_wine();
     // XWayland fractional scaling can lose a post-creation resize. Under Wine
@@ -58,7 +58,7 @@ pub fn show(settings_path: &Path, text: &str, linux: bool) -> Result<Outcome, St
         ..Default::default()
     };
     let path = settings_path.to_path_buf();
-    let text = text.to_string();
+    let text = text.map(str::to_string);
     eframe::run_native(
         "Colin McRae Rally 04",
         options,
@@ -207,20 +207,13 @@ impl<'a> Window<'a> {
     fn new(
         ctx: &egui::Context,
         path: PathBuf,
-        text: String,
+        text: Option<String>,
         linux: bool,
         zoom: f32,
         outcome: &'a mut Outcome,
     ) -> Self {
         let screen = win32::screen_size();
-        let form = if text.is_empty() {
-            Form::first_run(screen)
-        } else {
-            Form::new(
-                &cmr4_launcher::config::Settings::parse_file(&text).0,
-                screen,
-            )
-        };
+        let form = Form::open(text.as_deref(), screen);
         let check = check_game(&form.game, form.widescreen);
         Self {
             checked: form.game.clone(),

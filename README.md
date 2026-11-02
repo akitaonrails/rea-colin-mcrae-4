@@ -180,6 +180,8 @@ the picture in one click:
 | **Custom** | your own choice in **Picture** | — | — |
 
 The look itself isn't stored; the window works it out from the saved values.
+The first time it opens (no `launcher.cfg` yet) it starts on the recommended
+look for your screen.
 
 ![Picture tab](docs/images/launcher-picture.png)
 

@@ -120,6 +120,10 @@ in the game yet.
   Windows still saves every picture value, and that `cmr4-play --play` after a
   window save keeps using the saved resolution for gamescope (a `--play` run
   no longer stores the resolution it picked).
+- **First run on a Steam Deck** now opens on the Steam Deck look (1280x800,
+  widescreen off, 60 fps) instead of 4K (1280x720 widescreen). The look itself
+  is unchanged; check that the window sees the Deck's 1280x800 screen in
+  Desktop Mode.
 
 ## Remaining unknowns
 

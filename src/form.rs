@@ -76,8 +76,23 @@ impl Form {
         form
     }
 
+    /// The form for a real first run (no `launcher.cfg` yet): the defaults
+    /// with the recommended look for this screen (Steam Deck on a Deck, 4K
+    /// elsewhere), as the CMR3 launcher does.
     pub fn first_run(screen: Option<(u32, u32)>) -> Self {
-        Self::new(&Settings::default(), screen)
+        let mut form = Self::new(&Settings::default(), screen);
+        form.set_look(recommended(screen), screen);
+        form
+    }
+
+    /// The form the window opens with. Only a missing settings file is a
+    /// first run; any existing file, even an empty or hand-trimmed one,
+    /// opens on its own values so a saved choice is never replaced.
+    pub fn open(text: Option<&str>, screen: Option<(u32, u32)>) -> Self {
+        match text {
+            None => Self::first_run(screen),
+            Some(text) => Self::new(&Settings::parse_file(text).0, screen),
+        }
     }
 
     pub fn original_picture(&mut self) {
@@ -266,6 +281,25 @@ mod tests {
         assert_eq!(form.fps_limit, None);
         assert!(!form.vsync);
         assert_eq!(form.look, Look::FourK);
+    }
+
+    #[test]
+    fn the_recommended_look_is_applied_on_the_real_first_run_only() {
+        let deck = Form::open(None, DECK);
+        assert_eq!(deck.look, Look::SteamDeck);
+        assert_eq!(deck.resolution, Resolution::Custom(1280, 800));
+        assert_eq!(deck.fps_limit, Some(60));
+        assert_eq!(Form::open(None, UHD).look, Look::FourK);
+        assert_eq!(Form::open(None, UHD), Form::first_run(UHD));
+        // An existing file opens on its values, whatever the screen.
+        assert_eq!(Form::open(Some(""), DECK).look, Look::FourK);
+        let saved = Form::open(Some("resolution = original\nwidescreen = off\n"), DECK);
+        assert_eq!(saved.look, Look::Original);
+        let mut four_k = Form::first_run(DECK);
+        four_k.set_look(Look::FourK, DECK);
+        let reopened = Form::open(Some(&four_k.save("")), DECK);
+        assert_eq!(reopened.look, Look::FourK);
+        assert_eq!(reopened, four_k);
     }
 
     #[test]

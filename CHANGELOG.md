@@ -8,6 +8,10 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- First run: the settings window opens on the recommended look (Steam Deck on
+  a 1280x800 screen, 4K elsewhere) only when there is no `launcher.cfg` yet.
+  Before, a Deck got the 4K look, and an unreadable file counted as a first
+  run.
 - `launcher.cfg` is no longer rewritten wholesale: saving from the window
   changes only the launcher's own keys and keeps your comments and other
   lines (and CRLF line endings). Unknown keys are logged as warnings.
