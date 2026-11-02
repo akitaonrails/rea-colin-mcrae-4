@@ -81,13 +81,23 @@ fn xinput_proc(name: &std::ffi::CStr) -> Option<unsafe extern "system" fn() -> i
     None
 }
 
+type GetState = unsafe extern "system" fn(u32, *mut [u8; 16]) -> u32;
+
+/// XInputGetState, looked up once: the settings window polls it every frame,
+/// and each LoadLibraryW would also add a reference to the DLL.
+fn xinput_get_state() -> Option<GetState> {
+    static GET_STATE: std::sync::OnceLock<Option<GetState>> = std::sync::OnceLock::new();
+    *GET_STATE.get_or_init(|| {
+        // SAFETY: XInputGetState's signature; its output state is exactly 16 bytes.
+        xinput_proc(c"XInputGetState")
+            .map(|proc| unsafe { std::mem::transmute::<_, GetState>(proc) })
+    })
+}
+
 fn xinput_states() -> Vec<(u32, [u8; 16])> {
-    type GetState = unsafe extern "system" fn(u32, *mut [u8; 16]) -> u32;
-    let Some(get) = xinput_proc(c"XInputGetState") else {
+    let Some(get) = xinput_get_state() else {
         return Vec::new();
     };
-    // SAFETY: XInputGetState's signature; its output state is exactly 16 bytes.
-    let get: GetState = unsafe { std::mem::transmute(get) };
     (0..4)
         .filter_map(|slot| {
             let mut state = [0u8; 16];
@@ -611,5 +621,19 @@ pub fn run_game(
             return Err(format!("cannot read game exit status: {}", last_error()));
         }
         Ok(code)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Runs only on Windows/Wine (`cargo test --target i686-pc-windows-gnu`
+    /// under Wine); the host build compiles it through clippy.
+    #[test]
+    fn xinput_lookup_is_cached() {
+        let first = xinput_get_state().map(|proc| proc as usize);
+        assert_eq!(first, xinput_get_state().map(|proc| proc as usize));
+        assert_eq!(xinput_pads().len(), xinput_states().len());
     }
 }
