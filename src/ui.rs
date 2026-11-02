@@ -60,6 +60,9 @@ pub fn show(settings_path: &Path, text: Option<&str>, linux: bool) -> Result<Out
         linux,
         pads: xinput::connected(),
         pick_folder: dialog::pick_folder,
+        open_url: |url| {
+            let _ = dialog::open_url(url);
+        },
     };
     let path = settings_path.to_path_buf();
     eframe::run_native(

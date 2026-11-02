@@ -50,6 +50,7 @@ fn host() -> Host {
         linux: false,
         pads: 1,
         pick_folder: |_| None,
+        open_url: |_| {},
     }
 }
 
@@ -440,6 +441,27 @@ fn every_tab_renders_and_its_controls_are_reachable_and_named() {
     tab(&mut ui, "Controls");
     assert!(
         ui.query_by_role_and_label(Role::Switch, "Gamepad")
+            .is_some()
+    );
+    // Keyboard: Ctrl+Tab and Ctrl+Shift+Tab change tabs.
+    ui.key_press_modifiers(
+        rea_launcher_ui::egui::Modifiers::CTRL,
+        rea_launcher_ui::egui::Key::Tab,
+    );
+    ui.run();
+    assert_eq!(ui.state().tab, Tab::Play);
+    ui.key_press_modifiers(
+        rea_launcher_ui::egui::Modifiers::CTRL | rea_launcher_ui::egui::Modifiers::SHIFT,
+        rea_launcher_ui::egui::Key::Tab,
+    );
+    ui.run();
+    assert_eq!(ui.state().tab, Tab::Controls);
+    // Gamepad off: no mapping table, a note instead.
+    ui.get_by_role_and_label(Role::Switch, "Gamepad").click();
+    ui.run();
+    assert!(ui.query_by_label("What the game sees").is_none());
+    assert!(
+        ui.query_by_label_contains("reads the pad by itself")
             .is_some()
     );
     // The pad's shoulders change tabs; Start plays.

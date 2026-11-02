@@ -73,6 +73,8 @@ pub struct Host {
     pub pads: usize,
     /// The folder picker (`rea_launcher_win32::dialog::pick_folder`).
     pub pick_folder: fn(&str) -> Option<PathBuf>,
+    /// Opens a web page in the browser (`dialog::open_url`).
+    pub open_url: fn(&str),
 }
 
 /// What the Game folder field found.
@@ -100,7 +102,9 @@ pub fn check_game(folder: &str, widescreen: bool) -> Check {
     }
     let dir = Path::new(folder);
     if !dir.is_dir() {
-        return Check::Problem("There is no such folder.".into());
+        return Check::Problem(
+            "This folder doesn't exist. Check the path, or press Browse… to pick it.".into(),
+        );
     }
     let Some(exe) = std::fs::read_dir(dir).ok().and_then(|entries| {
         entries.flatten().map(|entry| entry.path()).find(|path| {
@@ -196,13 +200,19 @@ impl Window {
         let text = match config::read_file(&self.path) {
             Ok(text) => text.unwrap_or_default(),
             Err(error) => {
-                self.error = Some(format!("Can't read the settings: {error}"));
+                self.error = Some(format!(
+                    "Can't read the settings ({error}). Close any program that has launcher.cfg open, then press Play again."
+                ));
                 return;
             }
         };
         match rea_launcher::fsx::write_atomic(&self.path, self.form.save(&text)) {
             Ok(()) => self.played = true,
-            Err(error) => self.error = Some(format!("Can't save the settings: {error}")),
+            Err(error) => {
+                self.error = Some(format!(
+                    "Can't save the settings ({error}). Check that the launcher's folder can be written to, then press Play again."
+                ))
+            }
         }
     }
 
@@ -260,6 +270,19 @@ impl Window {
         }
         if ctx.input(|input| input.key_pressed(Key::Enter)) && !ctx.egui_wants_keyboard_input() {
             self.play();
+        }
+        // Keyboard: Ctrl+Tab / Ctrl+Shift+Tab (or Ctrl+PageDown/PageUp)
+        // change tabs, as LB/RB do on a pad; tabs are not focus stops.
+        let step = ctx.input_mut(|input| {
+            // The Shift form first: Ctrl+Tab would also match it.
+            let back = input.consume_key(egui::Modifiers::CTRL | egui::Modifiers::SHIFT, Key::Tab)
+                || input.consume_key(egui::Modifiers::CTRL, Key::PageUp);
+            let next = input.consume_key(egui::Modifiers::CTRL, Key::Tab)
+                || input.consume_key(egui::Modifiers::CTRL, Key::PageDown);
+            (next as isize) - (back as isize)
+        });
+        if step != 0 {
+            self.tab = self.tab.step(step);
         }
         // Taken, so a second egui pass in one frame can't play twice.
         for nav in std::mem::take(&mut self.pending) {
@@ -338,6 +361,11 @@ impl Window {
             Check::Unknown(message) | Check::Problem(message) => (message.clone(), ERROR),
         };
         ui.add(egui::Label::new(egui::RichText::new(note).font(body(13.0)).color(color)).wrap());
+        if matches!(self.check, Check::Unknown(_))
+            && widgets::outline_button(ui, "Report this version…").clicked()
+        {
+            (self.host.open_url)(edition::ISSUE_URL);
+        }
         ui.add_space(10.0);
         self.look_cards(ui);
         ui.add_space(12.0);
@@ -481,6 +509,13 @@ impl Window {
         };
         widgets::note(ui, &pads);
         ui.add_space(12.0);
+        if !self.form.controller {
+            widgets::note(
+                ui,
+                "With Gamepad off, the game reads the pad by itself: menus work, but under Wine the stick and triggers may not drive the car.",
+            );
+            return;
+        }
         widgets::heading(ui, "What the game sees");
         for (control, action) in [
             ("Left stick", "Steering"),
@@ -511,6 +546,7 @@ mod tests {
             linux: false,
             pads: 1,
             pick_folder: |_| None,
+            open_url: |_| {},
         }
     }
 

@@ -42,6 +42,11 @@ All notable changes to this project. The format follows
   1.0.0.0" instead of "PE32 found; widescreen check: Patched". The photo
   caption sits on a solid band. The window's drawing moved into the
   library (`src/window.rs`), so it is tested headless.
+- Settings window accessibility: Ctrl+Tab / Ctrl+Shift+Tab (and
+  Ctrl+PageDown/PageUp) change tabs, so the keyboard reaches every tab;
+  error messages say how to fix the problem; an unknown game version
+  gets a "Report this version…" button that opens the issue form; the
+  Controls tab no longer shows the pad mapping when Gamepad is off.
 - A launch is planned first (`src/plan.rs`: files, registry values, the
   game's environment, patch sets), then carried out; `launcher.log` now
   records the components installed and taken out and the game's

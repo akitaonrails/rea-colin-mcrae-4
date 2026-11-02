@@ -205,7 +205,7 @@ impl Tab {
 /// The Controls tab's note. `profile::choose_gamepad` selects the pad for a
 /// profile whose controls were never set up, so players need not visit the
 /// game's Options (choosing the controller there can freeze it under Wine).
-pub const CONTROLS_NOTE: &str = "For a profile whose controls were never set up, the launcher selects the pad and analogue pedals before the game starts; a profile you set up yourself is left as it is. In this window: D-pad moves, A activates, LB/RB change tabs, Start plays.";
+pub const CONTROLS_NOTE: &str = "For a profile whose controls were never set up, the launcher selects the pad and analogue pedals before the game starts; a profile you set up yourself is left as it is. In this window: D-pad moves, A activates, LB/RB change tabs, Start plays; on a keyboard, Ctrl+Tab changes tabs and Enter plays.";
 
 #[cfg(test)]
 mod tests {
