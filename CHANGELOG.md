@@ -8,6 +8,9 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- `cmr4-play`: an interrupted launch (Ctrl+C, the AppImage closed) now waits
+  for the game session to end after signalling it, so a start right after
+  never finds the old session still running.
 - Wine DLL overrides: a player's rule spelled with `.dll` (`d3d9.dll=b`, any
   case) for a DLL the launcher manages is replaced like `d3d9=b` instead of
   being kept next to the launcher's own.

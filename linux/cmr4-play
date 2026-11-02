@@ -39,7 +39,7 @@ LOCK=$STATE/running.pid
 # ") " avoids comm fields that contain spaces or parentheses.
 proc_stat() {
   [ -r "/proc/$1/stat" ] || return 1
-  stat=$(cat "/proc/$1/stat") || return 1
+  stat=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
   rest=${stat##*) }
   set -- $rest
   [ "$#" -ge 20 ] || return 1
@@ -92,6 +92,9 @@ launch_interrupted() {
   trap - EXIT HUP INT TERM
   if session_valid; then
     kill -TERM "-$LOCK_PID" 2>/dev/null || true
+    # Return only once the session has ended, so a caller that restarts
+    # right away never finds the old game still running.
+    wait "$LOCK_PID" 2>/dev/null || true
   fi
   rm -f "$LOCK"
   exit 143

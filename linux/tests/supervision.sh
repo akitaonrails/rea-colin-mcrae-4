@@ -79,6 +79,22 @@ unset CMR4_WAIT || true
 start > /dev/null
 if [ -f "$LOCK" ]; then fail "natural exit left lock"; else ok "natural supervised exit removes lock"; fi
 
+# Interrupting a launch waits for the session to end before returning: the
+# fake session takes a second to exit after TERM.
+cat > "$T/slow-session" <<'FAKE'
+#!/bin/sh
+trap 'sleep 1; echo "$$" > "$T/session-ended"; exit 0' TERM
+sleep 30 & wait
+FAKE
+chmod +x "$T/slow-session"
+rm -f "$T/session-ended" "$LOCK"
+(RUN= GPU= launch "$T/slow-session") > /dev/null 2>&1 & LAUNCHER_SHELL=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$LOCK" ] && break; sleep 0.2; done
+kill -TERM "$LAUNCHER_SHELL"
+wait "$LAUNCHER_SHELL" 2>/dev/null
+if [ -s "$T/session-ended" ]; then ok "interrupted launch waits for its session"; else fail "interrupted launch returned before its session ended"; fi
+if [ ! -f "$LOCK" ]; then ok "interrupted launch removes the lock"; else fail "interrupted launch left the lock"; fi
+
 # Spaces and an apostrophe stay in one positional argument, never shell source.
 mkdir -p "$T/launcher it's here"
 LAUNCHER=$T/"launcher it's here"/CMR4Launcher.exe
