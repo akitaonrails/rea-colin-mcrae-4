@@ -287,10 +287,19 @@ impl<'a> Window<'a> {
             self.tab = Tab::Picture;
             return;
         }
-        if let Some(dir) = self.path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        match std::fs::write(&self.path, settings.render()) {
+        // Written into the file as it is now, keeping comments and keys the
+        // window doesn't show. A file that exists but can't be read is not
+        // replaced.
+        let text = match std::fs::read_to_string(&self.path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(error) => {
+                self.error = Some(format!("Can't read the settings: {error}"));
+                return;
+            }
+        };
+        match cmr4_launcher::runtime::write_atomic(&self.path, settings.save_into(&text).as_bytes())
+        {
             Ok(()) => {
                 *self.outcome = Outcome::Play;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);

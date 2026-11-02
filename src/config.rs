@@ -1,6 +1,6 @@
 //! Command-line and commented `launcher.cfg` settings.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub const FILE_NAME: &str = "launcher.cfg";
 pub const DEFAULT_RESOLUTION: Resolution = Resolution::Custom(1920, 1080);
@@ -144,51 +144,143 @@ impl Settings {
                     },
                     None => bad("on or off"),
                 },
-                _ => {}
+                _ => warnings.push(format!(
+                    "{FILE_NAME} line {}: unknown setting {key:?} (ignored, kept in the file)",
+                    line_number + 1
+                )),
             }
         }
         (settings, warnings)
     }
 
-    /// Writes every launcher-owned value, with comments suitable for hand editing.
-    pub fn render(&self) -> String {
-        let game = self
-            .game
-            .as_ref()
-            .map(|path| path.display().to_string())
-            .unwrap_or_default();
-        let runtime = self
-            .runtime
-            .as_ref()
-            .map(|path| path.display().to_string())
-            .unwrap_or_default();
-        let fps = self
-            .fps_limit()
-            .map_or_else(|| "off".into(), |n| n.to_string());
-        format!(
-            "# Colin McRae Rally 04 launcher settings.\n\
-             # One setting per line as key = value; # starts a comment.\n\
-             # Command-line options override these values and are saved.\n\n\
-             # The installed game folder. It is only read, never modified.\n\
-             game = {game}\n\n\
-             # The private writable runtime, including saves and settings.\n\
-             runtime = {runtime}\n\n\
-             # Picture size: WIDTHxHEIGHT, or original to keep the game's mode.\n\
-             resolution = {}\n\n\
-             # Apply the tested 16:9 Low aspect patch to the private cmr4.exe.\n\
-             widescreen = {}\n\n\
-             # dgVoodoo frame-rate cap: 1 to 1000, or off.\n\
-             fps_limit = {fps}\n\n\
-             # Force vertical sync in dgVoodoo.\n\
-             vsync = {}\n\n\
-             # Xidi gamepad: stick steers, RT/LT drive the pedal (Y) axis.\n\
-             controller = {}\n",
-            self.resolution().value(),
-            on_off(self.widescreen()),
-            on_off(self.vsync()),
-            on_off(self.controller()),
-        )
+    /// The file `text` with these values written in. Every other line, the
+    /// player's comments and keys this launcher doesn't know included, is
+    /// kept; a value that is `None` is commented out so its default applies.
+    /// An empty or missing file starts from the commented `TEMPLATE`.
+    pub fn save_into(&self, text: &str) -> String {
+        let path = |path: &Option<PathBuf>| path.as_ref().map(|path| path.display().to_string());
+        let mut out = if text.trim().is_empty() {
+            TEMPLATE.to_string()
+        } else {
+            text.to_string()
+        };
+        for (key, value) in [
+            ("game", path(&self.game)),
+            ("runtime", path(&self.runtime)),
+            ("resolution", self.resolution.map(Resolution::value)),
+            ("widescreen", self.widescreen.map(|v| on_off(v).into())),
+            (
+                "fps_limit",
+                self.fps_limit
+                    .map(|n| if n == 0 { "off".into() } else { n.to_string() }),
+            ),
+            ("vsync", self.vsync.map(|v| on_off(v).into())),
+            ("controller", self.controller.map(|v| on_off(v).into())),
+        ] {
+            out = match value {
+                Some(value) => set_key(&out, key, &value),
+                None => clear_key(&out, key),
+            };
+        }
+        out
     }
+}
+
+/// Whether a launch should write its game folder into the settings file:
+/// when the file has none yet, or `--game` named a different one. No other
+/// command-line value is ever saved (the family rule: flags are one-run
+/// overrides).
+pub fn should_remember_game(saved: Option<&Path>, cli: Option<&Path>) -> bool {
+    saved.is_none() || cli.is_some_and(|cli| saved != Some(cli))
+}
+
+/// The settings file `text` with `game` remembered and every other line kept.
+pub fn remember_game(text: &str, game: &Path) -> String {
+    let text = if text.trim().is_empty() {
+        TEMPLATE
+    } else {
+        text
+    };
+    set_key(text, "game", &game.display().to_string())
+}
+
+/// A new `launcher.cfg`: every key with its comment, unset (defaults apply).
+pub const TEMPLATE: &str = "\
+# Colin McRae Rally 04 launcher settings.
+# One setting per line as key = value; # starts a comment. An empty value
+# uses the default. Command-line options override these values for one run;
+# only --game is remembered here.
+
+# The installed game folder. It is only read, never modified.
+game =
+
+# The private writable runtime, including saves and settings.
+# Default: %LOCALAPPDATA%\\CMR4Launcher\\CMR4
+runtime =
+
+# Picture size: WIDTHxHEIGHT, or original to keep the game's mode.
+# Default: the largest exact 16:9 that fits the screen.
+resolution =
+
+# Apply the tested 16:9 Low aspect patch to the private cmr4.exe (on/off).
+widescreen =
+
+# dgVoodoo frame-rate cap: 1 to 1000, or off.
+fps_limit =
+
+# Force vertical sync in dgVoodoo (on/off).
+vsync =
+
+# Xidi gamepad: stick steers, RT/LT drive the pedal (Y) axis (on/off).
+controller =
+";
+
+/// The newline `text` uses: CRLF when it has any (Notepad), else LF.
+fn newline(text: &str) -> &'static str {
+    if text.contains("\r\n") { "\r\n" } else { "\n" }
+}
+
+/// Whether `line` is an active (uncommented) `key = ...` line.
+fn is_key_line(line: &str, key: &str) -> bool {
+    let line = line.trim();
+    !line.starts_with('#') && line.split_once('=').is_some_and(|(k, _)| k.trim() == key)
+}
+
+/// Sets `key` in a settings file, keeping every other line (and comments)
+/// as it was: replaces each active `key =` line, else appends one.
+pub fn set_key(text: &str, key: &str, value: &str) -> String {
+    let nl = newline(text);
+    let mut out = String::with_capacity(text.len() + key.len() + value.len() + 4);
+    let mut done = false;
+    for line in text.lines() {
+        if is_key_line(line, key) {
+            out.push_str(&format!("{key} = {value}"));
+            done = true;
+        } else {
+            out.push_str(line);
+        }
+        out.push_str(nl);
+    }
+    if !done {
+        out.push_str(&format!("{key} = {value}{nl}"));
+    }
+    out
+}
+
+/// Turns `key` off in a settings file: each active line becomes `#key =`,
+/// so the default applies; other lines are kept.
+pub fn clear_key(text: &str, key: &str) -> String {
+    let nl = newline(text);
+    let mut out = String::with_capacity(text.len() + 2);
+    for line in text.lines() {
+        if is_key_line(line, key) {
+            out.push_str(&format!("#{key} ="));
+        } else {
+            out.push_str(line);
+        }
+        out.push_str(nl);
+    }
+    out
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -213,10 +305,10 @@ pub const USAGE: &str = concat!(
     "  --fps-limit N|off     dgVoodoo frame-rate cap\n",
     "  --vsync on|off        force vertical sync (default off)\n",
     "  --controller on|off   Xidi gamepad: stick steers, RT/LT are the pedals (default on)\n",
-    "  --check               validate the game and patch and save settings; copy nothing\n",
+    "  --check               validate the game and patch, remember --game; copy nothing\n",
     "  --no-window           run without a settings window\n",
     "  --help                show this help\n\n",
-    "The original game folder is never modified. Settings are saved in launcher.cfg."
+    "The original game folder is never modified. Options override launcher.cfg for one\nrun; only --game is remembered there."
 );
 
 fn on_off(value: bool) -> &'static str {
@@ -416,7 +508,7 @@ mod tests {
             runtime: Some(PathBuf::from(r"C:\Runtime")),
             ..Settings::default()
         };
-        let text = settings.render();
+        let text = settings.save_into("");
         assert!(text.contains("# The installed game folder"));
         let (read, warnings) = Settings::parse_file(&text);
         assert!(warnings.is_empty(), "{warnings:?}");
@@ -544,14 +636,14 @@ mod tests {
             vsync: Some(true),
             controller: Some(false),
         };
-        let (read, warnings) = Settings::parse_file(&settings.render());
+        let (read, warnings) = Settings::parse_file(&settings.save_into(""));
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(read, settings);
         let uncapped = Settings {
             fps_limit: Some(0),
             ..Settings::default()
         };
-        let text = uncapped.render();
+        let text = uncapped.save_into("");
         assert!(text.contains("fps_limit = off\n"));
         assert_eq!(Settings::parse_file(&text).0.fps_limit(), None);
     }
@@ -563,6 +655,102 @@ mod tests {
         );
         assert!(settings.game.is_some());
         assert_eq!(settings.resolution, None);
-        assert_eq!(warnings.len(), 2);
+        assert_eq!(warnings.len(), 3);
+        assert!(warnings[2].contains("line 4: unknown setting \"future\""));
+    }
+
+    #[test]
+    fn a_command_line_run_remembers_only_the_game_folder() {
+        let file = "# mine\nresolution = 1920x1080\nvsync = on\n";
+        let cli = args(&[
+            "--game",
+            r"D:\CMR4",
+            "--resolution",
+            "original",
+            "--vsync",
+            "off",
+        ])
+        .unwrap()
+        .settings;
+        let (saved, _) = Settings::parse_file(file);
+        assert!(should_remember_game(
+            saved.game.as_deref(),
+            cli.game.as_deref()
+        ));
+        let text = remember_game(file, Path::new(r"D:\CMR4"));
+        assert_eq!(
+            text,
+            "# mine\nresolution = 1920x1080\nvsync = on\ngame = D:\\CMR4\n"
+        );
+        let (read, _) = Settings::parse_file(&text);
+        assert_eq!(read.resolution, Some(Resolution::Custom(1920, 1080)));
+        assert_eq!(read.vsync, Some(true));
+        // Remembered already: no rewrite, with or without the same --game.
+        let game = read.game.as_deref();
+        assert!(!should_remember_game(game, None));
+        assert!(!should_remember_game(game, Some(Path::new(r"D:\CMR4"))));
+        assert!(should_remember_game(game, Some(Path::new(r"E:\CMR4"))));
+        // A first launch starts the file from the commented template.
+        let fresh = remember_game("", Path::new(r"D:\CMR4"));
+        assert!(fresh.starts_with("# Colin McRae Rally 04 launcher settings."));
+        assert_eq!(Settings::parse_file(&fresh).0.game, read.game);
+    }
+
+    #[test]
+    fn template_parses_clean_to_the_defaults() {
+        let (settings, warnings) = Settings::parse_file(TEMPLATE);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(settings, Settings::default());
+        for key in [
+            "game",
+            "runtime",
+            "resolution",
+            "widescreen",
+            "fps_limit",
+            "vsync",
+            "controller",
+        ] {
+            assert!(TEMPLATE.contains(&format!("\n{key} =\n")), "{key}");
+        }
+    }
+
+    #[test]
+    fn saving_keeps_comments_unknown_keys_and_line_order() {
+        let mine = "# my notes\r\nvsync = on # tear-free\r\nmod_path = C:\\mods\r\n# resolution = 640x480\r\nresolution = 1920x1080\r\n";
+        let saved = Settings {
+            resolution: Some(Resolution::Custom(3840, 2160)),
+            vsync: Some(false),
+            ..Settings::default()
+        }
+        .save_into(mine);
+        assert_eq!(
+            saved,
+            // Unset keys absent from the file stay absent.
+            "# my notes\r\nvsync = off\r\nmod_path = C:\\mods\r\n# resolution = 640x480\r\nresolution = 3840x2160\r\n"
+        );
+        let (read, warnings) = Settings::parse_file(&saved);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert_eq!(read.resolution, Some(Resolution::Custom(3840, 2160)));
+        assert_eq!(read.vsync, Some(false));
+    }
+
+    #[test]
+    fn set_key_replaces_every_active_line_and_clear_key_comments_it_out() {
+        let filled = set_key(TEMPLATE, "game", r"D:\CMR4");
+        assert!(filled.contains("\ngame = D:\\CMR4\n"));
+        assert!(filled.contains("\nruntime =\n"));
+        assert_eq!(
+            set_key(&filled, "game", r"E:\CMR4")
+                .matches("game =")
+                .count(),
+            1
+        );
+        // Duplicates all take the new value, so the last one read agrees.
+        let twice = set_key("vsync = on\nvsync = on\n", "vsync", "off");
+        assert_eq!(twice, "vsync = off\nvsync = off\n");
+        assert_eq!(set_key("a = 1", "b", "2"), "a = 1\nb = 2\n");
+        let cleared = clear_key(&filled, "game");
+        assert!(cleared.contains("\n#game =\n"));
+        assert_eq!(Settings::parse_file(&cleared).0.game, None);
     }
 }

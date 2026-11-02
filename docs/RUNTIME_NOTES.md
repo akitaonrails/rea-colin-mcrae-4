@@ -115,6 +115,11 @@ in the game yet.
 - **winebus `Map Controllers`** is now seeded only when absent (it was forced
   to 1 every launch). Check that a fresh prefix still drives with the pad, and
   that a prefix where it was set to 0 by hand keeps 0.
+- **`launcher.cfg` writing** keeps comments and unknown lines, and command-line
+  runs remember only `--game`. Check that Play in the window under Wine and on
+  Windows still saves every picture value, and that `cmr4-play --play` after a
+  window save keeps using the saved resolution for gamescope (a `--play` run
+  no longer stores the resolution it picked).
 
 ## Remaining unknowns
 

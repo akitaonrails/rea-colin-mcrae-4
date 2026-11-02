@@ -8,6 +8,14 @@ All notable changes to this project. The format follows
 
 ### Fixed
 
+- `launcher.cfg` is no longer rewritten wholesale: saving from the window
+  changes only the launcher's own keys and keeps your comments and other
+  lines (and CRLF line endings). Unknown keys are logged as warnings.
+- Command-line options are one-run overrides again: only the game folder is
+  remembered in `launcher.cfg` (when it has none, or `--game` names another).
+  Before, every flag (and the resolved runtime and resolution) was saved.
+- A `launcher.cfg` that exists but can't be read stops the launch with an
+  error instead of being replaced by defaults.
 - The game's `OPTIONS` save, the patched `cmr4.exe`, `dgVoodoo.conf`,
   `Xidi.ini` and the launcher's own bookkeeping files are written to a temp
   file and renamed into place, so a crash or full disk can't leave them torn.

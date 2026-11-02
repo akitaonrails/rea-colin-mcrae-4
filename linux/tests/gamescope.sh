@@ -47,6 +47,9 @@ for bad in huge 4kx x1080 1920x1080x2; do
   start > /dev/null
   check "invalid resolution $bad falls back to original mode" "gamescope -w 1024 -h 768 -W 1024 -H 768"
 done
+printf 'game = C:\\CMR4\nresolution =\n#resolution = 3840x2160\n' > "$CFGDIR/launcher.cfg"
+start > /dev/null
+check "unset resolution (the template's empty key) uses original mode" "gamescope -w 1024 -h 768 -W 1024 -H 768"
 rm "$CFGDIR/launcher.cfg"
 start > /dev/null
 check "missing launcher.cfg uses original mode" "gamescope -w 1024 -h 768 -W 1024 -H 768"

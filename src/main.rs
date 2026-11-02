@@ -76,12 +76,19 @@ mod app {
         Ok((patch::sha256(&bytes), outcome))
     }
 
-    fn persist(path: &Path, settings: &Settings) -> Result<(), String> {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
+    /// The settings file's text, or None when there is none yet. A file that
+    /// exists but can't be read stops the launch rather than being replaced.
+    fn read_settings(path: &Path) -> Result<Option<String>, String> {
+        match fs::read_to_string(path) {
+            Ok(text) => Ok(Some(text)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(format!("cannot read {}: {error}", path.display())),
         }
-        fs::write(path, settings.render())
+    }
+
+    /// Remembers the game folder, keeping every other line of the file.
+    fn remember_game(path: &Path, text: &str, game: &Path) -> Result<(), String> {
+        runtime::write_atomic(path, config::remember_game(text, game).as_bytes())
             .map_err(|error| format!("cannot write {}: {error}", path.display()))
     }
 
@@ -112,7 +119,7 @@ mod app {
         let wine = win32::is_wine();
         let gamescope = std::env::var_os("GAMESCOPE_WAYLAND_DISPLAY").is_some();
         let settings_path = settings_path();
-        let mut existing = fs::read_to_string(&settings_path).unwrap_or_default();
+        let mut existing = read_settings(&settings_path)?;
         let show_window =
             cli.settings_window || (!cli.no_window && raw.iter().all(|arg| arg == "--linux"));
         if show_window {
@@ -124,13 +131,17 @@ mod app {
                 }
             }
             log_line("settings window opened");
-            match ui::show(&settings_path, &existing, cli.linux) {
+            match ui::show(
+                &settings_path,
+                existing.as_deref().unwrap_or_default(),
+                cli.linux,
+            ) {
                 Ok(ui::Outcome::Play) => {
                     log_line("settings window: Play");
                     if cli.settings_window {
                         return Ok(0);
                     }
-                    existing = fs::read_to_string(&settings_path).unwrap_or_default();
+                    existing = read_settings(&settings_path)?;
                 }
                 Ok(ui::Outcome::Closed) => {
                     log_line("settings window: closed");
@@ -149,11 +160,13 @@ mod app {
             }
         }
 
+        let existing = existing.unwrap_or_default();
         let (saved, warnings) = Settings::parse_file(&existing);
         for warning in warnings {
             log_line(&format!("warning: {warning}"));
         }
-        let mut settings = saved.merged(cli.settings);
+        let cli_game = cli.settings.game.clone();
+        let mut settings = saved.clone().merged(cli.settings);
         let target = win32::display_target();
         if settings.resolution.is_none() {
             settings.resolution = Some(config::default_resolution(target.map(|t| t.size)));
@@ -171,6 +184,8 @@ mod app {
         let cwd = std::env::current_dir().map_err(|error| format!("current directory: {error}"))?;
         let runtime = runtime::resolve(&runtime, &cwd)?;
         let runtime = runtime::simplify_extended_length(&runtime);
+        // Only the game folder is remembered from the command line.
+        let remember = config::should_remember_game(saved.game.as_deref(), cli_game.as_deref());
         settings.game = Some(game.clone());
         settings.runtime = Some(runtime.clone());
         log_line(&format!("game: {}", game.display()));
@@ -181,8 +196,10 @@ mod app {
         log_line(&format!(
             "cmr4.exe SHA-256: {digest}; patch: {patch_outcome:?}"
         ));
+        if remember {
+            remember_game(&settings_path, &existing, &game)?;
+        }
         if cli.check {
-            persist(&settings_path, &settings)?;
             let text = format!(
                 "Ready to play.\n\nGame folder: {}\ncmr4.exe SHA-256: {}\nWidescreen check: {:?}",
                 game.display(),
@@ -225,7 +242,6 @@ mod app {
             gamescope,
             output,
         )?;
-        persist(&settings_path, &settings)?;
         log_line("components and owned configuration installed");
         log_line(&format!(
             "display/render policy: Wine={wine}, gamescope={gamescope}, borderless={}, monitor={:?}, dgVoodoo output={}, game renders {}",

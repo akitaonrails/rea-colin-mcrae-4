@@ -224,8 +224,9 @@ tests, so keep Xidi on unless your setup needs otherwise.
 
 ## Command line and `launcher.cfg`
 
-With no arguments the settings window opens. Any option skips the window,
-launches directly, and saves its values to `launcher.cfg` for next time.
+With no arguments the settings window opens. Any option skips the window and
+launches directly. Options apply to that run only; the one remembered in
+`launcher.cfg` is the game folder (`--game`).
 
 ```text
 CMR4Launcher [options]
@@ -236,7 +237,7 @@ CMR4Launcher [options]
   --fps-limit N|off     dgVoodoo frame-rate cap
   --vsync on|off        force vertical sync (default off)
   --controller on|off   Xidi gamepad: stick steers, RT/LT are the pedals (default on)
-  --check               validate the game and patch and save settings; copy nothing
+  --check               validate the game and patch, remember --game; copy nothing
   --no-window           run without the settings window
   --help                show this help
 ```
@@ -251,8 +252,9 @@ comment):
 | `widescreen`, `vsync`, `controller` | `on`/`off` (also `true`/`false`, `yes`/`no`, `1`/`0`) |
 | `fps_limit` | 1–1000, or `off` |
 
-An invalid value is logged as a warning and the rest of the file still
-applies.
+An invalid value or an unknown key is logged as a warning and the rest of the
+file still applies. Saving from the window or remembering `--game` changes
+only the launcher's own lines: your comments and any other lines are kept.
 
 ## Files and logs
 

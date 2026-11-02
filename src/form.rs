@@ -141,8 +141,10 @@ impl Form {
         }
     }
 
-    pub fn save(&self) -> String {
-        self.settings().render()
+    /// The settings file `text` with this form's values written in; every
+    /// other line (comments, keys the window doesn't show) is kept.
+    pub fn save(&self, text: &str) -> String {
+        self.settings().save_into(text)
     }
 }
 
@@ -278,7 +280,7 @@ mod tests {
         form.controller = false;
         form.look = form.look_of(Some((3840, 2160)));
         assert_eq!(form.look, Look::Custom);
-        let text = form.save();
+        let text = form.save("");
         let (settings, warnings) = Settings::parse_file(&text);
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(Form::new(&settings, Some((3840, 2160))), form);
@@ -414,7 +416,7 @@ mod tests {
                 let mut form = custom_form();
                 form.set_look(look, screen);
                 assert_eq!(form.look_of(screen), look, "{look:?} on {screen:?}");
-                let (settings, warnings) = Settings::parse_file(&form.save());
+                let (settings, warnings) = Settings::parse_file(&form.save(""));
                 assert!(warnings.is_empty(), "{warnings:?}");
                 let back = Form::new(&settings, screen);
                 assert_eq!(back.look, look, "{look:?} on {screen:?}");
@@ -450,7 +452,7 @@ mod tests {
                         form.vsync = vsync;
                         form.look = form.look_of(screen);
                         crate::config::validate_picture(&form.settings()).unwrap();
-                        let (settings, warnings) = Settings::parse_file(&form.save());
+                        let (settings, warnings) = Settings::parse_file(&form.save(""));
                         assert!(warnings.is_empty(), "{warnings:?}");
                         assert_eq!(Form::new(&settings, screen), form);
                     }
