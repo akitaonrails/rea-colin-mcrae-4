@@ -46,6 +46,9 @@ All notable changes to this project. The format follows
   instead of our own `cmr4close.dll`. It behaves the same: Alt+F4 or
   closing the game's window ends the game, and the intro movies are left
   alone.
+- CI: a weekly `sdk-update` workflow opens a pull request when a newer
+  rea-launcher-sdk tag exists, listing what the update asks of the
+  launcher. It never merges.
 - Agent instructions: `CLAUDE.md` imports `AGENTS.md` and the SDK's
   vendored `sdk/docs/STANDARDS.md`; `AGENTS.md` keeps only CMR04's own
   rules and owner decisions and points to the standards and playbooks.
