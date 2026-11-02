@@ -38,8 +38,8 @@ personality rights for the people shown.
 
 | File | What | Author and licence |
 | --- | --- | --- |
-| `docs/images/launcher.png`, `docs/images/launcher-picture.png` | The settings window (our own UI; the photo in it as above) | this project, MIT OR Apache-2.0 |
-| `docs/images/game.jpg` | A screenshot of Colin McRae Rally 04 running through the launcher | game imagery © Codemasters; captured by the project owner to show the launcher at work |
+| `docs/images/launcher-play.jpg`, `docs/images/launcher-picture.jpg` | The settings window (our own UI; the photo in it as above) | this project, MIT OR Apache-2.0 |
+| `docs/images/gameplay.jpg` | A screenshot of Colin McRae Rally 04 running through the launcher | game imagery © Codemasters; captured by the project owner to show the launcher at work |
 | Showcase video and poster (hosted at `new-uploads-akitaonrails.s3.us-east-2.amazonaws.com`, linked from the README, not in the repository) | Gameplay recorded by the project owner | game imagery © Codemasters |
 
 ## Community fixes

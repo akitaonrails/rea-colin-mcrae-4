@@ -1,170 +1,110 @@
 # Colin McRae Rally 04 Launcher
 
-Run your own installed PC copy of **Colin McRae Rally 04** on Windows 10/11,
-or on Linux through Wine, Steam/Proton, or the AppImage. Point the launcher at
-the game folder, pick a look, and press **Play**: the widescreen picture, the
-graphics wrappers, the gamepad and the game's first-run state are set up for
-you.
+Play your own PC copy of **Colin McRae Rally 04** on Windows 10/11, the
+Steam Deck and Linux (Proton, Wine or the AppImage). Point the launcher at
+your game folder, pick a look and press **Play**. The widescreen picture,
+the graphics wrappers and the gamepad are bundled and set up for you, with
+no mods, patchers, winetricks or registry edits by hand. Your game folder
+is only read, never changed: the launcher plays from a private copy.
 
-[![A USA stage in the Lancer Evo with v0.2.0: the launcher's look presets, then 16:9 widescreen on the landscape monitor, driven with a gamepad's stick and analogue triggers](https://new-uploads-akitaonrails.s3.us-east-2.amazonaws.com/2026/11/02/colin-mcrae-rally-04/showcase-poster.jpg)](https://new-uploads-akitaonrails.s3.us-east-2.amazonaws.com/2026/11/02/colin-mcrae-rally-04/showcase-h264.mp4)
+This project contains no game files: you need your own copy of the game.
 
-*Version 0.2.0 from the settings window to a full USA stage: correct 16:9
-proportions on the landscape monitor, driven with a pad's stick and analogue
-triggers. Click to watch (2⅓ minutes, with sound).*
+> Played end to end on Linux under Wine, with gamescope and a gamepad, on
+> 4K screens. Native Windows, the Steam Deck, Proton without the helper and
+> protected retail discs have not been tested yet. Reports are welcome:
+> [open an issue](https://github.com/akitaonrails/rea-colin-mcrae-4/issues/new?template=bug-report.yml).
 
-This repository and its packages contain **no game files**. The launcher never
-modifies the installed game folder; everything it changes lives in a private
-copy (the *runtime*).
+[![A USA stage in the Lancer Evo: the launcher's look presets, then 16:9 widescreen on the landscape monitor, driven with a gamepad's stick and analogue triggers](https://new-uploads-akitaonrails.s3.us-east-2.amazonaws.com/2026/11/02/colin-mcrae-rally-04/showcase-poster.jpg)](https://new-uploads-akitaonrails.s3.us-east-2.amazonaws.com/2026/11/02/colin-mcrae-rally-04/showcase-h264.mp4)
 
-## Problems it solves
+*From the settings window to a full USA stage under Linux: correct 16:9
+proportions on the landscape monitor, driven with a pad's stick and
+analogue triggers. Click to watch (2⅓ minutes, with sound).*
 
-Each item below is a problem the game has on a modern PC, followed by what
-the launcher does about it.
+## Problems this launcher solves
 
-**Runs on today's computers**
+| Problem | What the launcher does |
+| --- | --- |
+| The game crashes on a fresh install: it expects install paths and first-run graphics defaults in the registry. | Writes the paths on every launch and adds the defaults only when they are missing. |
+| The old Direct3D 9 renderer struggles on modern systems. | Installs the tested dgVoodoo2 wrapper. Under Wine or Proton it also adds DXVK, so the game draws through Vulkan on your graphics card. |
+| Alt+F4 and closing the window do nothing (Super+W in Hyprland too), so the game had to be killed. | A small hook ends the game when you press Alt+F4 or close its window. |
+| The known 16:9 patch squeezes the cars: rendered directly at 16:9, cars and scenery come out 25% too narrow. | The community fix was made for a 4:3 picture stretched to 16:9, so the launcher has the game render 4:3 (2880x2160 for a 4K screen) and dgVoodoo stretches it. You get correct proportions and the wider view. |
+| With a portrait monitor set as primary, the picture was fitted to that screen and stretched onto the landscape one: a thin, squashed strip. | Sends the game to your largest landscape monitor. |
+| Picking resolution and view by hand. | Choose a look in one click: **Original**, **Widescreen** (the largest 16:9 size that fits your screen), **Steam Deck** or **Custom**. Any 16:9 size gets the widescreen view; other shapes keep the game's own. |
+| The pad works in menus but not in a race: with Wine alone the buttons reached the game but the stick and triggers didn't. | Bundled Xidi presents a classic gamepad. The left stick steers, RT and LT are analogue pedals, and a thumb resting on the stick can't open the throttle. |
+| Every new player had to set up the pad, and choosing it in the game's menu can freeze the game under Wine. | For a profile whose controls were never set up, the launcher selects your pad, analogue pedals and the game's axis tuning, so you can drive straight away. A profile you set up yourself is left alone. |
+| An unknown version of `cmr4.exe` could be patched by guesswork. | The launcher patches only the builds it knows. Any other version still plays, with the game's own view, and the window offers a button to report it. |
+| Patches, wrappers and updates could damage your install or overwrite your saves. | The game folder is only read. A private copy holds the patched `cmr4.exe`, the wrappers, settings and saves; later launches update it without touching your saves, settings or DLL mods you added yourself. |
 
-- **Crashes on a fresh install.** CMR04 needs install paths and first-run
-  graphics defaults in the registry. The launcher writes the paths on every
-  launch and adds the defaults only when they are missing.
-- **Old Direct3D 9 renderer.** The launcher installs the tested dgVoodoo2
-  2.80 wrapper. Under Wine or Proton it also adds DXVK, so the game draws
-  through Vulkan on your graphics card.
-- **Closing the game does nothing.** CMR04 ignores Alt+F4 and window-close
-  requests (Super+W in Hyprland), so it had to be killed. A small hook
-  (`rea_close_hook.dll`, from rea-launcher-sdk) now ends it when you press
-  Alt+F4 or close its window.
+## Screenshots
 
-**Picture**
+| Play | Picture |
+| --- | --- |
+| ![The Play tab with the game folder, the four looks and the private copy folder](docs/images/launcher-play.jpg) | ![The Picture tab with the resolutions, the frame-rate cap and VSync](docs/images/launcher-picture.jpg) |
 
-- **Widescreen that squeezes the cars.** The known 16:9 patch is easy to
-  get wrong. Rendered directly at 16:9, cars and scenery come out 25% too
-  narrow. The patch was made for a 4:3 picture stretched to 16:9, so the
-  launcher has the game render 4:3 (2880x2160 for a 4K screen) and dgVoodoo
-  stretch it. You get correct proportions and the wider view.
-- **A thin, squashed strip with two monitors.** With a portrait monitor
-  set as primary, the picture was fitted to that portrait screen and then
-  stretched onto the landscape one. The launcher now sends the game to
-  your largest landscape monitor.
-- **Picking settings.** Choose a look in one click: Original, Widescreen
-  (the largest 16:9 size that fits your screen), Steam Deck or Custom.
-  The widescreen view follows the resolution: any 16:9 size gets it,
-  other shapes keep the game's own view. There is also an optional
-  frame-rate cap and VSync.
-- **Still to do:** the HUD (speedometer, timer) is drawn for 4:3 and stays
-  slightly wide at 16:9. Fixing it would need another patch to the game.
-
-**Gamepads**
-
-- **The pad works in menus but not in a race.** In our tests with Wine
-  alone, the pad's buttons reached the game but its stick and triggers
-  didn't, and the old mapping turned the pad into keyboard keys, which also
-  hid the axes. Bundled Xidi now presents a classic gamepad: the
-  left stick steers, RT and LT are analogue pedals, and a resting thumb on
-  the stick can't open the throttle.
-- **Every new player had to set up the pad.** New profiles start on the
-  keyboard, and choosing the controller in the game's own menu can freeze
-  it under Wine. For a profile whose controls were never set up, the
-  launcher selects your pad, analogue pedals and the game's axis tuning,
-  so you can drive straight away. A profile you set up yourself is left as
-  it is.
-
-**Your files**
-
-- **An unknown version of the game.** The launcher knows its `cmr4.exe`
-  builds by their SHA-256 and patches only those. Any other version still
-  plays, with the game's own view, and the window offers a button to
-  report it so it can be added.
-- **Patches and wrappers could damage your install.** The installed game
-  folder is only read, never changed. A private copy (the runtime) holds
-  the patched `cmr4.exe`, the wrappers, settings and saves.
-- **Updates could overwrite your saves.** Later launches update the
-  runtime without overwriting your saves, settings or DLL mods you added
-  yourself.
-
-![CMR04 in a stage at 16:9, driven with a gamepad](docs/images/game.jpg)
-
-## Verification status
-
-Verified on Linux (Wine 11.21, RTX 5090, 4K screens, an 8BitDo Ultimate 2):
-
-- **Picture:** correct 16:9 proportions in stages with widescreen on (4:3
-  render stretched to 3840x2160), filling the landscape monitor with a portrait
-  primary monitor present.
-- **Closing:** Super+W ends the game.
-- **Gamepad:** with Xidi on, stick steering and analogue RT/LT pedals in a
-  stage; menus with the D-pad and A. A brand-new profile set up by the launcher
-  drove without opening Options.
-- **Settings window:** presets, palette and gamepad navigation render under
-  Wine.
-
-Not yet verified: native Windows, Steam Deck/Proton separately, protected
-retail discs, and other pad models. Details and the evidence behind each fix:
-[docs/RUNTIME_NOTES.md](docs/RUNTIME_NOTES.md) and
-[docs/RESEARCH.md](docs/RESEARCH.md).
-
-## Download
-
-From the [latest release](https://github.com/akitaonrails/rea-colin-mcrae-4/releases/latest):
-
-- **Windows:** `CMR4Launcher-<version>.zip`
-- **Linux AppImage:** `CMR4Launcher-<version>-x86_64.AppImage`
+![Colin McRae Rally 04 in a stage at 16:9, driven with a gamepad](docs/images/gameplay.jpg)
 
 ## What you need
 
 An installed Windows copy of **Colin McRae Rally 04** with `cmr4.exe` in its
 folder. No installer, disc, executable, media or game data is supplied here.
 
-The launcher knows `cmr4.exe` 1.0.0.0 (also with the community 16:9 fix
-already applied) by its SHA-256 and applies the widescreen fix only to it.
-Any other version plays unpatched, with the game's own view; the window
-and `launcher.log` show its SHA-256 and a link to the
+The launcher knows `cmr4.exe` version 1.0.0.0, also with the community 16:9
+fix already applied, and applies the widescreen fix only to it. Any other
+version plays without the fix, with the game's own view. The window and
+`launcher.log` then show a code (the file's SHA-256) and a link to the
 [Unknown edition](https://github.com/akitaonrails/rea-colin-mcrae-4/issues/new?template=unknown-edition.yml)
-form. Report that code, never the executable.
+form. Report the code, never the executable.
 
 Original protected retail discs may not work under Wine (older reports say
-so; DRM-free/budget editions were reported working). This project has not
-verified either.
+so; DRM-free and budget editions were reported working). This project has
+not checked either.
 
-## Install and run
+## Download and install
+
+Download from the [latest release](https://github.com/akitaonrails/rea-colin-mcrae-4/releases/latest):
+
+- **Windows, Steam Deck and Proton:** `CMR4Launcher-<version>.zip`
+- **Linux AppImage:** `CMR4Launcher-<version>-x86_64.AppImage`
 
 ### Windows
 
-1. Download the zip from
-   [Releases](https://github.com/akitaonrails/rea-colin-mcrae-4/releases) and
-   unzip it anywhere outside the game folder.
-2. Keep `CMR4Launcher.exe` and the `components/` folder together and run the
-   executable.
-3. On **Play**, browse to the folder with `cmr4.exe`, pick a look, and press
-   **Play**.
+1. Unzip `CMR4Launcher-<version>.zip` anywhere outside the game folder.
+2. Keep `CMR4Launcher.exe` and the `components` folder together.
+3. Run `CMR4Launcher.exe`.
 
-The first launch copies the game into the runtime (a few GB); later launches
-only update what changed.
+### Steam Deck
 
-### Linux: AppImage (no Wine install needed)
+1. In Desktop Mode, unzip the Windows package, e.g. into
+   `~/Games/cmr4-launcher`.
+2. In Steam: **Games → Add a Non-Steam Game to My Library…** and pick
+   `CMR4Launcher.exe`.
+3. **Properties → Compatibility**: force GE-Proton or Proton Experimental.
+
+On a 1280x800 screen the window recommends the **Steam Deck** look, and it
+can be driven with a controller. Nothing has been tested on a Deck yet.
+
+### Linux: AppImage
 
 ```sh
 chmod +x CMR4Launcher-*-x86_64.AppImage
 ./CMR4Launcher-*-x86_64.AppImage
 ```
 
-It bundles portable Wine 11.20 and uses the prefix
-`~/.local/share/cmr4-launcher/prefix`. Your Linux files appear as drive `Z:`
-when browsing for the game. Gamescope is used when installed. See
-[linux/README.md](linux/README.md).
+It brings its own portable Wine (11.20), so you don't need to install
+Wine. It keeps its Wine prefix in `~/.local/share/cmr4-launcher/prefix`
+and uses gamescope when it is installed. When you browse for the game,
+your Linux files are drive `Z:`.
 
-### Linux: Steam / Proton
+### Linux: Steam (Proton)
 
-1. Unzip the Windows package, e.g. into `~/Games/cmr4-launcher`.
-2. **Games → Add a Non-Steam Game to My Library…** and pick
-   `CMR4Launcher.exe`.
-3. **Properties → Compatibility**: force GE-Proton or Proton Experimental.
-4. Start it, browse to the game, press Play.
+The same steps as on the Steam Deck, with the zip's `CMR4Launcher.exe`.
+Proton brings its own DXVK and runs the launcher without the Linux helper.
+This route hasn't been tested apart from the Deck.
 
-Steam Deck works the same way from Desktop Mode; Game Mode is not verified.
+### Linux: your own Wine
 
-### Linux: your own Wine (and gamescope)
-
-The zip contains `linux/cmr4-play`:
+The zip contains `linux/cmr4-play`, which runs the launcher with your Wine
+(and gamescope, when installed):
 
 ```sh
 linux/cmr4-play          # settings window, then the game
@@ -173,129 +113,143 @@ linux/cmr4-play status   # is our session running?
 linux/cmr4-play stop     # end our session
 ```
 
-It needs Wine; gamescope is optional.
+Variables, gamescope and the prefix are in [linux/README.md](linux/README.md).
+
+## First run
+
+1. On **Play**, press **Browse…** and pick the folder with `cmr4.exe`.
+   Under Wine your Linux files are drive `Z:`, e.g.
+   `Z:\home\you\Games\CMR04`.
+2. Pick a look. The window starts on the one recommended for your screen:
+   **Widescreen**, or **Steam Deck** on a 1280x800 screen.
+3. Press **Play** (or Enter, or Start on a pad).
+
+The first launch copies the game into the private copy (a few GB); later
+launches copy only what changed.
 
 ## The settings window
 
-![Play tab with the look presets](docs/images/launcher.png)
+**Play** holds the game folder, the look and the private copy folder.
+**Picture** sets the resolution, a frame-rate cap and VSync. **Controls**
+turns the Gamepad on or off and shows what the game sees. Settings are
+saved when you press **Play**.
 
-**Play** holds the game folder, the look and the private copy folder. A
-look sets the picture in one click:
+| Look | Resolution | View | Frame-rate cap | When to pick it |
+| --- | --- | --- | --- | --- |
+| **Original** | the game's own mode | the game's own | unchanged | to play the game as it shipped |
+| **Widescreen** | the largest 16:9 size that fits your screen, up to 3840x2160 | widescreen | unchanged | recommended on most screens |
+| **Steam Deck** | 1280x800, filling the 16:10 screen | the game's own | 60 | recommended on a 1280x800 screen |
+| **Custom** | your choice in **Picture** | depends on the resolution | your choice | any change in **Picture** |
 
-| Look | Resolution | View | Frame-rate cap |
-| --- | --- | --- | --- |
-| **Original** | the game's own mode | the game's own | unchanged |
-| **Widescreen** (recommended) | the largest 16:9 size that fits your screen, up to 3840x2160 | widescreen | unchanged |
-| **Steam Deck** (recommended on a 1280x800 screen) | 1280x800, filling the 16:10 screen | the game's own | 60 |
-| **Custom** | your own choice in **Picture** | — | — |
-
-The look itself isn't stored; the window works it out from the saved values.
-The first time it opens (no `launcher.cfg` yet) it starts on the recommended
-look for your screen.
-
-![Picture tab](docs/images/launcher-picture.png)
+The look itself isn't stored: the window works it out from the saved
+values. The first time it opens (no `launcher.cfg` yet) it picks the
+recommended look for your screen.
 
 **Picture** offers Original, your screen's own 16:9 fit when it isn't a
 standard size, 1920x1080, 2560x1440 and 3840x2160 (16:9), 1600x1200 (4:3),
 1920x1200 (16:10) and 2560x1080 (ultrawide); a frame-rate cap (no cap, 30,
 60, 120, 144); and VSync. A 16:9 size gets the widescreen view (the game
 draws a 4:3 picture that dgVoodoo stretches, which keeps the cars' shape);
-other shapes keep the game's own view. A value set in `launcher.cfg` or on
-the command line that isn't in the list shows as "(saved)" and is kept.
-(The screenshots predate the Widescreen look's new name.)
+other shapes keep the game's own view. A value from `launcher.cfg` or the
+command line that isn't in the list shows as "(saved)" and is kept.
 
-**Controls** turns the Gamepad on or off and shows what the game sees.
-
-Settings are saved when you press **Play**. The window works with a pad
-(D-pad moves, A activates, LB/RB switch tabs, Start plays) and with the
-keyboard alone (Tab moves, arrows pick, Ctrl+Tab switches tabs, Enter plays).
+The window works with a pad (D-pad moves, A activates, LB/RB switch tabs,
+Start plays) and with the keyboard alone (Tab moves, arrows pick, Ctrl+Tab
+switches tabs, Enter plays). A greyed-out **Play** says why it can't start
+yet.
 
 ## Gamepad
 
 With **Controls → Gamepad** on (the default; it uses the bundled Xidi):
 
-| On the pad | In the game |
-| --- | --- |
-| Left stick | Steering (analogue) |
-| RT / LT | Accelerate / brake (analogue) |
-| D-pad, A, B | Menus |
-| X, Y, LB, RB … | Handbrake, camera, gears (the game's defaults) |
+| On the pad | In menus | In a race |
+| --- | --- | --- |
+| Left stick | | Steering (analogue) |
+| RT / LT | | Accelerate / brake (analogue) |
+| D-pad, A, B | Move, select, back | |
+| X, Y, LB, RB … | | Handbrake, camera, gears (the game's defaults) |
 
-On launch, a profile that still has the factory controls (keyboard, digital
-pedals, untouched bindings) gets the connected pad, analogue pedals and the
-axis tuning the game itself writes, so you can drive without opening Options.
-The pad is chosen by its USB IDs, so **wake a wireless pad before launching**;
-if none is connected the profile is left as it is and set up next time.
+On launch, a profile that still has the factory controls (keyboard,
+digital pedals, untouched bindings) gets the connected pad, analogue
+pedals and the axis tuning the game itself writes, so you can drive
+without opening Options. The launcher picks the pad that is connected when
+you start, so **wake a wireless pad before launching**. If none is
+connected, the profile is left as it is and set up next time.
 
 If you set the controls up yourself (or change pads), do it in
-**Options → Controllers**: pick the controller, set Accel/brake to Analogue,
-then select Accelerate and pull RT, Brake and pull LT, Turn left/right and move
-the stick. The game labels the trigger axis "Z axis"; that is expected.
-Choosing the controller in that menu can freeze the game under Wine; the choice
-is saved before the freeze, so restart and it is in effect.
+**Options → Controllers**: pick the controller, set Accel/brake to
+Analogue, then select Accelerate and pull RT, Brake and pull LT, Turn
+left/right and move the stick. The game labels the trigger axis "Z axis";
+that is expected. Choosing the controller in that menu can freeze the game
+under Wine. The choice is saved before the freeze, so restart and it is in
+effect.
 
-With Xidi off the game reads the pad through Windows/Wine directly. Buttons and
-the D-pad work, but under Wine the pad's axes did not drive the car in our
-tests, so keep Xidi on unless your setup needs otherwise.
+With the Gamepad off, the game reads the pad through Windows or Wine
+directly. Buttons and the D-pad work, but under Wine the pad's axes did
+not drive the car in our tests, so keep it on unless your setup needs
+otherwise.
 
-## Command line and `launcher.cfg`
+## Options
 
-With no arguments the settings window opens. Any option skips the window and
-launches directly. Options apply to that run only; the one remembered in
-`launcher.cfg` is the game folder (`--game`). When neither the file nor
+Every option has the same name in the window, in `launcher.cfg` (with
+underscores) and as a flag (with hyphens). The first run writes a
+`launcher.cfg` with every key and its description, unset; where the file
+lives is under [Where things live](#where-things-live).
+
+| `launcher.cfg` / flag | In the window | Values | Unset | What it changes |
+| --- | --- | --- | --- | --- |
+| `game` / `--game` | Play: Game folder | a folder | the launcher's own folder, if `cmr4.exe` is there | The folder of your installed game. It is only read, never changed. |
+| `look` / `--look` | Play: Look | `original`, `widescreen`, `steam_deck` | no look: the values below | Sets the look's resolution and frame-rate cap. Values set next to it win. |
+| `resolution` / `--resolution` | Picture: Resolution | `WxH` (320x240 to 7680x4320) or `original` | the launcher picks one from your screen and saves it | The picture size. A 16:9 size shows the full widescreen view; other shapes keep the game's own view. |
+| `fps_limit` / `--fps-limit` | Picture: Frame-rate cap | 0 to 1000; `0` or `off` is no cap | no cap | The most frames per second the game draws. |
+| `vsync` / `--vsync` | Picture: VSync | `on`, `off` | off | Waits for the screen before showing each frame: no tearing, slightly more input delay. |
+| `controller` / `--controller` | Controls: Gamepad | `on`, `off` | on | Lets the game use an Xbox-style pad through Xidi: the left stick steers and the triggers are analogue pedals. |
+| `runtime` / `--runtime` | Play: Private copy folder | a folder outside the game folder | `%LOCALAPPDATA%\CMR4Launcher\CMR4` | Where the launcher keeps its own copy of the game, with your saves and settings. |
+
+`on`/`off` also accept `true`/`false`, `yes`/`no` and `1`/`0`. An invalid
+value or an unknown key is logged as a warning and the rest of the file
+still applies. Saving from the window, or remembering `--game`, changes
+only the launcher's own lines; your comments and any other lines are
+kept. The old `widescreen` key and `--widescreen` flag are accepted and
+ignored, because the resolution now decides.
+
+With no options the settings window opens. Any option skips the window and
+plays. Options override `launcher.cfg` for that run only; the one
+remembered is the game folder (`--game`). When neither the file nor
 `--resolution`/`--look` sets a resolution, the one the launcher picks from
-the screen is saved too, except inside gamescope, where the screen is only
+the screen is saved too, except inside gamescope, whose screen is only
 gamescope's own size.
 
-```text
-CMR4Launcher [options]
+The launcher's own switches:
 
-  --game <folder>                        Game folder
-  --look original|widescreen|steam_deck  Look
-  --resolution <WxH>                     Resolution
-  --fps-limit <0-1000>                   Frame-rate cap
-  --vsync on|off                         VSync
-  --controller on|off                    Gamepad
-  --runtime <folder>                     Private copy folder
-  --check                                check the game and settings only
-  --no-window                            play with saved settings and flags
-  --settings                             only the settings window (Linux helper)
-  --linux                                started by the Linux helper (cmr4-play)
-  --help                                 show this help
-
-With no options the settings window opens. Options override launcher.cfg
-for one run; only --game is remembered there. The game folder is never
-modified.
-```
-
-`launcher.cfg` uses the same names with underscores (`fps_limit` for
-`--fps-limit`), one `key = value` per line (`#` starts a comment). The
-first run writes every key with its description:
-
-| Key | Values |
+| Switch | What it does |
 | --- | --- |
-| `game`, `runtime` | folders; `runtime` empty means the default |
-| `look` | `original`, `widescreen` or `steam_deck`: sets those values; values set next to it win |
-| `resolution` | `WxH` (320–7680 × 240–4320) or `original`; 16:9 gets the widescreen view |
-| `fps_limit` | 0–1000; `0` or `off` is no cap |
-| `vsync`, `controller` | `on`/`off` (also `true`/`false`, `yes`/`no`, `1`/`0`) |
+| `--check` | Checks the game and the settings without playing; the result goes to `launcher.log` and the terminal (or a dialog). |
+| `--no-window` | Plays with the saved settings and the flags given. |
+| `--settings` | Opens only the settings window (the Linux helper uses it). |
+| `--linux` | Says the Linux helper (`cmr4-play`) started the launcher. |
+| `--help` | Shows the options. |
 
-An invalid value or an unknown key is logged as a warning and the rest of the
-file still applies. `widescreen` (removed in 0.3.0: the resolution decides)
-is accepted and ignored, as a key and as `--widescreen`. Saving from the
-window or remembering `--game` changes only the launcher's own lines: your
-comments and any other lines are kept.
+Exit codes for scripts: after playing, the game's own exit code; 0 when
+`--check` finds everything ready; 1 for any error, a bad flag or value
+included. With `--settings`: 0 Play
+pressed, 3 window closed without Play, 4 no window possible. Starting a
+second launcher brings the open window to the front (exit 0); while the
+game runs it says so and doesn't start a second copy (exit 1).
 
-## Files, saves and uninstalling
+## Where things live
 
-| What | Windows | AppImage / Wine |
+| What | Windows | Linux (AppImage, `cmr4-play`) |
 | --- | --- | --- |
-| `launcher.cfg` | `%LOCALAPPDATA%\CMR4Launcher\launcher.cfg` | in the prefix, under `drive_c/users/<you>/AppData/Local/CMR4Launcher` |
-| `launcher.log` | `%LOCALAPPDATA%\CMR4Launcher\launcher.log` | same place |
-| Private copy (runtime) | `%LOCALAPPDATA%\CMR4Launcher\CMR4` (or `runtime`) | same place |
+| Settings (`launcher.cfg`) and log (`launcher.log`) | `%LOCALAPPDATA%\CMR4Launcher\` | in the prefix, `drive_c/users/<you>/AppData/Local/CMR4Launcher/` |
+| The launcher's copy of the game (runtime) | `%LOCALAPPDATA%\CMR4Launcher\CMR4` (or `runtime`) | in the prefix, `drive_c/users/<you>/AppData/Local/CMR4Launcher/CMR4` |
+| Your saves | inside the runtime, next to its `cmr4.exe` | the same |
 | Wine prefix | — | `~/.local/share/cmr4-launcher/prefix` |
+| `cmr4-play`'s files (the window's error output, the session lock) | — | `~/.config/cmr4-launcher` |
 
-A `launcher.cfg` next to `CMR4Launcher.exe` takes precedence (portable setup).
+A `launcher.cfg` next to `CMR4Launcher.exe` is used instead (portable
+setup). Under Proton everything above is inside Steam's
+`compatdata/<appid>/pfx`.
 
 **Your saves live only in the private copy.** The game writes its profiles
 and settings (`OPTIONS`), championships (`CHAMPIONSHIP_SLOT_*`) and best
@@ -303,101 +257,172 @@ times (`BESTTIMES_GHOSTS`) next to the runtime's `cmr4.exe`. The launcher
 never overwrites them when it updates the copy, and it never writes them
 back to the game folder.
 
-**To uninstall:** first **back up your saves** (the files above, from the
-runtime folder). Then delete the launcher's folder, and
-`%LOCALAPPDATA%\CMR4Launcher` on Windows, or the prefix
-`~/.local/share/cmr4-launcher` (and `~/.config/cmr4-launcher`) on Linux.
-On Windows the launcher also wrote the game's registry key
-(`HKLM\SOFTWARE\WOW6432Node\Codemasters\Colin McRae Rally 04`, or the
-same under `HKCU\Software\Classes\VirtualStore`); remove it only if you
-no longer play the game itself. The installed game folder was never
-changed.
+On Windows the launcher also writes the game's registry key
+(`HKLM\SOFTWARE\WOW6432Node\Codemasters\Colin McRae Rally 04`, or the same
+under `HKCU\Software\Classes\VirtualStore`).
 
 `launcher.log` records what the launcher did and why: the game version and
 its SHA-256, the look and settings, each bundled DLL with its SHA-256, the
-DLL overrides given to the game, the monitor and dgVoodoo output it chose
-and the `gamepad setup:` step. It starts afresh past 1 MiB. Remove
-personal paths before posting it.
+DLL overrides given to the game, the monitor and dgVoodoo output it chose,
+and the `gamepad setup:` step. It starts afresh past 1 MiB. Remove personal
+paths before posting it.
 
 ## Troubleshooting
 
 - **"This cmr4.exe is a version the launcher doesn't know yet":** the game
   still plays, without the widescreen view. Press **Report this version…**
   (or open the [Unknown edition](https://github.com/akitaonrails/rea-colin-mcrae-4/issues/new?template=unknown-edition.yml)
-  form) and give the code it shows and where your copy comes from. Do not
+  form) and give the code it shows and where your copy comes from. Don't
   attach `cmr4.exe`.
-- **The pad doesn't drive:** keep Xidi on; wake the pad before launching; check
-  `gamepad setup:` in the log; set the controls once in Options → Controllers as
-  described above.
+- **The pad doesn't drive:** keep the Gamepad on, wake the pad before
+  launching, check the `gamepad setup:` line in the log, and set the
+  controls once in Options → Controllers as described above.
 - **The picture is in the wrong place or squashed:** the log's
-  `display/render policy` line names the monitor and dgVoodoo output; report it
-  with your monitor layout.
-- **Runtime DLL conflict:** the launcher refuses to replace a DLL it didn't
-  install. Move your custom DLL aside or use a fresh runtime.
-- **In-game Advanced Graphics menu:** avoid it; it rewrote the resolution and
-  hung in testing. The launcher reapplies its resolution on every launch.
+  `display/render policy` line names the monitor and dgVoodoo output.
+  Report it with your monitor layout.
+- **A DLL conflict in the private copy:** the launcher won't replace a DLL
+  there that it didn't install. Move your own DLL aside or use a
+  fresh private copy folder.
+- **The game hangs after the in-game Advanced Graphics menu:** avoid that
+  menu; it rewrote the resolution and hung in testing. The launcher sets
+  its resolution again on every launch.
+- **Anything else:** run `CMR4Launcher.exe --check`, then open a
+  [bug report](https://github.com/akitaonrails/rea-colin-mcrae-4/issues/new?template=bug-report.yml)
+  with `launcher.log` attached (remove personal paths). Never attach game
+  files.
+
+## Known limitations
+
+- The HUD (speedometer, timer) is drawn for 4:3 and stays slightly wide at
+  16:9. Fixing it would need another patch to the game.
+- The frame-rate cap and VSync have not been checked in the game yet.
+- Not tested yet: native Windows, the Steam Deck (Desktop and Game Mode),
+  Proton without the helper, protected retail discs and pads other than an
+  8BitDo Ultimate 2. The latest launcher's ways of quitting the game and
+  the one-launcher-at-a-time rule have been tested only without the game.
+
+What was tested, on Linux with Wine 11.21, an RTX 5090 and 4K screens:
+correct 16:9 proportions with a portrait primary monitor present, Super+W
+ending the game, stick steering and analogue pedals in a stage, a
+brand-new profile driving without opening Options, and the settings window
+with a pad. The details and the evidence behind each fix are in
+[docs/RUNTIME_NOTES.md](docs/RUNTIME_NOTES.md) and
+[docs/RESEARCH.md](docs/RESEARCH.md).
+
+## Uninstall
+
+1. **Back up your saves first.** They are only in the private copy (see
+   [Where things live](#where-things-live)): `OPTIONS`,
+   `CHAMPIONSHIP_SLOT_*` and `BESTTIMES_GHOSTS` next to the runtime's
+   `cmr4.exe`. The steps below delete them.
+2. Delete the launcher's folder (or the AppImage).
+3. Windows: delete `%LOCALAPPDATA%\CMR4Launcher` (settings, log and the
+   private copy, a few GB). Remove the registry key listed above only if
+   you no longer play the game itself.
+4. Linux: delete `~/.local/share/cmr4-launcher` (the prefix, with the
+   private copy) and `~/.config/cmr4-launcher`, after copying the saves
+   out. With Proton, removing the Steam shortcut offers to delete its
+   prefix, saves included.
+
+Your game folder was never changed, so there is nothing to undo there.
 
 ## For developers
 
-The workspace builds the launcher; `packaging/build-windows.sh` also builds
-the SDK's close hook (`cargo build -p rea-launcher-close-hook`, producing
-`rea_close_hook.dll`). The toolchain is Rust plus `mingw-w64` for the 32-bit Windows
-target, Wine for the Windows-target tests, and `cargo-deny`; the
+The toolchain is Rust (edition 2024), MinGW-w64 for the 32-bit Windows
+target with lld, Wine for the Windows-target tests and `cargo-deny`; the
 [`gaming` distrobox](https://github.com/akitaonrails/distrobox-gaming) has
-them all.
+them all. Windows builds link with lld (`.cargo/config.toml`): GNU ld 2.47
+leaves some imports unresolved and the launcher then crashes at startup.
 
 ```sh
 cargo fmt --all --check
-cargo test --workspace                     # host: logic, plans, GUI (headless)
+cargo test --workspace --locked                 # host tests, the window headless
 cargo clippy --release --target i686-pc-windows-gnu --all-targets -- -D warnings
-cargo build --release --locked --target i686-pc-windows-gnu
-sdk/scripts/wine-test --locked --workspace # Windows-target tests under Wine, headless
 cargo deny check
-sh ../rea-launcher-sdk/scripts/sdk-sync --check .
 for t in linux/tests/*.sh packaging/tests/*.sh; do sh "$t"; done
-packaging/build-windows.sh dev .work/packages
+cargo build --release --locked --target i686-pc-windows-gnu
+sdk/scripts/wine-test --locked --workspace      # Windows-target tests under Wine, headless
+sh ../rea-launcher-sdk/scripts/sdk-sync --check .   # sdk/ matches the pinned SDK tag
+packaging/build-windows.sh dev .work/packages .work/components-cache
 ```
 
-Tests never open a window and never need the game. The settings window is
-tested with `egui_kittest` (`src/e2e.rs`, `src/window.rs`); every option is
-tested from window control and flag to what it writes, through
-`plan::plan`. `CMR4_GAME_DIR=<game folder> cargo test -- --ignored` also
-checks the widescreen patch against your real `cmr4.exe` (read only).
+`packaging/build-windows.sh` also builds the SDK's close hook
+(`cargo build -p rea-launcher-close-hook`, producing `rea_close_hook.dll`)
+and checks both binaries' imports (`sdk/packaging/check-imports.sh`).
 
-GNU ld from mingw-w64 binutils 2.47 (snapshot builds in rolling distros) can
-drop an import descriptor from the launcher, which then crashes at startup
-under Wine; link with LLVM's lld in that case:
-`RUSTFLAGS="-C link-arg=-fuse-ld=lld" cargo build --release --target i686-pc-windows-gnu`.
-CI's Ubuntu toolchain is not affected.
+- Moving to a new SDK: `sdk/scripts/sdk-bump vX.Y.Z` (Cargo tags, `sdk/`,
+  workflow pins; prints the Migration notes), see
+  `sdk/docs/playbooks/sdk-change.md`. A weekly workflow opens that pull
+  request by itself.
+- Freeing disk space after a release: `sdk/scripts/clean` (dry run), then
+  `sdk/scripts/clean --yes`.
+- Golden snapshots in `tests/snapshots/` hold `--help`, the template and
+  the launch plan of each look: regenerate with
+  `CMR4_UPDATE_SNAPSHOTS=1 cargo test --lib snapshots` and review every
+  diff.
+- Tests never open a window and never need the game. The settings window
+  is tested with `egui_kittest` (`src/e2e.rs`, `src/window.rs`); every
+  option is tested from window control and flag to what it writes,
+  through `plan::plan`. `CMR4_GAME_DIR=<game folder> cargo test --
+  --ignored` also checks the widescreen patch against your real
+  `cmr4.exe` (read only).
+- Components are downloaded at package time from pinned URLs and checked
+  by SHA-256 (`packaging/components.pins`); archives are never committed.
+  The licence-less dgVoodoo2 2.80 archive comes from this repository's
+  `thirdparty` release (`packaging/mirror/README.md`). The package check
+  accepts only an exact file list and rejects game assets. GitHub Actions
+  (the SDK's reusable workflows) test, build the zip and the AppImage, and
+  a `v*` tag publishes the release.
+- The AppImage is built from the unpacked Windows package with the SDK's
+  `sdk/packaging/appimage-wine.sh`, which downloads Wine, appimagetool and
+  the AppImage runtime from their official releases and checks the SHA-256
+  digests pinned in `sdk/packaging/appimage/tools.pins`:
 
-Components are downloaded at package time from pinned URLs and checked by
-SHA-256 (`packaging/components.pins`); archives are never committed. The
-licence-less dgVoodoo2 2.80 archive comes from this repository's
-`thirdparty` release (see `packaging/mirror/README.md`). The package smoke
-test accepts only an exact file list and rejects game assets.
+  ```sh
+  sdk/packaging/appimage-wine.sh --app cmr4 --exe CMR4Launcher.exe \
+    --icon packaging/appimage/cmr4-launcher.png \
+    --desktop packaging/appimage/cmr4-launcher.desktop \
+    --payload components --doc licenses --doc docs \
+    <unpacked-package-folder> <output-folder>
+  ```
+
+  Wine's source and LGPL notices are in the AppImage under
+  `usr/share/doc/wine`.
+- More: [AGENTS.md](AGENTS.md) (rules for contributors and agents),
+  [docs/RESEARCH.md](docs/RESEARCH.md),
+  [docs/RUNTIME_NOTES.md](docs/RUNTIME_NOTES.md),
+  [docs/CONTRIBUTIONS.md](docs/CONTRIBUTIONS.md),
+  [docs/ENHANCEMENTS.md](docs/ENHANCEMENTS.md).
 
 ## Built on rea-launcher-sdk
 
-The runtime copy, settings window kit, `launcher.cfg` option table, patch
-tables, Win32 helpers, the Linux play library (`rea-play.sh`), packaging
-scripts and CI workflows come from
-[rea-launcher-sdk](https://github.com/akitaonrails/rea-launcher-sdk)
-(v0.2.0), shared by the rea launchers. This repository keeps what is
-specific to Colin McRae Rally 04.
+The runtime copy, the `launcher.cfg` option table, patch tables, Win32
+helpers, the settings window kit, the close hook, the Linux play library
+(`rea-play.sh`), packaging scripts and CI workflows come from
+[rea-launcher-sdk](https://github.com/akitaonrails/rea-launcher-sdk),
+shared by the rea launchers. It is pinned by tag in `Cargo.toml` and
+vendored in `sdk/` (the tag is in `sdk/VERSION`). This repository keeps
+what is specific to Colin McRae Rally 04: its editions and patch, the
+registry values, components and their settings, the looks, the gamepad
+profile and `cmr4-play`'s settings.
 
 ## Contributing
 
-- **Something about CMR04** (its versions, picture, gamepad, saves, the
-  settings, `cmr4-play`'s game settings): issues and pull requests here.
-- **Shared code** (the runtime folder logic, settings-window widgets,
-  `rea-play.sh`, packaging, the CI workflows, anything under `sdk/`):
-  issues and pull requests at
-  [rea-launcher-sdk](https://github.com/akitaonrails/rea-launcher-sdk).
-- **How to tell:** if the file is under `sdk/`, or the code comes from a
-  `rea_launcher*` crate, it is the SDK's. Never patch `sdk/` here and never
-  copy SDK code into this repository; a fix lands in the SDK and reaches
-  this launcher with an SDK update.
+- **About Colin McRae Rally 04** (its editions, fixes, picture, gamepad,
+  saves, settings, `cmr4-play`'s game settings, this README): issues and
+  pull requests here.
+- **Shared code** (the runtime folder, settings-window widgets, the option
+  table, the close hook, `rea-play.sh`, packaging, CI workflows, anything
+  under `sdk/`): issues and pull requests at
+  [rea-launcher-sdk](https://github.com/akitaonrails/rea-launcher-sdk/issues).
+- **How to tell:** code under `sdk/` or from a `rea_launcher*` crate is the
+  SDK's. If the same problem would happen with another rea launcher, it's
+  the SDK's. Not sure? Open it here and it will be moved.
+- Never patch `sdk/` or copy SDK code here: fix the SDK and bump the tag.
 - Never attach game files (executables, saves, data) to an issue.
+- Test reports are welcome, working or not: the
+  [bug report](https://github.com/akitaonrails/rea-colin-mcrae-4/issues/new?template=bug-report.yml)
+  form has a "What worked?" checklist.
 
 ## Credits
 
@@ -414,10 +439,16 @@ specific to Colin McRae Rally 04.
   **AppImage** project: appimagetool and its runtime.
 - [PCGamingWiki](https://www.pcgamingwiki.com/wiki/Colin_McRae_Rally_04)'s
   CMR04 page, where the fixes above were found.
+- [rea-launcher-sdk](https://github.com/akitaonrails/rea-launcher-sdk): the
+  shared launcher code.
+
+Full list with licences: [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ## Legal
 
-Colin McRae Rally 04 is © Codemasters. This project is not affiliated with or
-endorsed by Codemasters or Electronic Arts. Our code is MIT OR Apache-2.0;
-third-party binaries, fonts, the portrait photo and Wine, with their notices,
-are listed in [THIRD_PARTY.md](THIRD_PARTY.md).
+Colin McRae Rally 04 is © Codemasters. This project is not affiliated with
+or endorsed by Codemasters or Electronic Arts. It contains no game files and
+only runs a copy you own. Our code is MIT OR Apache-2.0
+([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)); bundled
+binaries, fonts, the portrait photo and Wine keep their own licences, listed
+in [THIRD_PARTY.md](THIRD_PARTY.md).

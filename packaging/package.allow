@@ -9,9 +9,9 @@ docs/CONTRIBUTIONS.md
 docs/ENHANCEMENTS.md
 docs/RESEARCH.md
 docs/RUNTIME_NOTES.md
-docs/images/game.jpg
-docs/images/launcher-picture.png
-docs/images/launcher.png
+docs/images/gameplay.jpg
+docs/images/launcher-picture.jpg
+docs/images/launcher-play.jpg
 components/D3D9.dll
 components/rea_close_hook.dll
 components/dinput8.dll

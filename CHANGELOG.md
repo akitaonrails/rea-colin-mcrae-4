@@ -46,6 +46,13 @@ All notable changes to this project. The format follows
   instead of our own `cmr4close.dll`. It behaves the same: Alt+F4 or
   closing the game's window ends the game, and the intro movies are left
   alone.
+- README and `linux/README.md` follow the rea launcher layout: a
+  problems table, screenshots, separate First run, Options (one table with
+  every key, flag, window label and unset value), Where things live,
+  Known limitations and Uninstall sections, and Steam Deck, Proton,
+  Environment and Troubleshooting sections for Linux. Download links name
+  no release; the screenshots are JPEG (`docs/images/launcher-play.jpg`,
+  `launcher-picture.jpg`, `gameplay.jpg`).
 - Issue forms follow the rea launcher layout: "Bug report" (it replaces
   "Test report" and keeps its "What worked?" checklist), "Unknown
   edition", and a link to the SDK for shared launcher code.
