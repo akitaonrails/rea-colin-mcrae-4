@@ -110,6 +110,32 @@ impl Platform {
 
 /// `dgVoodoo.conf`. `widescreen`: whether the runtime's `cmr4.exe` carries
 /// the widescreen fix (a 16:9 resolution on a known build).
+/// `name: SHA-256 (version)` of each bundled DLL, for `launcher.log`.
+pub fn describe(components: &Path) -> Vec<String> {
+    let version = |name: &str| match name {
+        "D3D9.dll" => "dgVoodoo2 2.80",
+        "d3d11.dll" | "dxgi.dll" => "DXVK 3.1.1",
+        XIDI_DLL => "Xidi 4.3.1",
+        CLOSE_HOOK_DLL => "close hook",
+        _ => "",
+    };
+    DGVOODOO_DLLS
+        .into_iter()
+        .chain(DXVK_DLLS)
+        .chain([XIDI_DLL, CLOSE_HOOK_DLL])
+        .map(
+            |name| match rea_launcher::identify::sha256_file(&components.join(name)) {
+                Ok(digest) => format!(
+                    "{name}: {} ({})",
+                    rea_launcher::identify::hex(&digest),
+                    version(name)
+                ),
+                Err(_) => format!("{name}: not bundled"),
+            },
+        )
+        .collect()
+}
+
 pub fn dgvoodoo_conf(settings: &Settings, widescreen: bool, platform: &Platform) -> String {
     let Platform {
         wine,
@@ -504,6 +530,22 @@ mod tests {
         for path in [game, runtime, components] {
             fs::remove_dir_all(path).unwrap();
         }
+    }
+
+    #[test]
+    fn the_log_names_each_bundled_dll_with_its_digest_and_version() {
+        let components = temp("describe");
+        write_components(&components);
+        let lines = describe(&components);
+        assert_eq!(lines.len(), 5);
+        assert!(lines[0].starts_with("D3D9.dll: ") && lines[0].ends_with("(dgVoodoo2 2.80)"));
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.starts_with("dinput8.dll: ") && l.ends_with("(Xidi 4.3.1)"))
+        );
+        assert_eq!(lines[4], "cmr4close.dll: not bundled");
+        fs::remove_dir_all(components).unwrap();
     }
 
     #[test]

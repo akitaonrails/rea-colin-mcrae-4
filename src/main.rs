@@ -31,16 +31,26 @@ mod app {
             .join("CMR4Launcher")
     }
 
-    /// `launcher.log`, never truncated (as before the shared SDK).
+    /// `launcher.log`, with the SDK's size cap (past 1 MiB the next launch
+    /// starts it afresh).
     pub fn log_line(line: &str) {
-        Log::new(home().join("launcher.log"))
-            .without_limit()
-            .line(line);
+        Log::new(home().join("launcher.log")).line(line);
     }
 
+    /// Shows `text` where the player will see it: the terminal that
+    /// started the launcher (or a redirected stdout), else a dialog.
     pub fn message(text: &str, error: bool) {
-        let icon = if error { Icon::Error } else { Icon::Info };
-        dialog::message("Colin McRae Rally 04", text, icon);
+        use rea_launcher_win32::console::{self, Output};
+        let terminal = console::attach_parent();
+        match console::output(terminal, console::stdout_usable(), true) {
+            Output::Terminal if error => eprintln!("{text}"),
+            Output::Terminal => println!("{text}"),
+            Output::Dialog => {
+                let icon = if error { Icon::Error } else { Icon::Info };
+                dialog::message("Colin McRae Rally 04", text, icon);
+            }
+            Output::Nowhere => {}
+        }
     }
 
     fn settings_path() -> PathBuf {
@@ -187,6 +197,13 @@ mod app {
         log_line(&format!("game: {}", game.display()));
         log_line(&format!("runtime: {}", runtime.display()));
         log_line(&format!("settings: {settings:?}"));
+        log_line(&format!(
+            "look: {}",
+            match settings.look {
+                Some(look) => format!("{} (from the file or --look)", look.value()),
+                None => "none set (the values above)".to_string(),
+            }
+        ));
 
         let exe = validate_game(&game, settings.widescreen())?;
         log_line(&exe.describe());
@@ -223,6 +240,9 @@ mod app {
             .and_then(|path| path.parent().map(|dir| dir.join("components")))
             .ok_or("cannot locate the launcher's components folder")?;
         components::validate(&components_dir, settings.controller(), wine)?;
+        for line in components::describe(&components_dir) {
+            log_line(&format!("component {line}"));
+        }
         paths::check_separate(&game, &runtime)?;
         match runtime::remove_legacy_temps(&runtime) {
             Ok(removed) if !removed.is_empty() => log_line(&format!(

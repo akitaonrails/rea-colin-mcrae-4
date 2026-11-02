@@ -47,6 +47,11 @@ All notable changes to this project. The format follows
   error messages say how to fix the problem; an unknown game version
   gets a "Report this version…" button that opens the issue form; the
   Controls tab no longer shows the pad mapping when Gamepad is off.
+- `launcher.log` also records the look, each bundled DLL's SHA-256 and
+  version, and starts afresh once it is past 1 MiB (the SDK's cap; it
+  used to grow without end). `--help`, `--check` and errors print to the terminal the
+  launcher was started from (or a redirected output); a dialog appears
+  only when there is none.
 - A launch is planned first (`src/plan.rs`: files, registry values, the
   game's environment, patch sets), then carried out; `launcher.log` now
   records the components installed and taken out and the game's
