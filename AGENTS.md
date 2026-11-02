@@ -37,3 +37,25 @@ the game.
   compilation. Do not claim registry, wrapper, controller, graphics, or gameplay
   behavior is verified until it has been exercised in the real target runtime.
 - Record exact verification commands and limitations with each milestone.
+
+## Shared SDK
+
+- Generic launcher code lives in
+  [rea-launcher-sdk](https://github.com/akitaonrails/rea-launcher-sdk):
+  the `rea-launcher`, `rea-launcher-win32` and `rea-launcher-ui` crates
+  (runtime copy, ledger, `launcher.cfg` editing, patch helpers, registry,
+  process start, settings-window kit) and, vendored under `sdk/`, the Linux
+  play library `rea-play.sh` and the packaging scripts. This repository keeps
+  CMR04's knowledge: the runtime policy, components, generators, registry
+  values, patch signature, looks, `cmr4-play`'s settings and the allowlist.
+- Never fork or patch SDK code locally, and never edit `sdk/` by hand. A
+  missing feature or a bug goes upstream to the SDK; keep the local code
+  until a fixed SDK tag exists.
+- To bump the SDK: change the `tag` of every rea-launcher-sdk git dependency in
+  `Cargo.toml`, run `../rea-launcher-sdk/scripts/sdk-sync .` from an SDK
+  checkout at that tag, and commit `Cargo.lock` and `sdk/` together. CI
+  (`sdk-sync --check`) fails when `sdk/` drifts.
+- Tests and probes run headless by default: Windows-target tests under Wine
+  with the SDK's `scripts/wine-test` (e.g. in the `gaming` distrobox), real
+  game runs in `gamescope --backend headless`. Open a visible window only
+  deliberately.

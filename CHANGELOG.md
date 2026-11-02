@@ -6,6 +6,26 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Built on the shared [rea-launcher-sdk](https://github.com/akitaonrails/rea-launcher-sdk)
+  v0.1.0: the runtime copy, component ledger, `launcher.cfg` editing, patch
+  and registry helpers, game start, settings-window kit and `cmr4-play`'s
+  session handling (`rea-play.sh`, shipped beside it in the zip and the
+  AppImage) are the SDK's. Files, settings, commands and environment names
+  are unchanged.
+- `launcher.cfg`: setting a key that is only present as a commented
+  `#key =` line fills that line in place instead of appending one; `;`
+  starts a comment too; a UTF-8 BOM is dropped; `×` is accepted in sizes.
+- Settings window: the Browse button's text is white, the focused control
+  shows a focus ring, and the d-pad's left/right step through a row of
+  choices.
+- `cmr4-play`: the settings window's errors go to
+  `~/.config/cmr4-launcher/settings.log`; an interrupted launch also ends
+  the prefix's wineserver; a `launcher.cfg` next to `CMR4Launcher.exe` is
+  read first; `--settings`, `--status`, `--stop` and `--help` are accepted.
+- Old `.cmr4-new` temp files in the runtime are removed once.
+
 ### Fixed
 
 - Settings window under Wine: Wine's own DPI setting (e.g. 144 or 192 in
