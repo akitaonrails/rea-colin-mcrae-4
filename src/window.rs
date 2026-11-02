@@ -252,7 +252,10 @@ impl Window {
         } else {
             "Play needs the game folder first."
         };
-        if widgets::footer(ui, layout.footer, hint, self.check.ready()).clicked() {
+        let play = widgets::footer(ui, layout.footer, hint, self.check.ready());
+        // A disabled Play says why to screen readers too.
+        ctx.accesskit_node_builder(play.id, |node| node.set_description(hint.to_owned()));
+        if play.clicked() {
             self.play();
         }
         if ctx.input(|input| input.key_pressed(Key::Enter)) && !ctx.egui_wants_keyboard_input() {

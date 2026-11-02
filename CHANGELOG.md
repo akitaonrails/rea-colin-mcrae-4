@@ -42,6 +42,16 @@ All notable changes to this project. The format follows
   1.0.0.0" instead of "PE32 found; widescreen check: Patched". The photo
   caption sits on a solid band. The window's drawing moved into the
   library (`src/window.rs`), so it is tested headless.
+- A launch is planned first (`src/plan.rs`: files, registry values, the
+  game's environment, patch sets), then carried out; `launcher.log` now
+  records the components installed and taken out and the game's
+  `WINEDLLOVERRIDES`. A disabled Play button tells screen readers why.
+- Tests: every option end to end (window control and flag → the same
+  `launcher.cfg` key → dgVoodoo.conf, Xidi, the registry, the environment
+  or the patch), headless GUI tests of every tab (`egui_kittest`, on the
+  host and under Wine), keyboard and pad navigation, an upgrade test with
+  a v0.2.0 settings file, and game/runtime paths with apostrophes and
+  accents.
 - `fps_limit = 0` means no cap, like `off` (it already did; the docs said
   1–1000).
 

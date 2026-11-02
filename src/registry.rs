@@ -30,6 +30,67 @@ pub fn install_root(runtime: &std::path::Path) -> String {
         .to_owned()
 }
 
+/// One value the launcher writes under [`KEY`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegWrite {
+    pub name: &'static str,
+    pub value: RegValue,
+    /// Written only when the value is absent (first-run defaults).
+    pub if_missing: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RegValue {
+    String(String),
+    Dword(u32),
+}
+
+impl RegWrite {
+    /// `name = string:"…"` / `name = dword:N`, plus `(if missing)`.
+    pub fn describe(&self) -> String {
+        let value = match &self.value {
+            RegValue::String(text) => format!("string:{text:?}"),
+            RegValue::Dword(n) => format!("dword:{n}"),
+        };
+        let when = if self.if_missing { " (if missing)" } else { "" };
+        format!("{} = {value}{when}", self.name)
+    }
+}
+
+/// Every value a launch writes: the install paths and the game's mode on
+/// every launch, the language and first-run graphics defaults only when
+/// missing. `existing`: the Width/Height already there.
+pub fn writes(
+    game_mode: Resolution,
+    runtime: &std::path::Path,
+    existing: Option<(u32, u32)>,
+) -> Vec<RegWrite> {
+    let root = install_root(runtime);
+    let always = |name, value| RegWrite {
+        name,
+        value,
+        if_missing: false,
+    };
+    let mut out: Vec<RegWrite> = INSTALL_PATH_VALUES
+        .iter()
+        .map(|name| always(name, RegValue::String(root.clone())))
+        .collect();
+    let (width, height) = dimensions(game_mode, existing);
+    out.push(always("Width", RegValue::Dword(width)));
+    out.push(always("Height", RegValue::Dword(height)));
+    out.push(RegWrite {
+        name: "LANGUAGE",
+        value: RegValue::String("E".into()),
+        if_missing: true,
+    });
+    out.extend(DEFAULT_DWORDS.iter().map(|&(name, value)| RegWrite {
+        name,
+        value: RegValue::Dword(value),
+        if_missing: true,
+    }));
+    out
+}
+
 /// Custom modes are enforced every launch. Original mode keeps the current
 /// game values, seeding a standard original mode only when they are absent.
 pub fn dimensions(resolution: Resolution, existing: Option<(u32, u32)>) -> (u32, u32) {

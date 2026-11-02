@@ -4,10 +4,8 @@
 
 use std::path::Path;
 
-use cmr4_launcher::components;
-use cmr4_launcher::config::Resolution;
 use cmr4_launcher::display;
-use cmr4_launcher::registry::{self, KEY};
+use cmr4_launcher::registry::{self, KEY, RegValue, RegWrite};
 use rea_launcher_win32::process::Launch;
 use rea_launcher_win32::reg::Key;
 use rea_launcher_win32::{display as screens, wine};
@@ -32,32 +30,47 @@ pub fn gamepad_ids() -> Option<(u16, u16)> {
     rea_launcher_win32::xinput::ids(0)
 }
 
-pub fn write_game_registry(
-    resolution: Resolution,
-    runtime: &Path,
-) -> Result<(&'static str, (u32, u32)), String> {
+/// The game's open key, where it is (log label) and its Width/Height.
+pub type GameKey = (Key, &'static str, Option<(u32, u32)>);
+
+/// Opens the game's key and reads its current Width/Height.
+pub fn game_registry() -> Result<GameKey, String> {
     let (key, place) = Key::machine_or_virtual_store(KEY)?;
-    let place = place.describe();
-    let root = registry::install_root(runtime);
-    for name in registry::INSTALL_PATH_VALUES {
-        key.set_string(name, &root)?;
-    }
     let existing = match (key.dword("Width")?, key.dword("Height")?) {
         (Some(width), Some(height)) => Some((width, height)),
         _ => None,
     };
-    let (width, height) = registry::dimensions(resolution, existing);
-    key.set_dword("Width", width)?;
-    key.set_dword("Height", height)?;
-    key.set_string_if_missing("LANGUAGE", "E")?;
-    key.seed_dwords(&registry::DEFAULT_DWORDS)?;
-    Ok((place, (width, height)))
+    Ok((key, place.describe(), existing))
+}
+
+/// Writes the plan's values (`registry::writes`) into `key`.
+pub fn write_game_registry(key: &Key, writes: &[RegWrite]) -> Result<(), String> {
+    for write in writes {
+        match (&write.value, write.if_missing) {
+            (RegValue::String(text), false) => key.set_string(write.name, text)?,
+            (RegValue::String(text), true) => {
+                key.set_string_if_missing(write.name, text)?;
+            }
+            (RegValue::Dword(n), false) => key.set_dword(write.name, *n)?,
+            (RegValue::Dword(n), true) => {
+                key.seed_dwords(&[(write.name, *n)])?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Seeds Wine's `Map Controllers` when the prefix has no value yet; a value
 /// already there (the player's choice) is kept. Returns whether it wrote.
 pub fn map_wine_controllers() -> Result<bool, String> {
     Ok(wine::seed_winebus(&registry::WINEBUS_DEFAULTS)?)
+}
+
+/// The player's own `WINEDLLOVERRIDES`, merged into the game's.
+pub fn inherited_overrides() -> Option<String> {
+    let vars: Vec<_> = std::env::vars_os().collect();
+    rea_launcher::env::lookup(&vars, rea_launcher::wine::DLL_OVERRIDES)
+        .map(|value| value.to_string_lossy().into_owned())
 }
 
 /// Starts the game and waits for it. Under Wine the game's own environment
@@ -68,20 +81,17 @@ pub fn map_wine_controllers() -> Result<bool, String> {
 pub fn run_game(
     exe: &Path,
     workdir: &Path,
-    wine: bool,
-    controller: bool,
+    env: &[(&str, String)],
+    args: &[String],
     close_hook: &Path,
     log: impl Fn(&str),
 ) -> Result<u32, String> {
     let mut launch = Launch::new(exe).cwd(workdir);
-    if wine {
-        let vars: Vec<_> = std::env::vars_os().collect();
-        let existing = rea_launcher::env::lookup(&vars, rea_launcher::wine::DLL_OVERRIDES)
-            .map(|value| value.to_string_lossy().into_owned());
-        launch = launch.env(
-            rea_launcher::wine::DLL_OVERRIDES,
-            components::wine_overrides(existing.as_deref(), controller),
-        );
+    for arg in args {
+        launch = launch.arg(arg);
+    }
+    for (name, value) in env {
+        launch = launch.env(name, value);
     }
     let game = launch.spawn()?;
     let _hook = match game.message_hook(close_hook, c"close_hook") {

@@ -12,7 +12,7 @@ mod app {
 
     use cmr4_launcher::config::{self, Settings};
     use cmr4_launcher::edition::{self, Prepared};
-    use cmr4_launcher::{GAME_EXE, components, profile, registry, runtime};
+    use cmr4_launcher::{GAME_EXE, components, plan, profile, runtime};
     use rea_launcher::identify::validate_pe32;
     use rea_launcher::log::Log;
     use rea_launcher::{fsx, paths};
@@ -250,53 +250,77 @@ mod app {
                 .map_err(|error| format!("cannot write {error}"))?;
         }
         // gamescope exposes one output; elsewhere avoid a portrait primary monitor.
-        let game_mode = registry::game_mode(settings.resolution(), exe.widescreen);
         let output = target.and_then(|t| t.output).filter(|_| !gamescope);
+        let platform = components::Platform::new(wine, gamescope, output);
+        let (key, place, existing) = win32::game_registry()?;
+        let inherited = win32::inherited_overrides();
         // An unknown build runs without the fix: dgVoodoo then keeps the
         // game's own frame shape.
+        let plan = plan::plan(
+            &settings,
+            exe.widescreen,
+            &runtime,
+            &platform,
+            existing,
+            inherited.as_deref(),
+        );
         components::install(
             &game,
             &runtime,
             &components_dir,
             &settings,
             exe.widescreen,
-            &components::Platform::new(wine, gamescope, output),
+            &platform,
         )?;
-        log_line("components and owned configuration installed");
+        log_line(&format!(
+            "components installed: {}; taken out: {}",
+            plan.wrappers.join(", "),
+            if plan.taken_out.is_empty() {
+                "none".to_string()
+            } else {
+                plan.taken_out.join(", ")
+            }
+        ));
         log_line(&format!(
             "display/render policy: Wine={wine}, gamescope={gamescope}, borderless={}, monitor={:?}, dgVoodoo output={}, game renders {}",
             wine && !gamescope,
             target.map(|t| t.size),
             output.map_or("default".into(), |n| n.to_string()),
-            game_mode.value(),
+            plan.game_mode.value(),
         ));
 
-        let (place, (width, height)) = win32::write_game_registry(game_mode, &runtime)?;
-        if wine {
-            if settings.controller() && win32::map_wine_controllers()? {
-                log_line("Wine: winebus Map Controllers seeded (absent before)");
-            }
-        } else if let Err(error) = gpu::prefer_fast_gpu(&runtime_exe) {
+        win32::write_game_registry(&key, &plan.registry)?;
+        drop(key);
+        if !plan.winebus.is_empty() && win32::map_wine_controllers()? {
+            log_line("Wine: winebus Map Controllers seeded (absent before)");
+        }
+        if plan.prefer_fast_gpu
+            && let Err(error) = gpu::prefer_fast_gpu(&runtime_exe)
+        {
             log_line(&format!("warning: {error}"));
         }
         log_line(&format!(
-            "registry: {place}, {width}x{height}; Wine: {wine}"
+            "registry: {place}, game mode {}; Wine: {wine}",
+            plan.game_mode.value()
         ));
+        for (name, value) in &plan.env {
+            log_line(&format!("game environment: {name}={value}"));
+        }
         let options_file = runtime.join("OPTIONS");
-        if settings.controller() {
+        if plan.gamepad_profile {
             choose_gamepad(&options_file);
         }
         log_line("starting game");
         let code = win32::run_game(
             &runtime_exe,
             &runtime,
-            wine,
-            settings.controller(),
+            &plan.env,
+            &plan.args,
             &components_dir.join(components::CLOSE_HOOK_DLL),
             log_line,
         )?;
         log_line(&format!("game exited with {code}"));
-        if settings.controller() {
+        if plan.gamepad_profile {
             // A first run creates OPTIONS while playing; set it up for the next.
             choose_gamepad(&options_file);
         }

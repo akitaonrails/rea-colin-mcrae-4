@@ -7,9 +7,13 @@ pub mod config;
 pub mod display;
 pub mod edition;
 pub mod form;
+pub mod plan;
 pub mod profile;
 pub mod registry;
 pub mod runtime;
 pub mod window;
 
 pub const GAME_EXE: &str = "cmr4.exe";
+
+#[cfg(test)]
+mod e2e;
