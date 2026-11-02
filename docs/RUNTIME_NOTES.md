@@ -4,6 +4,141 @@ This page distinguishes controlled runtime evidence from coverage that is
 still unknown. Portable tests and package inspection support the implementation
 but are not treated as gameplay evidence.
 
+## 2026-11-02: headless real-game verification (owner's install, read-only)
+
+Launcher at `5a51cb6` (SDK v0.3.2), release build packaged with
+`packaging/build-windows.sh` into `.work/realgame/pkg`; `cmr4.exe`
+SHA-256 `7dca9f4c…1b41` (FileVersion 1.0.0.0). Wine 11.21, gamescope
+3.17.0 and PipeWire 1.6.10 in the `gaming` distrobox, RTX 5090.
+
+**How it ran.** Every run went through `linux/cmr4-play --play` inside the
+box under a supervisor with a finite timeout (`.work/realgame/bin/run.sh`):
+a throwaway prefix, `HOME`/`XDG_*` and `XDG_RUNTIME_DIR` under
+`.work/realgame/`, credentials removed from the environment, `gamescope`
+wrapped to `--backend headless`, sound to a private PipeWire (own runtime
+dir, WirePlumber with every hardware monitor off) with one null sink.
+Input was XTest on gamescope's Xwayland (real Alt+F4 key events, a real
+`WM_DELETE_WINDOW` as a compositor sends), Windows-side requests from a
+small test helper (`PostMessage`, `SendInput`). Frame rates are Wine's
+`WINEDEBUG=fps` trace; screenshots are `gamescopectl screenshot`. After
+every run the process table was checked by name, by `WINEPREFIX`/
+`XDG_RUNTIME_DIR` in `/proc/*/environ` (match only, never printed) and by
+the session of the game's gamescope (gamescope has file capabilities, so
+its environ is unreadable). Logs, configs and screenshots per run are in
+`.work/realgame/logs/<run>/` (local, not in Git). The game folder's files
+were unchanged afterwards (no file newer than the first run; hashes of
+`cmr4.exe`, `OPTIONS`, `CHAMPIONSHIP_SLOT_1` and `BESTTIMES_GHOSTS`
+recorded).
+
+### Game and looks
+
+| Check | Result | Evidence (`.work/realgame/logs/…`) |
+|---|---|---|
+| First launch: runtime built, game starts and renders | **VERIFIED**: 1652 files copied (~80 s from the NAS), DXVK swapchain 1920x1080, title, intro movies, attract demo, menus and Quick Race stages | `first-widescreen/`, `nav-stage/` |
+| Widescreen look (16:9) | **VERIFIED**: fix applied, renders 1440x1080, `ScalingMode = stretched`, `Resolution = h:1920, v:1080` | `ws-*/`, `nav-stage/n6.jpg` |
+| Original look | **VERIFIED**: unpatched, `Resolution = unforced`, `stretched_ar`, gamescope 1024x768; stage renders 4:3 | `cfg-original/`, `look-original/stage.jpg` |
+| Steam Deck look | **VERIFIED**: unpatched, renders 1280x800, `FPSLimit = 60`, gamescope 1280x800 | `cfg-steamdeck/`, `look-steamdeck/stage.jpg` |
+| 16:10 (`--resolution 1920x1200`) | **VERIFIED**: unpatched, renders 1920x1200, `stretched_ar` | `cfg-1920x1200/`, `res-1920x1200/stage.jpg` |
+| `--look` with `--no-window` | **VERIFIED**: every run above (cmr4-play passes `--no-window`); the snapshots' values were written | as above |
+| v0.2.0 `launcher.cfg` with `widescreen = off` and a 16:9 resolution | **VERIFIED**: plays with the fix (`widescreen fix applied`, renders 1440x1080) | `cfg-v020-widescreen-off/` |
+| Unknown build (one copyright byte changed, SHA-256 `ab95d57e…c519`, through a symlink copy of the folder) | **VERIFIED**: log has the SHA-256 and the warning, game starts unpatched with `stretched_ar`. The window showed the message and Report button **but ran under the footer** (fixed, see below) | `unknown-16x9/`, `.work/realgame/shots/unknown-4k*.jpg` |
+| Source exe already patched (`60e0267b…c0b2`, made from the owner's exe) | **VERIFIED**: 16:9 plays patched (`stretched`), Original plays unpatched (`stretched_ar`) | `prepatched-16x9/`, `prepatched-original/` |
+| Command-line runs remember only `--game`; no resolution stored inside gamescope | **VERIFIED**: `launcher.cfg` gained only `game =` | `*/launcher.cfg` |
+| winebus `Map Controllers` | **VERIFIED**: seeded in a fresh prefix (`seeded (absent before)`); set to 0 by hand it stays 0 | `first-widescreen`, `misc-winebus-log/`, `misc-pre.txt` |
+| `launcher.log` past 1 MiB | **VERIFIED**: a 1,100,000-byte log started afresh (1766 bytes after the run) | `misc-pre.txt` |
+| Sound | **NOT CHECKED**: routed to the private null sink, not recorded | — |
+
+### Frame-rate cap and VSync (re-measured on a free GPU)
+
+The first measurements ran while another workload used the GPU and were
+discarded; these are from 15:00 on, GPU otherwise idle. Quick Race stage,
+car standing, gamescope headless at 60 Hz; last ten one-second readings of
+Wine's present trace.
+
+| Setting | dgVoodoo.conf | Present mode | Frame rate | Stage timer over 7.6 s / 16.6 s of wall time |
+|---|---|---|---|---|
+| `--fps-limit 0 --vsync off` | `FPSLimit = 0`, `ForceVerticalSync = false` | MAILBOX | 910–970 fps | 7.63 s / 16.64 s |
+| `--fps-limit 30` | `FPSLimit = 30` | MAILBOX | 29.99–30.01 fps | 7.64 s / 16.60 s |
+| `--fps-limit 60` | `FPSLimit = 60` | MAILBOX | 59.96–60.07 fps | 7.62 s / 16.61 s |
+| `--fps-limit 144` | `FPSLimit = 144` | MAILBOX | 143.90–144.09 fps | 7.62 s / 16.63 s |
+| `--fps-limit 0 --vsync on` | `ForceVerticalSync = true` | FIFO | 59.95–60.03 fps (the 60 Hz output) | 7.64 s / 16.61 s |
+
+- **VERIFIED:** each cap holds exactly; VSync switches DXVK to FIFO and
+  locks to the output's refresh; the stage timer runs at wall-clock speed
+  under every setting (within the 0.04 s reading error of the
+  screenshots).
+- **NOT CHECKABLE HEADLESS:** tearing (needs eyes on a real display) and
+  car physics at different caps (Quick Race picks a random car and stage;
+  a person should drive the same stage at 30 and at 144 fps and compare
+  the time).
+
+### Quitting (each: game and helper gone, then the process table checked)
+
+| Way | Result | Time to game gone / helper gone |
+|---|---|---|
+| Alt+F4 (XTest keys) in intros, title, main menu, save-slot screens, a stage countdown | **VERIFIED** | 0.3 s / 0.8 s |
+| Alt+F4 (`SendInput` from a Windows helper), main menu | **VERIFIED** | 0.7 s / 1.3 s |
+| Compositor close (`WM_DELETE_WINDOW`, as Super+W) | **VERIFIED** | 0.07 s / 0.8 s |
+| `WM_SYSCOMMAND SC_CLOSE` posted to `PC_CMR4` | **VERIFIED** | 0.4 s / 0.9 s |
+| `WM_CLOSE` posted, and `wine taskkill /im cmr4.exe` (no `/f`, sends `WM_CLOSE`) | **Ignored by design**: the hook leaves `WM_CLOSE` alone (the intro movies use it); the game kept running | — |
+| The game's own Quit (Escape → "exit cmr04" → YES) | **VERIFIED** | 0.5 s / 1.0 s |
+| `cmr4-play stop` | **VERIFIED** (exit 0), next start fine | 0.13 s / 0.4 s |
+| Ctrl+C (SIGINT to the helper's process group) | **VERIFIED** (exit 143) | 0.06 s / 0.8 s |
+| SIGTERM to `cmr4-play` | **VERIFIED** (exit 143) | 0.06 s / 0.3 s |
+| gamescope closed (SIGTERM) | **VERIFIED** | 0.1 s / 0.6 s |
+| Intro movies play to the end and can be skipped (Return) without ending the game | **VERIFIED** (the first run reached the attract demo; Return skipped to the menu) | `ws-skip-menu-altf4/` |
+| Steam's Stop | **NOT CHECKABLE HEADLESS** here (no Steam in the box) | — |
+
+After every one of these the process table had no `cmr4.exe`,
+`CMR4Launcher.exe`, `wineserver`, gamescope or helper of the test left.
+Two notes:
+
+- gamescope 3.17.0 itself **segfaults on exit** after its child is gone
+  ("Primary child shut down!", then `Segmentation fault (core dumped)`),
+  so `cmr4-play` returns 139 after an in-game quit although everything
+  ended cleanly. That is gamescope's bug, not the launcher's; a core dump
+  is written each time.
+- One Alt+F4 out of about fifteen did nothing (save-slot screen, VSync on,
+  sent right after a screenshot). Six attempts to reproduce it on the same
+  screens, with and without VSync, all quit. Likely a lost XTest event in
+  gamescope's input bridge (its log has "Unhandled libei event"); listed
+  in case a player sees it.
+
+### One launcher at a time (under Wine, without cmr4-play)
+
+| Check | Result |
+|---|---|
+| Second `CMR4Launcher.exe` while the settings window is open | **VERIFIED**: exit 0 in 0.4 s, log "brought its window forward", one window only |
+| Second `CMR4Launcher.exe --no-window` while the game runs | **VERIFIED**: dialog "Colin McRae Rally 04 is already running. Quit the game (Alt+F4 works)…", exit 1, game untouched (`second-start/second-dialog.jpg`) |
+| Second `cmr4-play --play` while the game runs | **VERIFIED**: "already running", exit 0 |
+| `--check` while a window is open | **VERIFIED**: refused with the "already open" message (as a dialog under Wine) |
+| The game's window is not mistaken for the launcher's | **VERIFIED**: the game's top-level window is class and title `PC_CMR4`, the launcher's is titled "Colin McRae Rally 04" and the lookup also checks the process image, so the CMR3 title clash can't happen here |
+
+### Settings window (private Xvfb, Wine at 96 DPI unless noted)
+
+- 4K screen, 96 DPI: 1320x960 (1.5x), fully drawn. **VERIFIED.**
+- 4K, Wine DPI 144: 1320x960, fully drawn. 4K, DPI 192: 1760x1280 (2x),
+  fits and fully drawn. **VERIFIED** (192 gives 2x, not "about 1.5x"; it
+  fits, so left as it is).
+- 1280x800 screen, no `launcher.cfg`: the window opens on the **Steam Deck**
+  look. **VERIFIED** under Wine; a real Deck's Desktop Mode is untested.
+  With a file that has only `game =` (left by a command-line run) it opens
+  on Widescreen, by design (the recommendation applies to a first run only).
+- **Bug found and fixed** (`5a51cb6`): an unknown build's five-line message
+  and Report button pushed the private-copy field and its note under the
+  footer. Now one line beside the Report button, whose link fills the
+  code into the issue form (`unknown-4k-fixed-root.jpg`).
+- README screenshots retaken from this build (`9ec2e57`).
+
+### What a person still has to do
+
+- Look at the screenshots: `.work/realgame/logs/look-original/stage.jpg`,
+  `look-steamdeck/stage.jpg`, `res-1920x1200/stage.jpg`,
+  `nav-stage/n6.jpg` (16:9), `.work/realgame/shots/unknown-4k-fixed-root.jpg`.
+- Tearing with VSync off/on on a real display; drive one stage at 30 and
+  144 fps and compare times; the pad in a fresh prefix; Steam's Stop;
+  everything on native Windows (Defender, `subst` drives, console output).
+
 ## 2026-11-02: picture, closing, gamepad (development package, gaming box)
 
 Wine 11.21 in the `gaming` distrobox, Hyprland at scale 1.5 with a portrait
@@ -110,6 +245,10 @@ is excluded from evidence.
 
 ## Unreleased changes awaiting a game check
 
+Most items below were checked headless on 2026-11-02; results in
+"headless real-game verification" at the top. What is still open there
+is listed under "What a person still has to do".
+
 Host tests and the Windows cross-build cover these; none has been exercised
 in the game yet.
 
@@ -140,6 +279,10 @@ in the game yet.
   at 96 DPI it must still open at 1.5x.
 
 ### rea-launcher-sdk v0.2.0 pass (2026-11-02)
+
+Most items below were checked headless on 2026-11-02; results in
+"headless real-game verification" at the top. What is still open there
+is listed under "What a person still has to do".
 
 Host tests, the GUI tests (headless, host and Wine) and the Windows build
 cover these; none has been run in the game yet.
@@ -174,6 +317,10 @@ cover these; none has been run in the game yet.
 - **`launcher.log`** starts afresh past 1 MiB (it never did before).
 
 ### rea-launcher-sdk v0.3.0 bump (2026-11-02)
+
+Most items below were checked headless on 2026-11-02; results in
+"headless real-game verification" at the top. What is still open there
+is listed under "What a person still has to do".
 
 Host tests, the Windows-target tests under Wine and the release build
 cover these; none has been run with the game yet.
@@ -214,9 +361,13 @@ cover these; none has been run with the game yet.
   swapchain observations are established.
 - **Protected retail media:** compatibility remains unknown. Older secondary
   reports indicate it may not run under Wine; there is no project result.
-- **Executable variants:** only the 1.0.0.0 build (and its patched form)
-  is identified; other retail, budget, regional and patched (1.01?)
-  builds are unknown and run unpatched until reported.
+- **Executable variants:** only the owner's build (and its patched form)
+  is identified. Its version resource says 1.0.0.0, but it was compiled
+  on 12 May 2004 (`__DATE__` string "May 12 2004 16:52:47"), after the
+  2 April 2004 retail release and a month before patch 1.01 (16-17 June
+  2004), so it is most likely the 1.01 exe, which kept the 1.0.0.0
+  version resource; see `RESEARCH.md`. The original retail exe and other
+  regional or budget builds are unknown and run unpatched until reported.
 - **Old-game trouble spots** surveyed in `RESEARCH.md` but not run: EAX
   without DSOAL, behaviour on focus loss, WMV intros on a Wine without
   GStreamer.

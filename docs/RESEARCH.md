@@ -27,8 +27,17 @@ set applies only to known builds and is verified against its result hash.
 | the same with the community fix already applied | 3,756,032 | `60e0267bebb5894aa4e2f2b791ca9e338c9469433c9b9192c5772174c1bcc0b2` | accepted as it is; turned back for other shapes |
 
 PCGamingWiki says the community fix needs the 1.01 patch, while this
-build's version resource reads 1.0.0.0; which retail patch level it is has
-not been established (owner to check). Any other build is played
+build's version resource reads 1.0.0.0 (FileVersion and ProductVersion,
+fixed and string tables). The version resource doesn't settle it: the
+exe's compiler date string reads "May 12 2004 16:52:47", after the PC
+retail release (2 April 2004 in Europe) and about a month before
+Codemasters released patch 1.01 (16-17 June 2004, a 3.3 MB multiplayer
+fix). A disc exe can't carry a build date six weeks after release, so
+this is almost certainly the 1.01 exe, which left the version resource at
+1.0.0.0. The PE header's timestamp and checksum are zero, so they don't
+help. Not proven against an unpatched retail exe (none at hand); the
+widescreen site (`04 00 00 80 3F E8`) occurs exactly once in it, at
+`0x77826`. Any other build is played
 unpatched, with the game's own view, and the player is asked to report its
 SHA-256 (issue form "Unknown edition").
 

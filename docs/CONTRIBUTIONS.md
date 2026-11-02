@@ -47,9 +47,10 @@ horizontal factor 1.0 → 0.75:
 - measured on `cmr4.exe` 3,756,032 bytes, FileVersion 1.0.0.0, SHA-256
   before the edit `7dca9f4cab16bc1a98df8871f3d20aec4cd931a818ea0899db86c83c1f712b41`
   (derived by reverting that one byte in the launcher's runtime copy; the
-  launcher changes no other byte. PCGW says the fix "requires 1.01", yet the
-  version resource reads 1.0.0.0. The owner should check which patch level
-  this copy is).
+  launcher changes no other byte. PCGW says the fix "requires 1.01"; the
+  version resource reads 1.0.0.0, but the exe was built on 12 May 2004,
+  after retail and before patch 1.01 shipped, so it is most likely the
+  1.01 exe with an unchanged version resource; see `RESEARCH.md`).
 
 Suggested `{{ii}}` line to add inside that fixbox (do not post a separate
 hex edit, since the bytes are the community fix):
