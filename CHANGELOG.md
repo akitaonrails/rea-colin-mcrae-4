@@ -6,7 +6,44 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- **The Widescreen switch** (`widescreen`, `--widescreen`). It only ever
+  worked together with an exact 16:9 resolution, so the resolution now
+  decides: a 16:9 size gets the widescreen view, other shapes the game's
+  own view (owner decision, 2026-11-02). An old `widescreen = …` line or
+  `--widescreen` flag is accepted and ignored; saving from the window
+  comments the line out. A player who had `widescreen = off` with a 16:9
+  resolution now gets the widescreen view; pick a 4:3 or 16:10 size (or
+  Original) to keep the game's own view.
+
+### Added
+
+- `--look original|widescreen|steam_deck` (and `look =` in
+  `launcher.cfg`): sets a look's values for one run, like the window's
+  look cards. Values set explicitly next to it win.
+- Picture tab: 4:3 (1600×1200), 16:10 (1920×1200) and ultrawide
+  (2560×1080) resolutions; a resolution or frame-rate cap saved from the
+  file or the command line that isn't listed shows as a "(saved)" choice
+  and is kept.
+
 ### Changed
+
+- One option table (`config::OPTIONS`) declares every setting once: the
+  `launcher.cfg` parser, the flags, `--help` (now listing `--settings` and
+  `--linux` too) and the first-run template come from it, and a test
+  checks the window has a control for each. The template's unset values
+  are `#key =` lines now; files from earlier versions read as before.
+- Settings window, in plain words: the "4K" look is now **Widescreen**
+  (its note names the size it picks for your screen), every Picture row
+  says what it does, the line under Resolution says what you'll see
+  (widescreen view or the game's own view), the Gamepad switch replaces
+  "Gamepad through Xidi", and the game-folder check says "Found cmr4.exe
+  1.0.0.0" instead of "PE32 found; widescreen check: Patched". The photo
+  caption sits on a solid band. The window's drawing moved into the
+  library (`src/window.rs`), so it is tested headless.
+- `fps_limit = 0` means no cap, like `off` (it already did; the docs said
+  1–1000).
 
 - Updated rea-launcher-sdk to v0.2.0 (crates, vendored `sdk/`, CI
   workflows, which now also run the Windows-target tests under Wine).

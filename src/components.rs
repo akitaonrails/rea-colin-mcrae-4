@@ -89,13 +89,34 @@ pub fn validate(components: &Path, controller: bool, wine: bool) -> Result<(), S
     }
 }
 
-pub fn dgvoodoo_conf(
-    settings: &Settings,
-    wine: bool,
-    gamescope: bool,
-    output: Option<u32>,
-) -> String {
-    let game = registry::game_mode(settings.resolution(), settings.widescreen());
+/// Where the game runs: under Wine, inside gamescope, on which monitor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Platform {
+    pub wine: bool,
+    pub gamescope: bool,
+    /// 1-based dgVoodoo `FullScreenOutput`, or None for its default.
+    pub output: Option<u32>,
+}
+
+impl Platform {
+    pub const fn new(wine: bool, gamescope: bool, output: Option<u32>) -> Platform {
+        Platform {
+            wine,
+            gamescope,
+            output,
+        }
+    }
+}
+
+/// `dgVoodoo.conf`. `widescreen`: whether the runtime's `cmr4.exe` carries
+/// the widescreen fix (a 16:9 resolution on a known build).
+pub fn dgvoodoo_conf(settings: &Settings, widescreen: bool, platform: &Platform) -> String {
+    let Platform {
+        wine,
+        gamescope,
+        output,
+    } = *platform;
+    let game = registry::game_mode(settings.resolution(), widescreen);
     let (resolution, enumerated) = match (settings.resolution(), game) {
         (Resolution::Custom(width, height), Resolution::Custom(game_w, game_h)) => (
             format!("h:{width}, v:{height}"),
@@ -174,10 +195,10 @@ pub fn install(
     runtime: &Path,
     components: &Path,
     settings: &Settings,
-    wine: bool,
-    gamescope: bool,
-    output: Option<u32>,
+    widescreen: bool,
+    platform: &Platform,
 ) -> Result<(), String> {
+    let wine = platform.wine;
     validate(components, settings.controller(), wine)?;
     let mut ledger = Ledger::load(game, runtime, OWNERSHIP_FILE);
     for name in DGVOODOO_DLLS {
@@ -196,7 +217,7 @@ pub fn install(
     }
     fsx::write_atomic(
         &runtime.join("dgVoodoo.conf"),
-        dgvoodoo_conf(settings, wine, gamescope, output),
+        dgvoodoo_conf(settings, widescreen, platform),
     )
     .map_err(|error| format!("cannot write dgVoodoo.conf: {error}"))?;
 
@@ -278,7 +299,11 @@ mod tests {
             vsync: Some(true),
             ..Settings::default()
         };
-        let text = dgvoodoo_conf(&settings, false, false, None);
+        let text = dgvoodoo_conf(
+            &settings,
+            settings.widescreen(),
+            &Platform::new(false, false, None),
+        );
         let general = ini_section(&text, "GeneralExt");
         let directx = ini_section(&text, "DirectX");
         let extended = ini_section(&text, "DirectXExt");
@@ -301,7 +326,7 @@ mod tests {
         for (wine, gamescope, attributes) in
             [(false, false, ""), (true, true, ""), (true, false, "fake")]
         {
-            let text = dgvoodoo_conf(&settings, wine, gamescope, None);
+            let text = dgvoodoo_conf(&settings, true, &Platform::new(wine, gamescope, None));
             let general = ini_section(&text, "General");
             let extended = ini_section(&text, "GeneralExt");
             assert_eq!(general["FullScreenMode"], "true");
@@ -313,13 +338,16 @@ mod tests {
     }
 
     #[test]
-    fn widescreen_off_keeps_native_mode_and_aspect() {
+    fn other_shapes_keep_their_native_mode_and_aspect() {
         let settings = Settings {
             resolution: Some(Resolution::Custom(2560, 1600)),
-            widescreen: Some(false),
             ..Settings::default()
         };
-        let text = dgvoodoo_conf(&settings, true, false, Some(2));
+        let text = dgvoodoo_conf(
+            &settings,
+            settings.widescreen(),
+            &Platform::new(true, false, Some(2)),
+        );
         let general = ini_section(&text, "General");
         assert_eq!(general["ScalingMode"], "stretched_ar");
         assert_eq!(general["FullScreenOutput"], "2");
@@ -339,7 +367,11 @@ mod tests {
             resolution: Some(Resolution::Original),
             ..Settings::default()
         };
-        let text = dgvoodoo_conf(&settings, false, false, None);
+        let text = dgvoodoo_conf(
+            &settings,
+            settings.widescreen(),
+            &Platform::new(false, false, None),
+        );
         assert_eq!(ini_section(&text, "DirectX")["Resolution"], "unforced");
         assert_eq!(
             ini_section(&text, "DirectXExt")["ExtraEnumeratedResolutions"],
@@ -350,9 +382,8 @@ mod tests {
 
     #[test]
     fn cli_over_cfg_reaches_dgvoodoo_and_the_registry_mode() {
-        let (saved, warnings) = Settings::parse_file(
-            "resolution = 1920x1080\nwidescreen = on\nfps_limit = 60\nvsync = on\n",
-        );
+        let (saved, warnings) =
+            Settings::parse_file("resolution = 1920x1080\nfps_limit = 60\nvsync = on\n");
         assert!(warnings.is_empty());
         let cli = crate::config::parse_args(
             [
@@ -367,7 +398,11 @@ mod tests {
         )
         .unwrap();
         let settings = saved.merged(cli.settings);
-        let text = dgvoodoo_conf(&settings, false, false, None);
+        let text = dgvoodoo_conf(
+            &settings,
+            settings.widescreen(),
+            &Platform::new(false, false, None),
+        );
         assert_eq!(
             ini_section(&text, "DirectX")["Resolution"],
             "h:2560, v:1440"
@@ -379,8 +414,20 @@ mod tests {
             "1920x1440@60"
         );
         assert_eq!(
-            registry::game_mode(settings.resolution(), settings.widescreen()),
+            registry::game_mode(settings.resolution(), true),
             Resolution::Custom(1920, 1440)
+        );
+    }
+
+    #[test]
+    fn an_unknown_build_at_16_by_9_renders_natively_without_stretching() {
+        // No fix in the exe: the game draws 16:9 itself, dgVoodoo keeps it.
+        let settings = Settings::default();
+        let text = dgvoodoo_conf(&settings, false, &Platform::default());
+        assert_eq!(ini_section(&text, "General")["ScalingMode"], "stretched_ar");
+        assert_eq!(
+            ini_section(&text, "DirectXExt")["ExtraEnumeratedResolutions"],
+            "1920x1080@60"
         );
     }
 
@@ -388,12 +435,15 @@ mod tests {
     fn steam_deck_preset_keeps_its_native_16_by_10_mode() {
         let settings = Settings {
             resolution: Some(Resolution::Custom(1280, 800)),
-            widescreen: Some(false),
             fps_limit: Some(60),
             ..Settings::default()
         };
         // gamescope on the Deck: real fullscreen, one output.
-        let text = dgvoodoo_conf(&settings, true, true, None);
+        let text = dgvoodoo_conf(
+            &settings,
+            settings.widescreen(),
+            &Platform::new(true, true, None),
+        );
         assert_eq!(ini_section(&text, "General")["ScalingMode"], "stretched_ar");
         assert_eq!(ini_section(&text, "GeneralExt")["FullscreenAttributes"], "");
         assert_eq!(ini_section(&text, "GeneralExt")["FPSLimit"], "60");
@@ -444,8 +494,7 @@ mod tests {
             &components,
             &Settings::default(),
             true,
-            false,
-            None,
+            &Platform::new(true, false, None),
         )
         .unwrap();
         assert_eq!(
@@ -495,9 +544,8 @@ mod tests {
                 &runtime,
                 &components,
                 &Settings::default(),
-                false,
-                false,
-                None,
+                true,
+                &Platform::new(false, false, None),
             )
             .unwrap_err();
             assert!(error.contains("not launcher-owned"), "{error}");
@@ -527,8 +575,7 @@ mod tests {
             &components,
             &Settings::default(),
             true,
-            false,
-            None,
+            &Platform::new(true, false, None),
         )
         .unwrap();
         let ledger = Ledger::load(&game, &runtime, OWNERSHIP_FILE);
@@ -547,8 +594,7 @@ mod tests {
             &components,
             &Settings::default(),
             true,
-            false,
-            None,
+            &Platform::new(true, false, None),
         )
         .unwrap();
         assert_eq!(
@@ -583,9 +629,8 @@ mod tests {
             &runtime,
             &components,
             &Settings::default(),
-            false,
-            false,
-            None,
+            true,
+            &Platform::new(false, false, None),
         )
         .unwrap();
         assert_eq!(
@@ -619,9 +664,8 @@ mod tests {
                 &runtime,
                 &components,
                 &Settings::default(),
-                false,
-                false,
-                None,
+                true,
+                &Platform::new(false, false, None),
             )
             .unwrap_err();
             assert!(error.contains("not launcher-owned"), "{error}");
@@ -644,7 +688,15 @@ mod tests {
         fs::create_dir_all(&runtime).unwrap();
         write_components(&components);
         let settings = Settings::default();
-        install(&game, &runtime, &components, &settings, true, false, None).unwrap();
+        install(
+            &game,
+            &runtime,
+            &components,
+            &settings,
+            settings.widescreen(),
+            &Platform::new(true, false, None),
+        )
+        .unwrap();
         for name in DXVK_DLLS {
             assert_eq!(
                 fs::read(runtime.join(name)).unwrap(),
@@ -658,7 +710,15 @@ mod tests {
             )["FullscreenAttributes"],
             "fake"
         );
-        install(&game, &runtime, &components, &settings, false, false, None).unwrap();
+        install(
+            &game,
+            &runtime,
+            &components,
+            &settings,
+            settings.widescreen(),
+            &Platform::new(false, false, None),
+        )
+        .unwrap();
         for name in DXVK_DLLS {
             assert!(!runtime.join(name).exists());
         }
@@ -677,7 +737,15 @@ mod tests {
         write_components(&components);
         fs::write(runtime.join("dsound.dll"), b"user DSOAL").unwrap();
         let on = Settings::default();
-        install(&game, &runtime, &components, &on, false, false, None).unwrap();
+        install(
+            &game,
+            &runtime,
+            &components,
+            &on,
+            on.widescreen(),
+            &Platform::new(false, false, None),
+        )
+        .unwrap();
         assert_eq!(
             fs::read(runtime.join(XIDI_DLL)).unwrap(),
             b"bundle dinput8.dll"
@@ -688,7 +756,15 @@ mod tests {
             controller: Some(false),
             ..Settings::default()
         };
-        install(&game, &runtime, &components, &off, false, false, None).unwrap();
+        install(
+            &game,
+            &runtime,
+            &components,
+            &off,
+            off.widescreen(),
+            &Platform::new(false, false, None),
+        )
+        .unwrap();
         assert!(!runtime.join(XIDI_DLL).exists());
         assert!(!runtime.join("Xidi.ini").exists());
         assert_eq!(fs::read(runtime.join("dsound.dll")).unwrap(), b"user DSOAL");
@@ -711,9 +787,8 @@ mod tests {
             &runtime,
             &components,
             &Settings::default(),
-            false,
-            false,
-            None,
+            true,
+            &Platform::new(false, false, None),
         )
         .unwrap();
         fs::write(game.join(XIDI_DLL), b"source proxy").unwrap();
@@ -721,11 +796,27 @@ mod tests {
             controller: Some(false),
             ..Settings::default()
         };
-        install(&game, &runtime, &components, &off, false, false, None).unwrap();
+        install(
+            &game,
+            &runtime,
+            &components,
+            &off,
+            off.widescreen(),
+            &Platform::new(false, false, None),
+        )
+        .unwrap();
         assert_eq!(fs::read(runtime.join(XIDI_DLL)).unwrap(), b"source proxy");
         // A second launch with the controller still off must accept the
         // game's own DLL (seen in the field: the game folder shipped Xidi).
-        install(&game, &runtime, &components, &off, false, false, None).unwrap();
+        install(
+            &game,
+            &runtime,
+            &components,
+            &off,
+            off.widescreen(),
+            &Platform::new(false, false, None),
+        )
+        .unwrap();
         assert_eq!(fs::read(runtime.join(XIDI_DLL)).unwrap(), b"source proxy");
         for path in [game, runtime, components] {
             fs::remove_dir_all(path).unwrap();
@@ -745,9 +836,8 @@ mod tests {
             &runtime,
             &components,
             &Settings::default(),
-            false,
-            false,
-            None,
+            true,
+            &Platform::new(false, false, None),
         )
         .unwrap();
         fs::write(runtime.join(XIDI_DLL), b"user changed").unwrap();
@@ -756,7 +846,15 @@ mod tests {
             controller: Some(false),
             ..Settings::default()
         };
-        let error = install(&game, &runtime, &components, &off, false, false, None).unwrap_err();
+        let error = install(
+            &game,
+            &runtime,
+            &components,
+            &off,
+            off.widescreen(),
+            &Platform::new(false, false, None),
+        )
+        .unwrap_err();
         assert!(error.contains("refusing to replace or remove"), "{error}");
         assert_eq!(fs::read(runtime.join(XIDI_DLL)).unwrap(), b"user changed");
         assert_eq!(fs::read(game.join(XIDI_DLL)).unwrap(), b"source proxy");

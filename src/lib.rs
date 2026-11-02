@@ -10,5 +10,6 @@ pub mod form;
 pub mod profile;
 pub mod registry;
 pub mod runtime;
+pub mod window;
 
 pub const GAME_EXE: &str = "cmr4.exe";

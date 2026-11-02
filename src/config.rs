@@ -1,16 +1,22 @@
 //! Command-line and commented `launcher.cfg` settings.
 //!
-//! Reading, line editing and value parsing are `rea_launcher::cfg`; the
-//! keys, defaults, template and what a launch remembers are CMR4's.
+//! Every option is declared once in [`OPTIONS`] (`rea_launcher::cfg::spec`):
+//! the file and flag parsing, `--help`, the first-run template and the
+//! window's rows come from it. The keys, defaults, looks and what a launch
+//! remembers are CMR4's.
 
 use std::path::{Path, PathBuf};
 
-use rea_launcher::cfg::{self, ArgError, Rejected, need, on_off, parse_bool};
+use rea_launcher::cfg::{
+    self, ArgError, KeyStyle, Kind, OptionSpec, Rejected, Value, on_off, spec,
+};
 pub use rea_launcher::cfg::{clear_key, read_file, set_key};
 use rea_launcher::display;
 
 pub const FILE_NAME: &str = "launcher.cfg";
 pub const DEFAULT_RESOLUTION: Resolution = Resolution::Custom(1920, 1080);
+/// The Steam Deck's own screen, landscape.
+pub const STEAM_DECK_SCREEN: (u32, u32) = display::STEAM_DECK_SCREEN;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Resolution {
@@ -43,22 +49,171 @@ pub fn default_resolution(screen: Option<(u32, u32)>) -> Resolution {
     Resolution::Custom(width, height)
 }
 
-pub fn validate_picture(settings: &Settings) -> Result<(), String> {
-    if settings.widescreen() && !settings.resolution().is_exact_16_by_9() {
-        return Err(format!(
-            "the 16:9 Low widescreen patch requires an exact 16:9 custom resolution (current: {}); choose 16:9 or turn widescreen off",
-            settings.resolution().value()
-        ));
+/// Picture presets: the window's look cards and `--look`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Look {
+    /// The game's own resolution and view.
+    Original,
+    /// The largest exact 16:9 that fits the screen (up to 3840x2160), so
+    /// the widescreen fix applies.
+    Widescreen,
+    /// Native 1280x800 (16:10: the game's own view, correct proportions)
+    /// at a 60 fps cap.
+    SteamDeck,
+    /// Whatever the Picture tab says (the window only; never a value).
+    Custom,
+}
+
+impl Look {
+    pub const ALL: [Look; 4] = [
+        Look::Original,
+        Look::Widescreen,
+        Look::SteamDeck,
+        Look::Custom,
+    ];
+
+    /// The `--look`/`look =` value.
+    pub fn value(self) -> &'static str {
+        match self {
+            Look::Original => "original",
+            Look::Widescreen => "widescreen",
+            Look::SteamDeck => "steam_deck",
+            Look::Custom => "custom",
+        }
     }
-    Ok(())
+
+    fn from_value(value: &str) -> Option<Look> {
+        Look::ALL.into_iter().find(|look| look.value() == value)
+    }
+
+    /// The resolution this look sets on `screen` (None: Custom).
+    pub fn resolution(self, screen: Option<(u32, u32)>) -> Option<Resolution> {
+        match self {
+            Look::Original => Some(Resolution::Original),
+            Look::Widescreen => Some(default_resolution(screen)),
+            Look::SteamDeck => Some(Resolution::Custom(STEAM_DECK_SCREEN.0, STEAM_DECK_SCREEN.1)),
+            Look::Custom => None,
+        }
+    }
+
+    /// The frame-rate cap this look sets (None: left as it is).
+    pub fn fps_limit(self) -> Option<u32> {
+        (self == Look::SteamDeck).then_some(60)
+    }
+}
+
+/// The look to recommend: Steam Deck on a 1280x800 screen (either
+/// orientation), otherwise Widescreen.
+pub fn recommended(screen: Option<(u32, u32)>) -> Look {
+    if display::is_steam_deck(screen) {
+        Look::SteamDeck
+    } else {
+        Look::Widescreen
+    }
+}
+
+const LOOKS: &[(&str, &str)] = &[
+    ("original", "Original"),
+    ("widescreen", "Widescreen"),
+    ("steam_deck", "Steam Deck"),
+];
+
+/// Every option: `launcher.cfg` key, flag (`fps_limit` ↔ `--fps-limit`),
+/// values, the window's label and a one-line description.
+pub const OPTIONS: &[OptionSpec] = &[
+    OptionSpec::new(
+        "game",
+        Kind::Path,
+        "Game folder",
+        "The folder of your installed game, with cmr4.exe. It is only read, never changed.",
+    ),
+    OptionSpec::new(
+        "look",
+        Kind::Choice(LOOKS),
+        "Look",
+        "Sets the picture in one go: Original as the game shipped, Widescreen fitted to your screen, or Steam Deck (1280x800 at 60 fps).",
+    ),
+    OptionSpec::new(
+        "resolution",
+        Kind::Size {
+            min: (320, 240),
+            max: (7680, 4320),
+            aliases: cfg::ORIGINAL,
+        },
+        "Resolution",
+        "The picture size. A 16:9 size shows the full widescreen view; other shapes keep the game's own view. Original keeps the game's own mode.",
+    )
+    .with_example("1920x1080"),
+    OptionSpec::new(
+        "fps_limit",
+        Kind::Range { min: 0, max: 1000 },
+        "Frame-rate cap",
+        "The most frames per second the game draws; 0 or off for no cap.",
+    )
+    .with_example("60"),
+    OptionSpec::new(
+        "vsync",
+        Kind::Toggle,
+        "VSync",
+        "Waits for the screen before showing each frame: no tearing, slightly more input delay.",
+    ),
+    OptionSpec::new(
+        "controller",
+        Kind::Toggle,
+        "Gamepad",
+        "Lets the game use an Xbox-style pad: the left stick steers and the triggers are analogue pedals. Off: the game reads the pad on its own (under Wine only its buttons work).",
+    ),
+    OptionSpec::new(
+        "runtime",
+        Kind::Path,
+        "Private copy folder",
+        "Where the launcher keeps its own copy of the game, with your saves and settings. Empty: %LOCALAPPDATA%\\CMR4Launcher\\CMR4. It must be outside the game folder.",
+    ),
+];
+
+/// `widescreen = on|off` and `--widescreen on|off` from launchers before
+/// 0.3.0. The switch only ever worked with a 16:9 resolution, so it was
+/// removed (the resolution decides); old files and flags are accepted and
+/// ignored.
+pub const REMOVED: &[&str] = &["widescreen"];
+
+/// The launcher's own flags that take no value, with their `--help` text.
+pub const SWITCHES: [(&str, &str); 4] = [
+    (
+        "--check",
+        "check the game and settings, write launcher.log; start nothing",
+    ),
+    (
+        "--no-window",
+        "play with the saved settings and these flags, no window",
+    ),
+    (
+        "--settings",
+        "only show the settings window (the Linux helper uses it)",
+    ),
+    (
+        "--linux",
+        "the window was started by the Linux helper (cmr4-play)",
+    ),
+];
+
+/// The spelling the table takes: `fps_limit = off` (what the window and
+/// older launchers wrote) is 0, no cap.
+fn normalize<'a>(key: &str, value: &'a str) -> &'a str {
+    if key == "fps_limit" && value.trim().eq_ignore_ascii_case("off") {
+        "0"
+    } else {
+        value
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Settings {
     pub game: Option<PathBuf>,
     pub runtime: Option<PathBuf>,
+    pub look: Option<Look>,
     pub resolution: Option<Resolution>,
-    pub widescreen: Option<bool>,
+    /// 0 is no cap.
     pub fps_limit: Option<u32>,
     pub vsync: Option<bool>,
     pub controller: Option<bool>,
@@ -69,8 +224,11 @@ impl Settings {
         self.resolution.unwrap_or(DEFAULT_RESOLUTION)
     }
 
+    /// Whether the widescreen fix is wanted: exactly when the resolution
+    /// is 16:9 (it used to be its own `widescreen` setting, which only
+    /// ever worked together with a 16:9 resolution).
     pub fn widescreen(&self) -> bool {
-        self.widescreen.unwrap_or(true)
+        self.resolution().is_exact_16_by_9()
     }
 
     pub fn fps_limit(&self) -> Option<u32> {
@@ -85,69 +243,97 @@ impl Settings {
         self.controller.unwrap_or(true)
     }
 
+    /// Fills the values a `look` sets on `screen`, where this same source
+    /// (the file, or the command line) didn't set them itself.
+    pub fn resolve_look(mut self, screen: Option<(u32, u32)>) -> Settings {
+        if let Some(look) = self.look {
+            self.resolution = self.resolution.or(look.resolution(screen));
+            self.fps_limit = self.fps_limit.or(look.fps_limit());
+        }
+        self
+    }
+
     pub fn merged(self, over: Settings) -> Settings {
         Settings {
             game: over.game.or(self.game),
             runtime: over.runtime.or(self.runtime),
+            look: over.look.or(self.look),
             resolution: over.resolution.or(self.resolution),
-            widescreen: over.widescreen.or(self.widescreen),
             fps_limit: over.fps_limit.or(self.fps_limit),
             vsync: over.vsync.or(self.vsync),
             controller: over.controller.or(self.controller),
         }
     }
 
-    /// Takes one `key = value` from the file or a `--key value` flag.
-    fn apply(&mut self, key: &str, value: &str) -> Result<(), Rejected> {
-        match key {
-            "game" => self.game = Some(value.into()),
-            "runtime" => self.runtime = Some(value.into()),
-            "resolution" => {
-                self.resolution = Some(need(parse_resolution(value), RESOLUTION_NEEDS)?);
+    /// Takes one checked value from the file or a flag.
+    fn apply(&mut self, key: &str, value: Value) -> Result<(), Rejected> {
+        match (key, value) {
+            ("game", Value::Text(path)) => self.game = Some(path.into()),
+            ("runtime", Value::Text(path)) => self.runtime = Some(path.into()),
+            ("look", Value::Choice(look)) => self.look = Look::from_value(look),
+            ("resolution", Value::Size(cfg::Resolution::Size(w, h))) => {
+                self.resolution = Some(Resolution::Custom(w, h));
             }
-            "fps_limit" => self.fps_limit = Some(need(parse_fps(value), FPS_NEEDS)?),
-            "widescreen" => self.widescreen = Some(need(parse_bool(value), cfg::ON_OFF)?),
-            "vsync" => self.vsync = Some(need(parse_bool(value), cfg::ON_OFF)?),
-            "controller" => self.controller = Some(need(parse_bool(value), cfg::ON_OFF)?),
+            ("resolution", Value::Size(_)) => self.resolution = Some(Resolution::Original),
+            ("fps_limit", Value::Number(fps)) => self.fps_limit = Some(fps),
+            ("vsync", Value::Toggle(on)) => self.vsync = Some(on),
+            ("controller", Value::Toggle(on)) => self.controller = Some(on),
             _ => return Err(Rejected::Unknown),
         }
         Ok(())
     }
 
+    /// The settings in `text` and a warning per line that was refused.
     pub fn parse_file(text: &str) -> (Settings, Vec<String>) {
         let mut settings = Settings::default();
-        let warnings = cfg::parse(text, FILE_NAME, |key, value| settings.apply(key, value));
+        let warnings = cfg::parse(text, FILE_NAME, |key, value| {
+            if REMOVED.contains(&key) {
+                return Ok(());
+            }
+            spec::dispatch(OPTIONS, key, normalize(key, value), &mut |key, value| {
+                settings.apply(key, value)
+            })
+        });
         (settings, warnings)
+    }
+
+    /// The text of each option's value, as the file and the flags spell
+    /// it (`None` when unset).
+    pub fn value_of(&self, key: &str) -> Option<String> {
+        let path = |path: &Option<PathBuf>| path.as_ref().map(|path| path.display().to_string());
+        match key {
+            "game" => path(&self.game),
+            "runtime" => path(&self.runtime),
+            "look" => self.look.map(|look| look.value().into()),
+            "resolution" => self.resolution.map(Resolution::value),
+            "fps_limit" => self
+                .fps_limit
+                .map(|n| if n == 0 { "off".into() } else { n.to_string() }),
+            "vsync" => self.vsync.map(|v| on_off(v).into()),
+            "controller" => self.controller.map(|v| on_off(v).into()),
+            _ => None,
+        }
     }
 
     /// The file `text` with these values written in. Every other line, the
     /// player's comments and keys this launcher doesn't know included, is
-    /// kept; a value that is `None` is commented out so its default applies.
-    /// An empty or missing file starts from the commented `TEMPLATE`.
+    /// kept; a value that is `None` is commented out so its default applies
+    /// (so is a removed key). An empty or missing file starts from
+    /// [`template`].
     pub fn save_into(&self, text: &str) -> String {
-        let path = |path: &Option<PathBuf>| path.as_ref().map(|path| path.display().to_string());
         let mut out = if text.trim().is_empty() {
-            TEMPLATE.to_string()
+            template()
         } else {
             refresh_header(text)
         };
-        for (key, value) in [
-            ("game", path(&self.game)),
-            ("runtime", path(&self.runtime)),
-            ("resolution", self.resolution.map(Resolution::value)),
-            ("widescreen", self.widescreen.map(|v| on_off(v).into())),
-            (
-                "fps_limit",
-                self.fps_limit
-                    .map(|n| if n == 0 { "off".into() } else { n.to_string() }),
-            ),
-            ("vsync", self.vsync.map(|v| on_off(v).into())),
-            ("controller", self.controller.map(|v| on_off(v).into())),
-        ] {
-            out = match value {
-                Some(value) => set_key(&out, key, &value),
-                None => clear_key(&out, key),
+        for option in OPTIONS {
+            out = match self.value_of(option.key) {
+                Some(value) => spec::set_key(&out, option, &value),
+                None => clear_key(&out, option.key),
             };
+        }
+        for key in REMOVED {
+            out = clear_key(&out, key);
         }
         out
     }
@@ -165,9 +351,10 @@ pub fn should_remember_game(saved: Option<&Path>, cli: Option<&Path>) -> bool {
 /// other line; None when nothing changes. Two values are remembered:
 /// - the game folder, as `should_remember_game` decides;
 /// - `picked`, the resolution the launcher picked from the screen, when
-///   neither the file nor a `--resolution` flag set one. The caller passes
-///   None inside gamescope, whose output is only `cmr4-play`'s 1024x768
-///   fallback and would be saved for good. A flag's value is never saved.
+///   neither the file nor the command line (`--resolution`, `--look`) set
+///   one. The caller passes None inside gamescope, whose output is only
+///   `cmr4-play`'s 1024x768 fallback and would be saved for good. A flag's
+///   value is never saved.
 pub fn remember(
     text: &str,
     saved: &Settings,
@@ -176,12 +363,13 @@ pub fn remember(
     picked: Option<Resolution>,
 ) -> Option<String> {
     let game_changed = should_remember_game(saved.game.as_deref(), cli.game.as_deref());
-    let auto_resolution = picked.filter(|_| saved.resolution.is_none() && cli.resolution.is_none());
+    let set = |s: &Settings| s.resolution.is_some() || s.look.is_some();
+    let auto_resolution = picked.filter(|_| !set(saved) && !set(cli));
     if !game_changed && auto_resolution.is_none() {
         return None;
     }
     let mut out = if text.trim().is_empty() {
-        TEMPLATE.to_string()
+        template()
     } else {
         refresh_header(text)
     };
@@ -194,37 +382,14 @@ pub fn remember(
     Some(out)
 }
 
-/// A new `launcher.cfg`: every key with its comment, unset (defaults apply).
-pub const TEMPLATE: &str = "\
-# Colin McRae Rally 04 launcher settings.
-# One setting per line as key = value; # starts a comment. An empty value
-# uses the default. Command-line options override these values for one run;
-# only --game is remembered here. An unset resolution is filled in with the
-# one the launcher picks from the screen.
+const HEADING: &str = "\
+Colin McRae Rally 04 launcher settings.
+One setting per line as key = value; # starts a comment. An unset value uses the default. Command-line options override these values for one run; only --game is remembered here. An unset resolution is filled in with the one the launcher picks from the screen.";
 
-# The installed game folder. It is only read, never modified.
-game =
-
-# The private writable runtime, including saves and settings.
-# Default: %LOCALAPPDATA%\\CMR4Launcher\\CMR4
-runtime =
-
-# Picture size: WIDTHxHEIGHT, or original to keep the game's mode.
-# Default: the largest exact 16:9 that fits the screen.
-resolution =
-
-# Apply the tested 16:9 Low aspect patch to the private cmr4.exe (on/off).
-widescreen =
-
-# dgVoodoo frame-rate cap: 1 to 1000, or off.
-fps_limit =
-
-# Force vertical sync in dgVoodoo (on/off).
-vsync =
-
-# Xidi gamepad: stick steers, RT/LT drive the pedal (Y) axis (on/off).
-controller =
-";
+/// A new `launcher.cfg`: every option with its description, unset.
+pub fn template() -> String {
+    spec::template(HEADING, OPTIONS)
+}
 
 /// v0.1.0 and v0.2.0 wrote this header line; it is no longer true.
 const STALE_HEADER: &str = "# Command-line options override these values and are saved.";
@@ -246,63 +411,55 @@ pub struct Cli {
     pub linux: bool,
 }
 
-pub const USAGE: &str = concat!(
-    "CMR4Launcher ",
-    env!("CARGO_PKG_VERSION"),
-    "\n\n",
-    "CMR4Launcher [options]\n\n",
-    "  --game <folder>       folder containing the installed cmr4.exe\n",
-    "  --runtime <folder>    private writable runtime folder\n",
-    "  --resolution WxH      exact 16:9 for widescreen, or original (default: screen fit)\n",
-    "  --widescreen on|off   tested 16:9 Low patch (default on; off for other aspects)\n",
-    "  --fps-limit N|off     dgVoodoo frame-rate cap\n",
-    "  --vsync on|off        force vertical sync (default off)\n",
-    "  --controller on|off   Xidi gamepad: stick steers, RT/LT are the pedals (default on)\n",
-    "  --check               validate the game and patch, remember --game; copy nothing\n",
-    "  --no-window           run without a settings window\n",
-    "  --help                show this help\n\n",
-    "The original game folder is never modified. Options override launcher.cfg for one\nrun; only --game is remembered there."
-);
-
-/// What `resolution` takes, for messages.
-const RESOLUTION_NEEDS: &str = "WIDTHxHEIGHT or original";
-/// What `fps_limit` takes, for messages.
-const FPS_NEEDS: &str = "1 to 1000 or off";
-/// The settings keys, which are also the `--flag` names.
-const KEYS: [&str; 7] = [
-    "game",
-    "runtime",
-    "resolution",
-    "widescreen",
-    "fps_limit",
-    "vsync",
-    "controller",
-];
-/// The launcher's own flags that take no value.
-const SWITCHES: [&str; 4] = ["--check", "--no-window", "--settings", "--linux"];
-
-fn parse_resolution(value: &str) -> Option<Resolution> {
-    match cfg::parse_resolution(value, (320, 240), (7680, 4320), cfg::ORIGINAL)? {
-        cfg::Resolution::Size(width, height) => Some(Resolution::Custom(width, height)),
-        _ => Some(Resolution::Original),
+/// `--help`: the options from [`OPTIONS`], then the switches.
+pub fn usage() -> String {
+    let mut out = format!(
+        "CMR4Launcher {}\n\nCMR4Launcher [options]\n\n",
+        env!("CARGO_PKG_VERSION")
+    );
+    out.push_str(&spec::usage(OPTIONS, KeyStyle::Underscore));
+    let width = SWITCHES
+        .iter()
+        .map(|(flag, _)| flag.len())
+        .max()
+        .unwrap_or(0);
+    for (flag, text) in SWITCHES.iter().chain(&[("--help", "show this help")]) {
+        out.push_str(&format!("  {flag:width$}  {text}\n"));
     }
-}
-
-fn parse_fps(value: &str) -> Option<u32> {
-    if value.trim().eq_ignore_ascii_case("off") {
-        return Some(0);
-    }
-    cfg::parse_range(value, 0..=1000)
+    out.push_str(
+        "\nWith no options the settings window opens. Options override launcher.cfg for one\n\
+         run; only --game is remembered there. The original game folder is never modified.\n",
+    );
+    out
 }
 
 pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Cli, String> {
     let mut cli = Cli::default();
     let mut settings = Settings::default();
-    match cfg::parse_args(args, &KEYS, &SWITCHES, |key, value| {
-        settings.apply(key, value)
-    }) {
-        Ok(switches) => {
-            for switch in switches {
+    // Removed flags and their value are dropped; `--fps-limit off` is 0.
+    let mut kept = Vec::new();
+    let mut args = args.into_iter();
+    while let Some(arg) = args.next() {
+        if REMOVED.iter().any(|key| cfg::key_flag(key) == arg) {
+            args.next();
+            continue;
+        }
+        let next = (arg == "--fps-limit").then(|| args.next()).flatten();
+        kept.push(arg);
+        if let Some(value) = next {
+            kept.push(normalize("fps_limit", &value).to_owned());
+        }
+    }
+    let switches: Vec<&str> = SWITCHES.iter().map(|(flag, _)| *flag).collect();
+    match spec::parse_args(
+        kept,
+        KeyStyle::Underscore,
+        OPTIONS,
+        &switches,
+        |key, value| settings.apply(key, value),
+    ) {
+        Ok(seen) => {
+            for switch in seen {
                 match switch.as_str() {
                     "--check" => cli.check = true,
                     "--no-window" => cli.no_window = true,
@@ -312,7 +469,7 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Cli, String
             }
         }
         Err(ArgError::Help(_)) => cli.help = true,
-        Err(error) => return Err(format!("{error}\n\n{USAGE}")),
+        Err(error) => return Err(format!("{error}\n\n{}", usage())),
     }
     cli.settings = settings;
     Ok(cli)
@@ -325,6 +482,9 @@ mod tests {
     fn args(values: &[&str]) -> Result<Cli, String> {
         parse_args(values.iter().map(|value| (*value).to_string()))
     }
+
+    const DECK: Option<(u32, u32)> = Some((1280, 800));
+    const UHD: Option<(u32, u32)> = Some((3840, 2160));
 
     #[test]
     fn defaults_match_the_tested_modern_setup() {
@@ -357,23 +517,40 @@ mod tests {
     }
 
     #[test]
-    fn widescreen_rejects_non_16_by_9_but_4_by_3_can_be_unpatched() {
-        let wide = Settings {
-            resolution: Some(Resolution::Custom(2560, 1080)),
-            ..Settings::default()
-        };
-        assert!(validate_picture(&wide).unwrap_err().contains("exact 16:9"));
-        let original = Settings {
-            resolution: Some(Resolution::Original),
-            ..Settings::default()
-        };
-        assert!(validate_picture(&original).is_err());
-        let four_three = Settings {
-            resolution: Some(Resolution::Custom(1600, 1200)),
-            widescreen: Some(false),
-            ..Settings::default()
-        };
-        assert_eq!(validate_picture(&four_three), Ok(()));
+    fn widescreen_follows_the_resolution() {
+        for (resolution, wide) in [
+            (Resolution::Custom(3840, 2160), true),
+            (Resolution::Custom(1360, 765), true),
+            (Resolution::Custom(2560, 1080), false),
+            (Resolution::Custom(1600, 1200), false),
+            (Resolution::Custom(1280, 800), false),
+            (Resolution::Original, false),
+        ] {
+            let settings = Settings {
+                resolution: Some(resolution),
+                ..Settings::default()
+            };
+            assert_eq!(settings.widescreen(), wide, "{resolution:?}");
+        }
+    }
+
+    #[test]
+    fn a_removed_widescreen_line_or_flag_is_ignored_and_commented_out_on_save() {
+        // What v0.2.0 wrote: widescreen = off next to a 16:9 resolution.
+        let old = "resolution = 1920x1080\r\nwidescreen = off\r\nvsync = on\r\n";
+        let (settings, warnings) = Settings::parse_file(old);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(settings.resolution, Some(Resolution::Custom(1920, 1080)));
+        assert!(settings.widescreen(), "the resolution decides now");
+        assert_eq!(settings.vsync, Some(true));
+        let saved = settings.save_into(old);
+        assert!(saved.contains("#widescreen =\r\n"), "{saved}");
+        assert!(!saved.contains("widescreen = off"));
+        assert_eq!(Settings::parse_file(&saved).0, settings);
+        // Steam launch options with --widescreen still work.
+        let cli = args(&["--widescreen", "off", "--vsync", "on", "--widescreen", "on"]).unwrap();
+        assert_eq!(cli.settings.vsync, Some(true));
+        assert!(args(&["--widescreen", "perhaps"]).is_ok());
     }
 
     #[test]
@@ -383,10 +560,10 @@ mod tests {
             r"D:\Games\CMR4",
             "--runtime",
             r"D:\Runtime",
+            "--look",
+            "steam_deck",
             "--resolution",
             "1920X1080",
-            "--widescreen",
-            "off",
             "--fps-limit",
             "120",
             "--vsync",
@@ -395,88 +572,120 @@ mod tests {
             "off",
             "--check",
             "--no-window",
+            "--settings",
+            "--linux",
         ])
         .unwrap();
-        assert_eq!(
-            cli.settings.resolution,
-            Some(Resolution::Custom(1920, 1080))
-        );
-        assert_eq!(cli.settings.widescreen, Some(false));
-        assert_eq!(cli.settings.fps_limit, Some(120));
-        assert_eq!(cli.settings.vsync, Some(true));
-        assert_eq!(cli.settings.controller, Some(false));
-        assert!(cli.check && cli.no_window && !cli.help);
-        assert!(args(&["--help"]).unwrap().help);
-        assert!(args(&["--resolution", "original"]).is_ok());
-        assert!(args(&["--fps-limit", "off"]).is_ok());
-        assert!(args(&["--resolution", "1x2"]).is_err());
-        assert!(args(&["--widescreen", "perhaps"]).is_err());
-        assert!(args(&["--game"]).is_err());
-        assert!(args(&["--bogus"]).is_err());
+        let s = &cli.settings;
+        assert_eq!(s.game.as_deref(), Some(Path::new(r"D:\Games\CMR4")));
+        assert_eq!(s.runtime.as_deref(), Some(Path::new(r"D:\Runtime")));
+        assert_eq!(s.look, Some(Look::SteamDeck));
+        assert_eq!(s.resolution, Some(Resolution::Custom(1920, 1080)));
+        assert_eq!(s.fps_limit, Some(120));
+        assert_eq!(s.vsync, Some(true));
+        assert_eq!(s.controller, Some(false));
+        assert!(cli.check && cli.no_window && cli.settings_window && cli.linux && !cli.help);
+    }
+
+    #[test]
+    fn bad_values_and_unknown_flags_say_what_they_need() {
+        for (argv, says) in [
+            (&["--resolution", "1x2"][..], "--resolution"),
+            (&["--resolution", "huge"], "WIDTHxHEIGHT or original"),
+            (&["--fps-limit", "1001"], "0 to 1000"),
+            (&["--fps-limit", "fast"], "0 to 1000"),
+            (&["--vsync", "perhaps"], "on or off"),
+            (&["--controller", "2"], "on or off"),
+            (&["--look", "4k"], "original, widescreen or steam_deck"),
+            (&["--game"], "--game"),
+            (&["--bogus"], "--bogus"),
+        ] {
+            let error = args(argv).unwrap_err();
+            assert!(error.contains(says), "{argv:?}: {error}");
+            assert!(
+                error.contains("CMR4Launcher [options]"),
+                "{argv:?}: no usage"
+            );
+        }
+    }
+
+    #[test]
+    fn help_is_generated_from_the_table_and_lists_every_flag() {
+        for help in ["--help", "-h", "/?"] {
+            assert!(args(&[help]).unwrap().help, "{help}");
+        }
+        let text = usage();
+        for option in OPTIONS {
+            let flag = option.flag_name(KeyStyle::Underscore);
+            assert!(text.contains(&flag), "{flag} missing from --help");
+            assert!(text.contains(option.label), "{} missing", option.label);
+        }
+        for (flag, _) in SWITCHES {
+            assert!(text.contains(flag), "{flag} missing from --help");
+        }
+        assert!(text.contains("--look original|widescreen|steam_deck"));
+        assert!(text.contains("--fps-limit <0-1000>"));
+        assert!(!text.contains("--widescreen"));
+    }
+
+    #[test]
+    fn looks_set_their_values_and_explicit_values_win() {
+        let deck = args(&["--look", "steam_deck"])
+            .unwrap()
+            .settings
+            .resolve_look(UHD);
+        assert_eq!(deck.resolution, Some(Resolution::Custom(1280, 800)));
+        assert_eq!(deck.fps_limit, Some(60));
+        let wide = args(&["--look", "widescreen"])
+            .unwrap()
+            .settings
+            .resolve_look(DECK);
+        assert_eq!(wide.resolution, Some(Resolution::Custom(1280, 720)));
+        assert_eq!(wide.fps_limit, None);
+        let original = args(&["--look", "original", "--fps-limit", "30"])
+            .unwrap()
+            .settings
+            .resolve_look(UHD);
+        assert_eq!(original.resolution, Some(Resolution::Original));
+        assert_eq!(original.fps_limit, Some(30));
+        let mixed = args(&["--look", "steam_deck", "--resolution", "1920x1080"])
+            .unwrap()
+            .settings
+            .resolve_look(UHD);
+        assert_eq!(mixed.resolution, Some(Resolution::Custom(1920, 1080)));
+        // A look on the command line beats the file's own values.
+        let (file, _) = Settings::parse_file("resolution = 1600x1200\nfps_limit = 144\n");
+        let merged = file.resolve_look(UHD).merged(deck);
+        assert_eq!(merged.resolution, Some(Resolution::Custom(1280, 800)));
+        assert_eq!(merged.fps_limit, Some(60));
+        // In the file, the explicit values win over its own look line.
+        let (file, _) = Settings::parse_file("resolution = 1600x1200\nlook = steam_deck\n");
+        let resolved = file.resolve_look(UHD);
+        assert_eq!(resolved.resolution, Some(Resolution::Custom(1600, 1200)));
+        assert_eq!(resolved.fps_limit, Some(60));
+        assert_eq!(recommended(DECK), Look::SteamDeck);
+        assert_eq!(recommended(Some((800, 1280))), Look::SteamDeck);
+        assert_eq!(recommended(UHD), Look::Widescreen);
+        assert_eq!(recommended(None), Look::Widescreen);
     }
 
     #[test]
     fn command_line_overrides_file_and_original_is_not_empty() {
-        let (saved, warnings) = Settings::parse_file(
-            "resolution = 1920x1080\nwidescreen = off\ncontroller = off\nfps_limit = 60\n",
-        );
+        let (saved, warnings) =
+            Settings::parse_file("resolution = 1920x1080\ncontroller = off\nfps_limit = 60\n");
         assert!(warnings.is_empty());
-        let over = args(&["--resolution", "original", "--widescreen", "on"])
-            .unwrap()
-            .settings;
+        let over = args(&["--resolution", "original"]).unwrap().settings;
         let merged = saved.merged(over);
         assert_eq!(merged.resolution(), Resolution::Original);
-        assert!(merged.widescreen());
+        assert!(!merged.widescreen());
         assert!(!merged.controller());
         assert_eq!(merged.fps_limit(), Some(60));
     }
 
     #[test]
-    fn rendered_file_is_commented_and_round_trips() {
-        let settings = Settings {
-            game: Some(PathBuf::from(r"C:\Games\CMR 04")),
-            runtime: Some(PathBuf::from(r"C:\Runtime")),
-            ..Settings::default()
-        };
-        let text = settings.save_into("");
-        assert!(text.contains("# The installed game folder"));
-        let (read, warnings) = Settings::parse_file(&text);
-        assert!(warnings.is_empty(), "{warnings:?}");
-        assert_eq!(read.game, settings.game);
-        assert_eq!(read.runtime, settings.runtime);
-        assert_eq!(read.resolution(), DEFAULT_RESOLUTION);
-        assert!(read.widescreen());
-        assert!(read.controller());
-    }
-
-    #[test]
-    fn hidden_helper_flags_and_help_aliases_parse() {
-        let cli = args(&["--settings", "--linux"]).unwrap();
-        assert!(cli.settings_window && cli.linux && !cli.no_window && !cli.check);
-        assert_eq!(cli.settings, Settings::default());
-        for help in ["--help", "-h", "/?"] {
-            assert!(args(&[help]).unwrap().help, "{help}");
-        }
-        for flag in [
-            "--game",
-            "--runtime",
-            "--resolution",
-            "--widescreen",
-            "--fps-limit",
-            "--vsync",
-            "--controller",
-            "--check",
-            "--no-window",
-            "--help",
-        ] {
-            assert!(USAGE.contains(flag), "{flag} missing from USAGE");
-        }
-    }
-
-    #[test]
     fn cli_off_values_override_saved_on_values() {
         let (saved, warnings) =
-            Settings::parse_file("fps_limit = 60\nvsync = on\ncontroller = on\nwidescreen = on\n");
+            Settings::parse_file("fps_limit = 60\nvsync = on\ncontroller = on\n");
         assert!(warnings.is_empty());
         let over = args(&[
             "--fps-limit",
@@ -485,17 +694,14 @@ mod tests {
             "off",
             "--controller",
             "off",
-            "--widescreen",
-            "off",
         ])
         .unwrap()
         .settings;
         let merged = saved.clone().merged(over);
         assert_eq!(merged.fps_limit(), None);
-        assert!(!merged.vsync() && !merged.controller() && !merged.widescreen());
+        assert!(!merged.vsync() && !merged.controller());
         // Absent CLI values keep the saved ones.
-        let kept = saved.clone().merged(Settings::default());
-        assert_eq!(kept, saved);
+        assert_eq!(saved.clone().merged(Settings::default()), saved);
     }
 
     #[test]
@@ -515,34 +721,45 @@ mod tests {
             assert_eq!(file.vsync, Some(expected), "{raw}");
             assert_eq!(args(&["--vsync", raw]).unwrap().settings.vsync, file.vsync);
         }
-        for (raw, expected) in [("off", Some(0)), ("0", Some(0)), ("1000", Some(1000))] {
-            let (file, _) = Settings::parse_file(&format!("fps_limit = {raw}\n"));
-            assert_eq!(file.fps_limit, expected, "{raw}");
+        for (raw, expected) in [("off", 0), ("OFF", 0), ("0", 0), ("1000", 1000)] {
+            let (file, warnings) = Settings::parse_file(&format!("fps_limit = {raw}\n"));
+            assert!(warnings.is_empty(), "{raw}");
+            assert_eq!(file.fps_limit, Some(expected), "{raw}");
             assert_eq!(
                 args(&["--fps-limit", raw]).unwrap().settings.fps_limit,
-                expected
+                Some(expected)
             );
         }
         for raw in ["1001", "-5", "fast"] {
-            assert!(
+            assert_eq!(
                 Settings::parse_file(&format!("fps_limit = {raw}\n"))
                     .1
-                    .len()
-                    == 1
+                    .len(),
+                1
             );
             assert!(args(&["--fps-limit", raw]).is_err(), "{raw}");
         }
         for raw in ["319x240", "320x239", "7681x4320", "1920*1080", "x1080"] {
-            assert!(
+            assert_eq!(
                 Settings::parse_file(&format!("resolution = {raw}\n"))
                     .1
-                    .len()
-                    == 1
+                    .len(),
+                1
             );
             assert!(args(&["--resolution", raw]).is_err(), "{raw}");
         }
-        let (file, _) = Settings::parse_file("resolution = 1920X1080\n");
-        assert_eq!(file.resolution, Some(Resolution::Custom(1920, 1080)));
+        for raw in ["1920X1080", "1920×1080", "1920x1080"] {
+            let (file, _) = Settings::parse_file(&format!("resolution = {raw}\n"));
+            assert_eq!(
+                file.resolution,
+                Some(Resolution::Custom(1920, 1080)),
+                "{raw}"
+            );
+        }
+        for raw in ["Steam_Deck", "ORIGINAL", "widescreen"] {
+            let (file, warnings) = Settings::parse_file(&format!("look = {raw}\n"));
+            assert!(warnings.is_empty() && file.look.is_some(), "{raw}");
+        }
     }
 
     #[test]
@@ -560,8 +777,8 @@ mod tests {
         let settings = Settings {
             game: Some(PathBuf::from(r"C:\Games\CMR 04")),
             runtime: Some(PathBuf::from(r"D:\Runtime")),
+            look: Some(Look::Original),
             resolution: Some(Resolution::Original),
-            widescreen: Some(false),
             fps_limit: Some(144),
             vsync: Some(true),
             controller: Some(false),
@@ -586,6 +803,10 @@ mod tests {
         assert!(settings.game.is_some());
         assert_eq!(settings.resolution, None);
         assert_eq!(warnings.len(), 3);
+        assert!(
+            warnings[0].contains("WIDTHxHEIGHT or original"),
+            "{warnings:?}"
+        );
         assert!(warnings[2].contains("line 4: unknown setting \"future\""));
     }
 
@@ -641,27 +862,14 @@ mod tests {
             text,
             "game = D:\\CMR4\n# my comment\nresolution = 2560x1440\n"
         );
-        // --resolution: a one-run override, never saved.
-        let flag = args(&["--resolution", "1920x1080"]).unwrap().settings;
-        assert_eq!(
-            remember(
-                file,
-                &saved,
-                &flag,
-                game,
-                Some(Resolution::Custom(1920, 1080))
-            ),
-            None
-        );
+        // --resolution and --look: one-run overrides, never saved.
+        for flag in [&["--resolution", "1920x1080"][..], &["--look", "original"]] {
+            let flag = args(flag).unwrap().settings;
+            assert_eq!(remember(file, &saved, &flag, game, picked), None);
+        }
         // A first launch with a flag remembers only the game folder.
-        let fresh = remember(
-            "",
-            &Settings::default(),
-            &flag,
-            game,
-            Some(Resolution::Custom(1920, 1080)),
-        )
-        .unwrap();
+        let flag = args(&["--resolution", "1920x1080"]).unwrap().settings;
+        let fresh = remember("", &Settings::default(), &flag, game, picked).unwrap();
         assert!(fresh.starts_with("# Colin McRae Rally 04 launcher settings."));
         let (read, _) = Settings::parse_file(&fresh);
         assert_eq!(read.game.as_deref(), Some(game));
@@ -686,21 +894,23 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(FILE_NAME);
         assert!(read_file(&path).unwrap().is_none());
-        // Notepad ANSI (Windows-1252): "C:\Jogos\Colin McRae Rally 04 Edição".
-        let mut ansi = b"game = C:\\Jogos\\Edi".to_vec();
+        // Notepad ANSI (Windows-1252): "C:\Jogos d'Ação\Edição".
+        let mut ansi = b"game = C:\\Jogos d'A".to_vec();
+        ansi.extend([0xE7, 0xE3]);
+        ansi.extend(b"o\\Edi");
         ansi.extend([0xE7, 0xE3]);
         ansi.extend(b"o\r\n");
         std::fs::write(&path, &ansi).unwrap();
         let text = read_file(&path).unwrap().unwrap();
         assert_eq!(
             Settings::parse_file(&text).0.game,
-            Some(PathBuf::from("C:\\Jogos\\Edição"))
+            Some(PathBuf::from("C:\\Jogos d'Ação\\Edição"))
         );
-        std::fs::write(&path, "game = D:\\Edição\n").unwrap();
+        std::fs::write(&path, "\u{feff}game = D:\\José\\Edição\n").unwrap();
         let text = read_file(&path).unwrap().unwrap();
         assert_eq!(
             Settings::parse_file(&text).0.game,
-            Some(PathBuf::from("D:\\Edição"))
+            Some(PathBuf::from("D:\\José\\Edição"))
         );
         // Not a file: a real error, so the caller won't overwrite it.
         assert!(read_file(&dir).is_err());
@@ -727,26 +937,49 @@ mod tests {
         let remembered = remember(old, &saved, &cli, Path::new(r"D:\CMR4"), None).unwrap();
         assert!(!remembered.contains(STALE_HEADER));
         assert!(remembered.contains(HEADER));
-        // A file without the old line is left alone.
         assert_eq!(refresh_header("# mine\n"), "# mine\n");
     }
 
     #[test]
-    fn template_parses_clean_to_the_defaults() {
-        let (settings, warnings) = Settings::parse_file(TEMPLATE);
+    fn a_v0_2_0_template_still_reads_and_is_filled_in_place() {
+        // The hand-written template v0.2.0 created on first run.
+        let old = "# Colin McRae Rally 04 launcher settings.\n\n# The installed game folder.\ngame =\n\nresolution =\n\n# Apply the tested 16:9 Low aspect patch to the private cmr4.exe (on/off).\nwidescreen =\n\nfps_limit =\nvsync =\ncontroller =\n";
+        let (settings, warnings) = Settings::parse_file(old);
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(settings, Settings::default());
-        for key in [
-            "game",
-            "runtime",
-            "resolution",
-            "widescreen",
-            "fps_limit",
-            "vsync",
-            "controller",
-        ] {
-            assert!(TEMPLATE.contains(&format!("\n{key} =\n")), "{key}");
+        let saved = Settings {
+            game: Some(PathBuf::from(r"C:\CMR4")),
+            vsync: Some(true),
+            ..Settings::default()
         }
+        .save_into(old);
+        assert!(saved.contains("\ngame = C:\\CMR4\n"), "{saved}");
+        assert!(saved.contains("\nvsync = on\n"), "{saved}");
+        assert_eq!(saved.matches("game =").count(), 1);
+    }
+
+    #[test]
+    fn template_comes_from_the_table_and_parses_clean_to_the_defaults() {
+        let text = template();
+        let (settings, warnings) = Settings::parse_file(&text);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(settings, Settings::default());
+        for option in OPTIONS {
+            assert!(
+                text.contains(&format!("\n#{} ", option.key))
+                    || text.contains(&format!("\n#{} =", option.key)),
+                "{}",
+                option.key
+            );
+        }
+        assert!(!text.contains("widescreen ="));
+        let filled = Settings {
+            vsync: Some(true),
+            ..Settings::default()
+        }
+        .save_into("");
+        assert!(filled.contains("\nvsync = on\n"));
+        assert_eq!(filled.matches("vsync =").count(), 1);
     }
 
     #[test]
@@ -770,22 +1003,15 @@ mod tests {
     }
 
     #[test]
-    fn set_key_replaces_every_active_line_and_clear_key_comments_it_out() {
-        let filled = set_key(TEMPLATE, "game", r"D:\CMR4");
-        assert!(filled.contains("\ngame = D:\\CMR4\n"));
-        assert!(filled.contains("\nruntime =\n"));
-        assert_eq!(
-            set_key(&filled, "game", r"E:\CMR4")
-                .matches("game =")
-                .count(),
-            1
-        );
-        // Duplicates all take the new value, so the last one read agrees.
-        let twice = set_key("vsync = on\nvsync = on\n", "vsync", "off");
-        assert_eq!(twice, "vsync = off\nvsync = off\n");
-        assert_eq!(set_key("a = 1", "b", "2"), "a = 1\nb = 2\n");
-        let cleared = clear_key(&filled, "game");
-        assert!(cleared.contains("\n#game =\n"));
-        assert_eq!(Settings::parse_file(&cleared).0.game, None);
+    fn the_table_is_consistent() {
+        // Duplicate keys or flags, empty choices, bad examples: the GUI
+        // parity test also checks the window's side.
+        let keys: Vec<&str> = OPTIONS.iter().map(|o| o.key).collect();
+        let problems = spec::parity_problems(OPTIONS, KeyStyle::Underscore, &keys);
+        assert!(problems.is_empty(), "{problems:?}");
+        for option in OPTIONS {
+            assert!(!option.description.is_empty(), "{}", option.key);
+            assert!(option.description.len() < 200, "{} too long", option.key);
+        }
     }
 }

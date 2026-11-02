@@ -116,7 +116,7 @@ mod app {
         let cli = config::parse_args(raw.clone())?;
         if cli.help {
             log_line("help requested");
-            message(config::USAGE, false);
+            message(&config::usage(), false);
             return Ok(0);
         }
         let wine = win32::is_wine();
@@ -164,13 +164,15 @@ mod app {
         for warning in warnings {
             log_line(&format!("warning: {warning}"));
         }
-        let cli_values = cli.settings.clone();
-        let mut settings = saved.clone().merged(cli.settings);
         let target = win32::display_target();
+        let screen = target.map(|t| t.size);
+        // A look sets the values its own source (file or flags) left unset.
+        let saved = saved.resolve_look(screen);
+        let cli_values = cli.settings.resolve_look(screen);
+        let mut settings = saved.clone().merged(cli_values.clone());
         if settings.resolution.is_none() {
-            settings.resolution = Some(config::default_resolution(target.map(|t| t.size)));
+            settings.resolution = Some(config::default_resolution(screen));
         }
-        config::validate_picture(&settings)?;
         log_line(&format!("resolution: {}", settings.resolution().value()));
         let game = find_game(&settings)?;
         let cwd = std::env::current_dir().map_err(|error| format!("current directory: {error}"))?;
@@ -252,15 +254,13 @@ mod app {
         let output = target.and_then(|t| t.output).filter(|_| !gamescope);
         // An unknown build runs without the fix: dgVoodoo then keeps the
         // game's own frame shape.
-        settings.widescreen = Some(exe.widescreen);
         components::install(
             &game,
             &runtime,
             &components_dir,
             &settings,
-            wine,
-            gamescope,
-            output,
+            exe.widescreen,
+            &components::Platform::new(wine, gamescope, output),
         )?;
         log_line("components and owned configuration installed");
         log_line(&format!(
@@ -319,7 +319,7 @@ fn main() {
 #[cfg(not(windows))]
 fn main() {
     if std::env::args().any(|arg| matches!(arg.as_str(), "--help" | "-h" | "/?")) {
-        print!("{}", cmr4_launcher::config::USAGE);
+        print!("{}", cmr4_launcher::config::usage());
     } else {
         eprintln!("CMR4Launcher is a Windows program; on Linux run it with Proton or Wine.");
         std::process::exit(2);
