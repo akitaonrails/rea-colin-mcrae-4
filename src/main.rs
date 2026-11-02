@@ -86,9 +86,13 @@ mod app {
         }
     }
 
-    /// Remembers the game folder, keeping every other line of the file.
-    fn remember_game(path: &Path, text: &str, game: &Path) -> Result<(), String> {
-        runtime::write_atomic(path, config::remember_game(text, game).as_bytes())
+    /// Writes back the game folder and an auto-picked resolution (see
+    /// `config::remember`), keeping every other line of the file.
+    fn remember(path: &Path, text: Option<String>) -> Result<(), String> {
+        let Some(text) = text else {
+            return Ok(());
+        };
+        runtime::write_atomic(path, text.as_bytes())
             .map_err(|error| format!("cannot write {}: {error}", path.display()))
     }
 
@@ -161,7 +165,7 @@ mod app {
         for warning in warnings {
             log_line(&format!("warning: {warning}"));
         }
-        let cli_game = cli.settings.game.clone();
+        let cli_values = cli.settings.clone();
         let mut settings = saved.clone().merged(cli.settings);
         let target = win32::display_target();
         if settings.resolution.is_none() {
@@ -180,8 +184,6 @@ mod app {
         let cwd = std::env::current_dir().map_err(|error| format!("current directory: {error}"))?;
         let runtime = runtime::resolve(&runtime, &cwd)?;
         let runtime = runtime::simplify_extended_length(&runtime);
-        // Only the game folder is remembered from the command line.
-        let remember = config::should_remember_game(saved.game.as_deref(), cli_game.as_deref());
         settings.game = Some(game.clone());
         settings.runtime = Some(runtime.clone());
         log_line(&format!("game: {}", game.display()));
@@ -192,9 +194,13 @@ mod app {
         log_line(&format!(
             "cmr4.exe SHA-256: {digest}; patch: {patch_outcome:?}"
         ));
-        if remember {
-            remember_game(&settings_path, &existing, &game)?;
-        }
+        // Only --game is remembered from the command line; a resolution the
+        // launcher picked from the screen is saved so cmr4-play can size
+        // gamescope to it next time.
+        remember(
+            &settings_path,
+            config::remember(&existing, &saved, &cli_values, &game, settings.resolution()),
+        )?;
         if cli.check {
             let text = format!(
                 "Ready to play.\n\nGame folder: {}\ncmr4.exe SHA-256: {}\nWidescreen check: {:?}",

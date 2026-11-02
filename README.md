@@ -228,7 +228,9 @@ tests, so keep Xidi on unless your setup needs otherwise.
 
 With no arguments the settings window opens. Any option skips the window and
 launches directly. Options apply to that run only; the one remembered in
-`launcher.cfg` is the game folder (`--game`).
+`launcher.cfg` is the game folder (`--game`). When neither the file nor
+`--resolution` sets a resolution, the one the launcher picks from the screen
+is saved too.
 
 ```text
 CMR4Launcher [options]

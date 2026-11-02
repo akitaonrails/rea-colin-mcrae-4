@@ -20,7 +20,10 @@ All notable changes to this project. The format follows
   lines (and CRLF line endings). Unknown keys are logged as warnings.
 - Command-line options are one-run overrides again: only the game folder is
   remembered in `launcher.cfg` (when it has none, or `--game` names another).
-  Before, every flag (and the resolved runtime and resolution) was saved.
+  Before, every flag (and the resolved runtime) was saved. A resolution the
+  launcher picks from the screen, when neither the file nor `--resolution`
+  sets one, is still saved, so `cmr4-play --play` sizes gamescope to it from
+  the second run on.
 - A `launcher.cfg` that exists but can't be read stops the launch with an
   error instead of being replaced by defaults.
 - The game's `OPTIONS` save, the patched `cmr4.exe`, `dgVoodoo.conf`,

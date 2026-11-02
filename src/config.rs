@@ -194,14 +194,36 @@ pub fn should_remember_game(saved: Option<&Path>, cli: Option<&Path>) -> bool {
     saved.is_none() || cli.is_some_and(|cli| saved != Some(cli))
 }
 
-/// The settings file `text` with `game` remembered and every other line kept.
-pub fn remember_game(text: &str, game: &Path) -> String {
-    let text = if text.trim().is_empty() {
-        TEMPLATE
+/// What a launch writes back into the settings file `text`, keeping every
+/// other line; None when nothing changes. Two values are remembered:
+/// - the game folder, as `should_remember_game` decides;
+/// - the resolution the launcher picked from the screen, when neither the
+///   file nor a `--resolution` flag set one (so `cmr4-play` sizes gamescope
+///   to it next time). A flag's value is never saved.
+pub fn remember(
+    text: &str,
+    saved: &Settings,
+    cli: &Settings,
+    game: &Path,
+    picked: Resolution,
+) -> Option<String> {
+    let game_changed = should_remember_game(saved.game.as_deref(), cli.game.as_deref());
+    let auto_resolution = saved.resolution.is_none() && cli.resolution.is_none();
+    if !game_changed && !auto_resolution {
+        return None;
+    }
+    let mut out = if text.trim().is_empty() {
+        TEMPLATE.to_string()
     } else {
-        text
+        text.to_string()
     };
-    set_key(text, "game", &game.display().to_string())
+    if game_changed {
+        out = set_key(&out, "game", &game.display().to_string());
+    }
+    if auto_resolution {
+        out = set_key(&out, "resolution", &picked.value());
+    }
+    Some(out)
 }
 
 /// A new `launcher.cfg`: every key with its comment, unset (defaults apply).
@@ -209,7 +231,8 @@ pub const TEMPLATE: &str = "\
 # Colin McRae Rally 04 launcher settings.
 # One setting per line as key = value; # starts a comment. An empty value
 # uses the default. Command-line options override these values for one run;
-# only --game is remembered here.
+# only --game is remembered here. An unset resolution is filled in with the
+# one the launcher picks from the screen.
 
 # The installed game folder. It is only read, never modified.
 game =
@@ -673,11 +696,8 @@ mod tests {
         .unwrap()
         .settings;
         let (saved, _) = Settings::parse_file(file);
-        assert!(should_remember_game(
-            saved.game.as_deref(),
-            cli.game.as_deref()
-        ));
-        let text = remember_game(file, Path::new(r"D:\CMR4"));
+        let game = Path::new(r"D:\CMR4");
+        let text = remember(file, &saved, &cli, game, Resolution::Original).unwrap();
         assert_eq!(
             text,
             "# mine\nresolution = 1920x1080\nvsync = on\ngame = D:\\CMR4\n"
@@ -686,14 +706,56 @@ mod tests {
         assert_eq!(read.resolution, Some(Resolution::Custom(1920, 1080)));
         assert_eq!(read.vsync, Some(true));
         // Remembered already: no rewrite, with or without the same --game.
-        let game = read.game.as_deref();
-        assert!(!should_remember_game(game, None));
-        assert!(!should_remember_game(game, Some(Path::new(r"D:\CMR4"))));
-        assert!(should_remember_game(game, Some(Path::new(r"E:\CMR4"))));
-        // A first launch starts the file from the commented template.
-        let fresh = remember_game("", Path::new(r"D:\CMR4"));
+        let same = Settings {
+            game: read.game.clone(),
+            ..Settings::default()
+        };
+        let picked = Resolution::Custom(3840, 2160);
+        assert_eq!(
+            remember(&text, &read, &Settings::default(), game, picked),
+            None
+        );
+        assert_eq!(remember(&text, &read, &same, game, picked), None);
+        assert!(should_remember_game(
+            read.game.as_deref(),
+            Some(Path::new(r"E:\CMR4"))
+        ));
+    }
+
+    #[test]
+    fn a_resolution_picked_from_the_screen_is_saved_but_a_flag_is_not() {
+        let game = Path::new(r"D:\CMR4");
+        let file = "game = D:\\CMR4\n# my comment\n";
+        let (saved, _) = Settings::parse_file(file);
+        let picked = Resolution::Custom(2560, 1440);
+        // Auto-picked: the file had none and no flag set one.
+        let text = remember(file, &saved, &Settings::default(), game, picked).unwrap();
+        assert_eq!(
+            text,
+            "game = D:\\CMR4\n# my comment\nresolution = 2560x1440\n"
+        );
+        // --resolution: a one-run override, never saved.
+        let flag = args(&["--resolution", "1920x1080"]).unwrap().settings;
+        assert_eq!(
+            remember(file, &saved, &flag, game, Resolution::Custom(1920, 1080)),
+            None
+        );
+        // A first launch with a flag remembers only the game folder.
+        let fresh = remember(
+            "",
+            &Settings::default(),
+            &flag,
+            game,
+            Resolution::Custom(1920, 1080),
+        )
+        .unwrap();
         assert!(fresh.starts_with("# Colin McRae Rally 04 launcher settings."));
-        assert_eq!(Settings::parse_file(&fresh).0.game, read.game);
+        let (read, _) = Settings::parse_file(&fresh);
+        assert_eq!(read.game.as_deref(), Some(game));
+        assert_eq!(read.resolution, None);
+        // A first launch without flags also keeps the picked resolution.
+        let auto = remember("", &Settings::default(), &Settings::default(), game, picked).unwrap();
+        assert_eq!(Settings::parse_file(&auto).0.resolution, Some(picked));
     }
 
     #[test]
