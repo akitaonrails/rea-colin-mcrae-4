@@ -1,4 +1,4 @@
-CMR4Launcher 0.2.0
+CMR4Launcher <version>
 
 CMR4Launcher [options]
 

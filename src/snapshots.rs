@@ -74,7 +74,8 @@ fn help_and_template() {
     check(
         "help.txt",
         include_str!("../tests/snapshots/help.txt"),
-        &config::usage(),
+        // The version changes every release; the snapshot keeps a placeholder.
+        &config::usage().replace(env!("CARGO_PKG_VERSION"), "<version>"),
     );
     check(
         "template.cfg",
