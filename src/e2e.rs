@@ -20,14 +20,23 @@ use crate::window::{Host, METRICS, PALETTE, Window};
 
 const UHD: Option<(u32, u32)> = Some((3840, 2160));
 
-/// A scratch folder with a hostile name (space, apostrophe, accents).
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir()
-        .join(format!("cmr4-e2e-{}-{name}", std::process::id()))
-        .join("Jogos d'Ação José");
-    let _ = fs::remove_dir_all(&dir);
+/// Removes a test's scratch folder when the test ends.
+struct Clean(PathBuf);
+
+impl Drop for Clean {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+/// A scratch folder with a hostile name (space, apostrophe, accents),
+/// under the temp folder only; removed when the guard drops.
+fn scratch(name: &str) -> (PathBuf, Clean) {
+    let root = std::env::temp_dir().join(format!("cmr4-e2e-{}-{name}", std::process::id()));
+    let dir = root.join("Jogos d'Ação José");
+    let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&dir).unwrap();
-    dir
+    (dir, Clean(root))
 }
 
 /// A game folder whose `CMR4.EXE` is a tiny synthetic PE32 (no game
@@ -155,7 +164,7 @@ fn picture_only(saved: &str) -> String {
 
 #[test]
 fn resolution_chip_and_flag_reach_the_registry_dgvoodoo_and_the_patch() {
-    let dir = scratch("resolution");
+    let (dir, _clean) = scratch("resolution");
     let (mut ui, path) = open(&dir, "");
     tab(&mut ui, "Picture");
     let row = ui.get_by_role_and_label(Role::RadioGroup, "Resolution");
@@ -215,7 +224,7 @@ fn resolution_chip_and_flag_reach_the_registry_dgvoodoo_and_the_patch() {
 
 #[test]
 fn frame_rate_cap_chip_and_flag_reach_dgvoodoo() {
-    let dir = scratch("fps");
+    let (dir, _clean) = scratch("fps");
     let (mut ui, path) = open(&dir, "");
     tab(&mut ui, "Picture");
     ui.get_by_role_and_label(Role::RadioGroup, "Frame-rate cap");
@@ -247,7 +256,7 @@ fn frame_rate_cap_chip_and_flag_reach_dgvoodoo() {
 
 #[test]
 fn vsync_chip_and_flag_reach_dgvoodoo() {
-    let dir = scratch("vsync");
+    let (dir, _clean) = scratch("vsync");
     let (mut ui, path) = open(&dir, "");
     tab(&mut ui, "Picture");
     let row = ui.get_by_role_and_label(Role::RadioGroup, "VSync");
@@ -269,7 +278,7 @@ fn vsync_chip_and_flag_reach_dgvoodoo() {
 
 #[test]
 fn gamepad_switch_and_flag_reach_xidi_the_environment_and_winebus() {
-    let dir = scratch("controller");
+    let (dir, _clean) = scratch("controller");
     let (mut ui, path) = open(&dir, "");
     tab(&mut ui, "Controls");
     let switch = ui.get_by_role_and_label(Role::Switch, "Gamepad");
@@ -301,7 +310,7 @@ fn gamepad_switch_and_flag_reach_xidi_the_environment_and_winebus() {
 
 #[test]
 fn look_cards_and_the_look_flag_set_the_same_values() {
-    let dir = scratch("look");
+    let (dir, _clean) = scratch("look");
     for (card, flag) in [
         ("Original", "original"),
         ("Widescreen", "widescreen"),
@@ -335,7 +344,7 @@ fn look_cards_and_the_look_flag_set_the_same_values() {
 
 #[test]
 fn game_and_runtime_folders_typed_in_the_window_are_saved_and_used() {
-    let dir = scratch("folders");
+    let (dir, _clean) = scratch("folders");
     let (mut ui, path) = open(&dir, "");
     let runtime = dir.join("Cópia privada");
     let field = ui.get_by_role_and_label(Role::TextInput, "Leave empty for the launcher's default");
@@ -365,7 +374,7 @@ fn game_and_runtime_folders_typed_in_the_window_are_saved_and_used() {
 
 #[test]
 fn play_waits_for_the_game_folder_and_says_why() {
-    let dir = scratch("play");
+    let (dir, _clean) = scratch("play");
     let path = dir.join(config::FILE_NAME);
     let mut ui = testing::harness(
         &PALETTE,
@@ -406,7 +415,7 @@ fn play_waits_for_the_game_folder_and_says_why() {
 
 #[test]
 fn every_tab_renders_and_its_controls_are_reachable_and_named() {
-    let dir = scratch("tabs");
+    let (dir, _clean) = scratch("tabs");
     let (mut ui, _) = open(&dir, "");
     for name in ["Original", "Widescreen", "Steam Deck", "Custom"] {
         assert!(
@@ -473,7 +482,7 @@ fn every_tab_renders_and_its_controls_are_reachable_and_named() {
 
 #[test]
 fn keyboard_alone_picks_a_resolution() {
-    let dir = scratch("keyboard");
+    let (dir, _clean) = scratch("keyboard");
     let (mut ui, _) = open(&dir, "resolution = 1920x1080\n");
     tab(&mut ui, "Picture");
     let before = ui.state().form.resolution;
@@ -486,7 +495,7 @@ fn keyboard_alone_picks_a_resolution() {
 
 #[test]
 fn a_v0_2_0_settings_file_opens_saves_and_plans_cleanly() {
-    let dir = scratch("upgrade");
+    let (dir, _clean) = scratch("upgrade");
     let old = "# Colin McRae Rally 04 launcher settings.\r\n# Command-line options override these values and are saved.\r\n\r\nresolution = 1920x1080\r\nwidescreen = off\r\nfps_limit = off\r\nvsync = on\r\ncontroller = on\r\n";
     let (mut ui, path) = open(&dir, old);
     assert_eq!(ui.state().form.resolution, Resolution::Custom(1920, 1080));
@@ -500,7 +509,7 @@ fn a_v0_2_0_settings_file_opens_saves_and_plans_cleanly() {
 
 #[test]
 fn hostile_game_and_runtime_paths_sync_and_resolve() {
-    let dir = scratch("hostile");
+    let (dir, _clean) = scratch("hostile");
     let game = fake_game(&dir);
     fs::create_dir_all(game.join("Data/Pistas d'Ação")).unwrap();
     fs::write(game.join("Data/Pistas d'Ação/Finlândia.big"), b"track").unwrap();
