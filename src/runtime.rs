@@ -250,6 +250,26 @@ fn temp_beside(path: &Path) -> PathBuf {
     path.with_file_name(name)
 }
 
+/// Windows: an antivirus scanning the fresh temp file (the patched exe
+/// above all) holds it for a moment and the rename fails with access
+/// denied, so it is retried, 100 ms apart, before giving up.
+const RENAME_TRIES: u32 = if cfg!(windows) { 5 } else { 1 };
+const RENAME_RETRY_DELAY: Duration = Duration::from_millis(100);
+
+/// Runs `op` up to `tries` times while it fails with PermissionDenied.
+fn retry_denied(tries: u32, mut op: impl FnMut() -> io::Result<()>) -> io::Result<()> {
+    let mut left = tries.max(1);
+    loop {
+        left -= 1;
+        match op() {
+            Err(error) if error.kind() == io::ErrorKind::PermissionDenied && left > 0 => {
+                std::thread::sleep(RENAME_RETRY_DELAY);
+            }
+            other => return other,
+        }
+    }
+}
+
 /// Replaces `path` with `bytes` through a temp file and a rename, so a crash
 /// or a full disk mid-write leaves the old file whole instead of a torn one.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
@@ -263,15 +283,17 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
             io::Write::write_all(&mut file, bytes)?;
             file.sync_all()
         })
-        .and_then(|()| match fs::rename(&tmp, path) {
-            // Windows refuses to rename over a read-only file: make it
-            // writable (it is the launcher's own copy), then rename.
-            Err(error) if error.kind() == io::ErrorKind::PermissionDenied && path.exists() => {
-                make_writable(path)?;
-                fs::rename(&tmp, path)
-            }
-            other => other,
-        });
+        .and_then(
+            |()| match retry_denied(RENAME_TRIES, || fs::rename(&tmp, path)) {
+                // Windows refuses to rename over a read-only file: make it
+                // writable (it is the launcher's own copy), then rename.
+                Err(error) if error.kind() == io::ErrorKind::PermissionDenied && path.exists() => {
+                    make_writable(path)?;
+                    fs::rename(&tmp, path)
+                }
+                other => other,
+            },
+        );
     if result.is_err() {
         let _ = fs::remove_file(&tmp);
     }
@@ -476,6 +498,34 @@ mod tests {
         assert!(!game.join("new-runtime").exists());
         fs::remove_file(alias).unwrap();
         fs::remove_dir_all(game).unwrap();
+    }
+
+    #[test]
+    fn denied_renames_are_retried_a_few_times_then_reported() {
+        let denied = || io::Error::from(io::ErrorKind::PermissionDenied);
+        let mut calls = 0;
+        let held_briefly = retry_denied(5, || {
+            calls += 1;
+            if calls < 3 { Err(denied()) } else { Ok(()) }
+        });
+        assert!(held_briefly.is_ok());
+        assert_eq!(calls, 3);
+        calls = 0;
+        let held = retry_denied(5, || {
+            calls += 1;
+            Err(denied())
+        });
+        assert_eq!(held.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
+        assert_eq!(calls, 5);
+        // Other errors are not retried.
+        calls = 0;
+        let missing = retry_denied(5, || {
+            calls += 1;
+            Err(io::Error::from(io::ErrorKind::NotFound))
+        });
+        assert!(missing.is_err());
+        assert_eq!(calls, 1);
+        assert_eq!(RENAME_TRIES, if cfg!(windows) { 5 } else { 1 });
     }
 
     #[test]

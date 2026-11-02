@@ -128,6 +128,9 @@ in the game yet.
 - **`cmr4-play stop`** now also runs `wineserver -k` on the private prefix.
   Check with a running stage that the game, its wineserver and the AppImage
   exit cleanly and that the next start works.
+- **Atomic writes on Windows** retry a denied rename 5 × 100 ms (antivirus
+  holding the fresh patched `cmr4.exe`). Check a first launch on Windows with
+  Defender active.
 
 ## Remaining unknowns
 
