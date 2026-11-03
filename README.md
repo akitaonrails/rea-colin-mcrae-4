@@ -224,7 +224,7 @@ The launcher's own switches:
 
 | Switch | What it does |
 | --- | --- |
-| `--check` | Checks the game and the settings without playing; the result goes to `launcher.log` and the terminal (or a dialog). Fails (exit 1) while another launcher is open. |
+| `--check` | Checks the game and the settings without playing; the result goes to `launcher.log` and the terminal (or a dialog). Fails (exit 5) while another launcher is open. |
 | `--no-window` | Plays with the saved settings and the flags given. |
 | `--settings` | Opens only the settings window (the Linux helper uses it). |
 | `--linux` | Says the Linux helper (`cmr4-play`) started the launcher. |
@@ -235,7 +235,9 @@ Exit codes for scripts: after playing, the game's own exit code; 0 when
 included. With `--settings`: 0 Play
 pressed, 3 window closed without Play, 4 no window possible. Starting a
 second launcher brings the open window to the front (exit 0); while the
-game runs it says so and doesn't start a second copy (exit 1).
+game runs it says so and doesn't start a second copy (exit 5). Play is
+refused the same way while the game still runs from the launcher's
+private copy (after a launcher was ended while playing).
 
 ## Where things live
 

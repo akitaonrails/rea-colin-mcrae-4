@@ -20,6 +20,8 @@ mod app {
     use rea_launcher::log::Log;
     use rea_launcher::{fsx, paths};
     use rea_launcher_win32::gpu;
+    use rea_launcher_win32::instance::Window;
+    use rea_launcher_win32::process;
     use rea_launcher_win32::report::{self, Mode, Run};
 
     use crate::{ui, win32};
@@ -144,12 +146,13 @@ mod app {
         // window forward, or refuses to play while the game runs.
         let _instance = match win32::single_instance(instance::NAME) {
             Ok(guard) => guard,
-            Err(_) => {
-                let second = SecondStart::for_run(cli.check, || {
-                    win32::bring_launcher_forward(&win32::launcher_exe_name())
-                });
+            Err(running) => {
+                let second = running.second_start(cli.check, Window::Own(TITLE));
                 log_line(second.log_line());
-                return second.outcome().map_err(str::to_owned);
+                if let Some(text) = instance::message(second) {
+                    fatal(text);
+                }
+                return Ok(second.exit_code() as u32);
             }
         };
         let wine = win32::is_wine();
@@ -267,6 +270,15 @@ mod app {
             log_line(&format!("component {line}"));
         }
         paths::check_separate(&game, &runtime)?;
+        // A launcher killed while its game ran released the instance, but
+        // the game may still run from this runtime copy: never sync under it.
+        let runtime_exe = runtime.join(GAME_EXE);
+        if !process::find_running(&runtime_exe).is_empty() {
+            let busy = SecondStart::Busy;
+            log_line(busy.log_line());
+            fatal(instance::message(busy).unwrap_or(instance::GAME_RUNNING));
+            return Ok(busy.exit_code() as u32);
+        }
         match runtime::remove_legacy_temps(&runtime) {
             Ok(removed) if !removed.is_empty() => log_line(&format!(
                 "removed {} temp file(s) an interrupted older launch left",
@@ -287,7 +299,6 @@ mod app {
 
         // Always from the game's own bytes, so switching the fix off needs
         // no restore step.
-        let runtime_exe = runtime.join(GAME_EXE);
         if fs::read(&runtime_exe).ok().as_deref() != Some(exe.bytes.as_slice()) {
             fsx::write_atomic(&runtime_exe, &exe.bytes)
                 .map_err(|error| format!("cannot write {error}"))?;

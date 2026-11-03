@@ -26,17 +26,16 @@ rea-launcher-close-hook = { git = "https://github.com/akitaonrails/rea-launcher-
 # (report::Audience) is portable and tested on the host.
 rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.1" }
 
-[target.'cfg(windows)'.dependencies]
-# The second-start window search (src/win32.rs): the SDK finds a window
-# by title or class only, and eframe windows share winit's class.
-windows-sys = { version = "0.61", features = [
-    "Win32_Foundation",
-    "Win32_System_Threading",
-    "Win32_UI_WindowsAndMessaging",
-] }
-
 [dev-dependencies]
 rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.1", features = ["testing"] }
+
+# The Wine test of the second-start window search (src/win32.rs) creates
+# a window titled like the launcher's.
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 [profile.release]
 panic = "abort"

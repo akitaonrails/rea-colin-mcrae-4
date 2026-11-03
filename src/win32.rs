@@ -5,9 +5,7 @@
 use std::path::Path;
 
 use cmr4_launcher::display;
-use cmr4_launcher::instance::is_launcher_window;
 use cmr4_launcher::registry::{self, KEY, RegValue, RegWrite};
-use cmr4_launcher::window::TITLE;
 use rea_launcher_win32::instance::{self, AlreadyRunning, Guard};
 use rea_launcher_win32::process::Launch;
 use rea_launcher_win32::reg::Key;
@@ -123,111 +121,6 @@ pub fn single_instance(name: &str) -> Result<Guard, AlreadyRunning> {
     instance::single(name)
 }
 
-/// This launcher's file name (`CMR4Launcher.exe` unless renamed).
-pub fn launcher_exe_name() -> String {
-    std::env::current_exe()
-        .ok()
-        .and_then(|path| {
-            path.file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-        })
-        .unwrap_or_else(|| "CMR4Launcher.exe".to_owned())
-}
-
-/// Brings the running launcher's settings window forward: a top-level
-/// window that [`cmr4_launcher::instance::is_launcher_window`] accepts,
-/// in a process running `launcher_exe`. False when there is none (it is
-/// the game that is running).
-pub fn bring_launcher_forward(launcher_exe: &str) -> bool {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        IsIconic, SW_RESTORE, SetForegroundWindow, ShowWindow,
-    };
-    let Some(hwnd) = launcher_window(launcher_exe) else {
-        return false;
-    };
-    // SAFETY: window calls on a handle EnumWindows just returned.
-    unsafe {
-        if IsIconic(hwnd) != 0 {
-            ShowWindow(hwnd, SW_RESTORE);
-        }
-        SetForegroundWindow(hwnd);
-    }
-    true
-}
-
-fn launcher_window(launcher_exe: &str) -> Option<windows_sys::Win32::Foundation::HWND> {
-    use windows_sys::Win32::Foundation::{CloseHandle, HWND, LPARAM};
-    use windows_sys::Win32::System::Threading::{
-        OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
-        QueryFullProcessImageNameW,
-    };
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
-    };
-
-    struct Search<'a> {
-        launcher_exe: &'a str,
-        found: Option<HWND>,
-    }
-
-    fn image(pid: u32) -> Option<String> {
-        // SAFETY: a query-only handle, closed before returning; the buffer
-        // and its length outlive the call.
-        unsafe {
-            let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
-            if process.is_null() {
-                return None;
-            }
-            let mut buffer = [0u16; 1024];
-            let mut len = buffer.len() as u32;
-            let ok = QueryFullProcessImageNameW(
-                process,
-                PROCESS_NAME_WIN32,
-                buffer.as_mut_ptr(),
-                &mut len,
-            );
-            CloseHandle(process);
-            (ok != 0).then(|| String::from_utf16_lossy(&buffer[..len as usize]))
-        }
-    }
-
-    unsafe extern "system" fn visit(hwnd: HWND, data: LPARAM) -> i32 {
-        // SAFETY: `data` is the Search below, alive for the enumeration;
-        // the title buffer outlives GetWindowTextW.
-        unsafe {
-            let search = &mut *(data as *mut Search);
-            if IsWindowVisible(hwnd) == 0 {
-                return 1;
-            }
-            let mut title = [0u16; 128];
-            let len = GetWindowTextW(hwnd, title.as_mut_ptr(), title.len() as i32);
-            let title = String::from_utf16_lossy(&title[..len.max(0) as usize]);
-            if title != TITLE {
-                return 1;
-            }
-            let mut pid = 0u32;
-            GetWindowThreadProcessId(hwnd, &mut pid);
-            match image(pid) {
-                Some(image) if is_launcher_window(&title, &image, search.launcher_exe) => {
-                    search.found = Some(hwnd);
-                    0
-                }
-                _ => 1,
-            }
-        }
-    }
-
-    let mut search = Search {
-        launcher_exe,
-        found: None,
-    };
-    // SAFETY: the callback only touches `search` during this call.
-    unsafe {
-        EnumWindows(Some(visit), (&raw mut search) as LPARAM);
-    }
-    search.found
-}
-
 /// Starts the game and waits for it. Under Wine the game's own environment
 /// carries the DLL overrides, so it works without the Linux helper. CMR04
 /// ignores WM_CLOSE and has no OS-level quit path, so Alt+F4 and the
@@ -338,10 +231,14 @@ mod tests {
     }
 
     #[test]
-    fn a_window_with_the_launchers_title_in_another_program_is_not_the_launcher() {
-        // This test process stands for "another program" (an Explorer
-        // window on a folder named like the game, or the game itself)
-        // showing a window titled like the launcher's.
+    fn the_second_start_finds_only_a_window_with_the_launchers_title() {
+        use cmr4_launcher::window::TITLE;
+        use rea_launcher_win32::instance::Window;
+        // This test process stands for the running launcher (Window::Own
+        // takes windows of this program's own exe). Another program's
+        // same-titled window is the SDK's tested is_own_window case.
+        let running = AlreadyRunning;
+        assert!(!running.is_window_found(Window::Own(TITLE)));
         let (class, title) = (wide("STATIC"), wide(TITLE));
         // SAFETY: a system class and NUL-terminated strings; destroyed below.
         let hwnd = unsafe {
@@ -361,12 +258,34 @@ mod tests {
             )
         };
         assert!(!hwnd.is_null(), "no test window");
-        // Not CMR4Launcher.exe: no launcher window, so a second start
-        // says the game is running instead of exiting silently.
-        assert!(!bring_launcher_forward("CMR4Launcher.exe"));
-        // The same window in the launcher's own process is found.
-        assert_eq!(launcher_window(&launcher_exe_name()), Some(hwnd));
+        assert!(running.is_window_found(Window::Own(TITLE)));
+        assert!(!running.is_window_found(Window::Own("Colin McRae Rally 04 (other)")));
+        // A plain second start brings it forward and exits 0; --check
+        // leaves it and is refused with 5.
+        assert_eq!(
+            running.second_start(true, Window::Own(TITLE)).exit_code(),
+            5
+        );
+        assert_eq!(
+            running.second_start(false, Window::Own(TITLE)).exit_code(),
+            0
+        );
         // SAFETY: the window created above, on this thread.
         unsafe { DestroyWindow(hwnd) };
+        assert_eq!(
+            running.second_start(false, Window::Own(TITLE)).exit_code(),
+            5
+        );
+    }
+
+    #[test]
+    fn no_game_runs_from_a_runtime_copy_nobody_started() {
+        let exe = std::env::temp_dir()
+            .join("cmr4-launcher-test-runtime")
+            .join("cmr4.exe");
+        assert!(rea_launcher_win32::process::find_running(&exe).is_empty());
+        // This test program is found by its own image.
+        let me = std::env::current_exe().unwrap();
+        assert!(rea_launcher_win32::process::find_running(&me).contains(&std::process::id()));
     }
 }

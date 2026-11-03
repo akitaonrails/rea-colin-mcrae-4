@@ -1,10 +1,15 @@
 //! One launcher at a time (`sdk/docs/STANDARDS.md`, "Clean exit, single
 //! instance"). The launcher holds a named mutex
 //! (`rea_launcher_win32::instance::single`) from the start until the game
-//! it started has exited, so a second start can neither open a second
-//! window nor start the game again from the same runtime.
+//! it started has exited; a second start asks the SDK what to do
+//! (`AlreadyRunning::second_start` with `Window::Own`, which only takes a
+//! window of this launcher's own exe: a title alone also matched an
+//! Explorer folder named "Colin McRae Rally 04"). Before Play the launcher
+//! also refuses while the runtime copy's game still runs
+//! (`process::find_running`): a launcher killed while its game ran
+//! released the mutex.
 
-use crate::window::TITLE;
+pub use rea_launcher_win32::instance::{ALREADY_RUNNING, SecondStart};
 
 /// The instance name: `Local\rea-launcher-CMR4Launcher`.
 pub const NAME: &str = "CMR4Launcher";
@@ -13,122 +18,59 @@ pub const NAME: &str = "CMR4Launcher";
 /// to bring forward: the first launcher is waiting for the game.
 pub const GAME_RUNNING: &str = "Colin McRae Rally 04 is already running. Quit the game (Alt+F4 works), then start the launcher again.";
 
-/// Whether a top-level window is the running launcher's settings window:
-/// its title is the launcher's and its process runs `launcher_exe` (the
-/// launcher's own file name, any case). A title alone also matched an
-/// Explorer window open on a folder named "Colin McRae Rally 04" and the
-/// game's own window, so a second start "found" one of those and exited
-/// silently. eframe gives every window winit's generic class, so the class
-/// can't tell either.
-/// `process_image` is the process's full path as Windows reports it.
-pub fn is_launcher_window(title: &str, process_image: &str, launcher_exe: &str) -> bool {
-    let name = process_image.rsplit(['\\', '/']).next().unwrap_or_default();
-    title == TITLE && name.eq_ignore_ascii_case(launcher_exe)
-}
+/// What `--check` says while another launcher's window is open: it would
+/// check against a runtime the other one may be changing.
+pub const ALREADY_OPEN: &str =
+    "The Colin McRae Rally 04 launcher is already open. Close it, then run the check again.";
 
-/// What `--check` says while another launcher is open: it would check
-/// against a runtime the other one may be changing.
-pub const ALREADY_OPEN: &str = "The Colin McRae Rally 04 launcher is already open (its window, or the game). Close it, then run the check again.";
-
-/// What a second start does.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SecondStart {
-    /// The running launcher's window came to the front; exit quietly.
-    Focused,
-    /// No window to show: the game is running. Say so and refuse to play.
-    GameRunning,
-    /// An action flag (`--check`): reported, non-zero exit, and nothing
-    /// brought forward, so a script never reads it as success.
-    ActionRefused,
-}
-
-impl SecondStart {
-    /// `window_found`: whether the running launcher's window was brought
-    /// forward ([`is_launcher_window`]).
-    pub fn new(window_found: bool) -> SecondStart {
-        if window_found {
-            SecondStart::Focused
-        } else {
-            SecondStart::GameRunning
-        }
-    }
-
-    /// A second start of a run with `--check` (`action`) or without:
-    /// `focus` brings the running launcher's window forward and says
-    /// whether there was one; an action never calls it.
-    pub fn for_run(action: bool, focus: impl FnOnce() -> bool) -> SecondStart {
-        if action {
-            SecondStart::ActionRefused
-        } else {
-            SecondStart::new(focus())
-        }
-    }
-
-    /// The line for `launcher.log`.
-    pub fn log_line(self) -> &'static str {
-        match self {
-            SecondStart::Focused => "another launcher is running: brought its window forward",
-            SecondStart::GameRunning => "another launcher is running the game: Play refused",
-            SecondStart::ActionRefused => "another launcher is running: --check refused",
-        }
-    }
-
-    /// The exit code and, when the player must be told, the message.
-    pub fn outcome(self) -> Result<u32, &'static str> {
-        match self {
-            SecondStart::Focused => Ok(0),
-            SecondStart::GameRunning => Err(GAME_RUNNING),
-            SecondStart::ActionRefused => Err(ALREADY_OPEN),
-        }
+/// What the player is told about a second start, in CMR4's words (the
+/// SDK's say the same without the Alt+F4 hint); `None` when the running
+/// launcher's window just came forward.
+pub fn message(second: SecondStart) -> Option<&'static str> {
+    match second {
+        SecondStart::Focused => None,
+        SecondStart::Busy => Some(GAME_RUNNING),
+        SecondStart::WindowOpen => Some(ALREADY_OPEN),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rea_launcher_win32::instance::is_own_window;
+
+    use crate::window::TITLE;
 
     #[test]
-    fn a_second_start_focuses_the_window_or_refuses_to_play() {
-        let focused = SecondStart::new(true);
+    fn a_second_start_focuses_the_window_or_refuses_with_exit_5() {
+        let focused = SecondStart::decide(false, || unreachable!(), || true);
         assert_eq!(focused, SecondStart::Focused);
-        assert_eq!(focused.outcome(), Ok(0));
-        let running = SecondStart::new(false);
-        assert_eq!(running, SecondStart::GameRunning);
-        assert_eq!(running.outcome(), Err(GAME_RUNNING));
-        assert!(running.log_line().contains("Play refused"));
+        assert_eq!((focused.exit_code(), message(focused)), (0, None));
+        let busy = SecondStart::decide(false, || unreachable!(), || false);
+        assert_eq!(busy, SecondStart::Busy);
+        assert_eq!(busy.exit_code(), ALREADY_RUNNING);
+        assert_eq!(ALREADY_RUNNING, 5);
+        assert_eq!(message(busy), Some(GAME_RUNNING));
     }
 
     #[test]
-    fn check_while_another_launcher_is_open_fails_without_focusing_it() {
-        let second = SecondStart::for_run(true, || panic!("an action must not focus a window"));
-        assert_eq!(second, SecondStart::ActionRefused);
-        // Non-zero (main exits 1 on Err) with a message, never a silent 0.
-        assert_eq!(second.outcome(), Err(ALREADY_OPEN));
-        assert!(second.log_line().contains("--check refused"));
-        assert_eq!(SecondStart::for_run(false, || true), SecondStart::Focused);
-        assert_eq!(
-            SecondStart::for_run(false, || false),
-            SecondStart::GameRunning
-        );
+    fn check_while_another_launcher_runs_is_refused_without_focusing_it() {
+        let never = || -> bool { panic!("an action must not bring a window forward") };
+        let open = SecondStart::decide(true, || true, never);
+        assert_eq!(open, SecondStart::WindowOpen);
+        assert_eq!((open.exit_code(), message(open)), (5, Some(ALREADY_OPEN)));
+        let game = SecondStart::decide(true, || false, never);
+        assert_eq!((game.exit_code(), message(game)), (5, Some(GAME_RUNNING)));
     }
 
     #[test]
     fn only_the_launchers_own_window_counts_as_the_running_launcher() {
+        // f089792's case, now the SDK's Window::Own rule.
         let launcher = r"C:\Games\CMR4 Launcher\CMR4Launcher.exe";
-        assert!(is_launcher_window(TITLE, launcher, "CMR4Launcher.exe"));
-        assert!(is_launcher_window(TITLE, launcher, "cmr4launcher.EXE"));
-        // A renamed launcher is still found by its own file name.
-        let renamed = r"C:\Games\cmr4.launcher.exe";
-        assert!(is_launcher_window(TITLE, renamed, "cmr4.launcher.exe"));
-        // Same title, other programs: an Explorer folder window, the game.
+        assert!(is_own_window(TITLE, TITLE, launcher, "CMR4Launcher.exe"));
+        assert!(is_own_window(TITLE, TITLE, launcher, "cmr4launcher.EXE"));
         for other in [r"C:\Windows\explorer.exe", r"C:\Games\CMR4\cmr4.exe"] {
-            assert!(!is_launcher_window(TITLE, other, "CMR4Launcher.exe"));
+            assert!(!is_own_window(TITLE, TITLE, other, "CMR4Launcher.exe"));
         }
-        // The launcher's other windows (a file dialog) don't count.
-        assert!(!is_launcher_window(
-            "Choose the game folder",
-            launcher,
-            "CMR4Launcher.exe"
-        ));
     }
 }
