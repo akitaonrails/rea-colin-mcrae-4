@@ -42,40 +42,13 @@ REA_DEFAULT_SIZE=1024x768             # original, unset or invalid: the game's m
 REA_SCALER_KEY=                       # gamescope always scales with NIS
 REA_DEFAULT_SCALER=nis
 REA_LEGACY_LOCK=off                   # cmr4-play never wrote a pid-only lock
-REA_HELPER_KEYS="look resolution"     # --look/--resolution size gamescope too
-
-# The gamescope size a look gives (the launcher's Look::resolution in
-# src/config.rs): Steam Deck 1280x800; Widescreen the screen, inside which
-# the launcher then picks the largest exact 16:9, as it does on the real
-# screen; Original the game's mode. Custom sets nothing.
-cmr4_look_size() {
-  case $1 in
-    steam_deck) echo 1280x800 ;;
-    widescreen) rea_screen_size || echo 1920x1080 ;;
-    original) echo original ;;
-    *) return 1 ;;
-  esac
-}
-
-# A look fills the resolution its own source (launcher.cfg, or this run's
-# flags) left unset, and flags win over the file, as in the launcher. The
-# size goes into this run's values, which rea_game_size reads first.
-rea_hook_before_start() {
-  [ -n "$(REA_CFG=; rea_get_key resolution)" ] && return 0
-  _cmr4_size=
-  _cmr4_look=$(REA_CFG=; rea_get_value look)
-  if [ -n "$_cmr4_look" ]; then
-    _cmr4_size=$(cmr4_look_size "$_cmr4_look") || _cmr4_size=
-  fi
-  if [ -z "$_cmr4_size" ] && [ -n "$REA_CFG" ] &&
-    [ -z "$(rea_get_key resolution "$REA_CFG")" ]; then
-    _cmr4_look=$(rea_get_value look "$REA_CFG")
-    [ -n "$_cmr4_look" ] && { _cmr4_size=$(cmr4_look_size "$_cmr4_look") || _cmr4_size=; }
-  fi
-  [ -n "$_cmr4_size" ] || return 0
-  REA_ONE_RUN="${REA_ONE_RUN:+$REA_ONE_RUN
-}resolution=$_cmr4_size"
-}
+# The gamescope size each look gives (the launcher's Look::resolution in
+# src/config.rs), read from --look / look = as the launcher resolves it
+# (this run's flags over the file, a resolution over a look): Steam Deck
+# 1280x800; Widescreen the screen, inside which the launcher then picks
+# the largest exact 16:9, as it does on the real screen; Original the
+# game's mode. Custom sets nothing.
+REA_LOOK_SIZES="original=original widescreen=screen steam_deck=1280x800"
 
 rea_init || exit 1
 # Tests load the configuration without running anything (REA_FUNCTIONS_ONLY=1).

@@ -24,6 +24,10 @@ done
 printf 'game = C:\\CMR4\nresolution =\n#resolution = 3840x2160\n' > "$CFG"
 contains "unset resolution (the template's empty key) uses original mode" "$(run)" "gamescope -W 1024 -H 768"
 # A look without a resolution sizes gamescope like the launcher sizes the game.
+contains "the looks are declared to the play library" "$REA_LOOK_SIZES" "steam_deck=1280x800"
+for pair in widescreen=screen original=original; do
+  contains "REA_LOOK_SIZES has $pair" " $REA_LOOK_SIZES " " $pair "
+done
 printf 'look = steam_deck\n' > "$CFG"
 contains "file look steam_deck, no resolution: 1280x800" "$(run)" "gamescope -W 1280 -H 800 -w 1280 -h 800"
 printf 'look = Widescreen\n' > "$CFG"
@@ -34,6 +38,10 @@ printf 'look = steam_deck\nresolution = 1920x1080\n' > "$CFG"
 contains "the file's own resolution wins over its look" "$(run)" "gamescope -W 1920 -H 1080"
 contains "--look wins over the file's resolution" "$(run --look steam_deck)" "gamescope -W 1280 -H 800"
 contains "--look=original too" "$(run --look=original)" "gamescope -W 1024 -H 768"
+printf 'resolution = 1920x1080\n' > "$CFG"
+contains "--look widescreen: the screen, over the file's resolution" \
+  "$(REA_SCREEN=3440x1440 run --look widescreen)" "gamescope -W 3440 -H 1440"
+printf 'look = steam_deck\nresolution = 1920x1080\n' > "$CFG"
 contains "--resolution wins over --look" "$(run --look steam_deck --resolution 2560x1440)" "gamescope -W 2560 -H 1440"
 contains "the flags still reach the launcher" "$(run --look steam_deck)" "--no-window --look steam_deck"
 rm "$CFG"
