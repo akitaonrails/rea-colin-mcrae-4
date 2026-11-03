@@ -53,4 +53,3 @@ jobs:
     with:
       package: cmr4-launcher
       artifact-pattern: CMR4Launcher-*
-      notes: generate
