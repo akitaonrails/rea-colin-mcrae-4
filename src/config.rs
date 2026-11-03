@@ -12,6 +12,7 @@ use rea_launcher::cfg::{
 };
 pub use rea_launcher::cfg::{clear_key, read_file, set_key};
 use rea_launcher::display;
+use rea_launcher_win32::report::{Audience, Run};
 
 pub const FILE_NAME: &str = "launcher.cfg";
 pub const DEFAULT_RESOLUTION: Resolution = Resolution::Custom(1920, 1080);
@@ -383,6 +384,27 @@ pub struct Cli {
     pub linux: bool,
 }
 
+impl Cli {
+    /// The kind of run these flags ask for, for the SDK's
+    /// `report::Audience`.
+    pub fn run(&self) -> Run {
+        Run {
+            command: self.help || self.check,
+            no_window: self.no_window,
+            settings_only: self.settings_window,
+            linux: self.linux,
+        }
+    }
+
+    /// Who may see this run's messages (`wine`: running under Wine). The
+    /// SDK decides it; never `!no_window` or `!linux` here: `cmr4-play`,
+    /// the AppImage and Proton start the game run with `--no-window` for a
+    /// player who is watching (STANDARDS "Messages reach the player").
+    pub fn audience(&self, wine: bool) -> Audience {
+        Audience::of(self.run(), wine)
+    }
+}
+
 /// `--help`: the options from [`OPTIONS`], then the switches.
 pub fn usage() -> String {
     let mut out = format!(
@@ -426,6 +448,111 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Cli, String
     }
     cli.settings = settings;
     Ok(cli)
+}
+
+#[cfg(test)]
+mod audience_tests {
+    //! Who sees a message (the SDK's `report::Audience`), for the command
+    //! lines `cmr4-play`, the AppImage, Proton and Windows players use.
+    use super::*;
+    use rea_launcher_win32::report::{Audience, Mode, Route, Terminal, route};
+
+    fn audience(values: &[&str], wine: bool) -> Audience {
+        let cli = parse_args(values.iter().map(|value| (*value).to_string())).unwrap();
+        cli.audience(wine)
+    }
+
+    /// `cmr4-play`, the AppImage and Proton: no console, stdout to a log.
+    const UNDER_HELPER: Terminal = Terminal {
+        attached: false,
+        redirected: true,
+        wine: true,
+    };
+
+    #[test]
+    fn the_run_comes_from_the_parsed_flags() {
+        let cli = parse_args(["--check", "--no-window", "--linux"].map(String::from)).unwrap();
+        assert_eq!(
+            cli.run(),
+            rea_launcher_win32::report::Run {
+                command: true,
+                no_window: true,
+                settings_only: false,
+                linux: true,
+            }
+        );
+        let cli = parse_args(["--settings", "--linux"].map(String::from)).unwrap();
+        assert!(cli.run().settings_only && !cli.run().command);
+        // A value spelled like a switch is a value, not the switch.
+        let cli = parse_args(["--game", "--check"].map(String::from)).unwrap();
+        assert!(!cli.run().command);
+        let help = parse_args(["--help"].map(String::from)).unwrap();
+        assert!(help.run().command);
+    }
+
+    #[test]
+    fn a_play_error_under_the_linux_helper_is_a_dialog() {
+        // cmr4-play's game run (`--no-window`), a plain start (Proton, the
+        // AppImage), and a game run the helper marks with --linux.
+        for run in [&["--no-window"][..], &[], &["--no-window", "--linux"]] {
+            let audience = audience(run, true);
+            assert_eq!(audience.mode(), Mode::Play { interactive: true }, "{run:?}");
+            assert_eq!(
+                route(audience.mode(), UNDER_HELPER),
+                Route {
+                    print: true,
+                    dialog: true
+                },
+                "{run:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_helpers_settings_window_and_check_show_no_dialog() {
+        // The window reports itself; when it can't open, the helper reads
+        // exit code 4 and the game run reports.
+        let window = audience(&["--settings", "--linux"], true);
+        assert!(!route(window.mode(), UNDER_HELPER).dialog);
+        // The helper reads --check's output and exit code itself.
+        let check = audience(&["--check", "--linux"], true);
+        assert_eq!(check.mode(), Mode::Command { interactive: false });
+    }
+
+    #[test]
+    fn check_and_help_print_and_show_a_dialog_only_when_unseen() {
+        // Under Wine without the helper, stdout is a log: a dialog too.
+        let check = audience(&["--check", "--no-window"], true);
+        assert!(route(check.mode(), UNDER_HELPER).dialog);
+        // From a Windows terminal: printed, no dialog.
+        let terminal = Terminal {
+            attached: true,
+            redirected: false,
+            wine: false,
+        };
+        assert_eq!(
+            route(audience(&["--check"], false).mode(), terminal),
+            Route {
+                print: true,
+                dialog: false
+            }
+        );
+        assert!(audience(&["--help"], false).command);
+    }
+
+    #[test]
+    fn a_windows_script_with_no_window_never_gets_a_dialog() {
+        let script = audience(&["--no-window", "--game", "C:\\CMR4"], false);
+        assert_eq!(script.mode(), Mode::Play { interactive: false });
+        let redirected = Terminal {
+            attached: false,
+            redirected: true,
+            wine: false,
+        };
+        assert!(!route(script.mode(), redirected).dialog);
+        // A double-clicked shortcut is a person.
+        assert!(audience(&[], false).interactive);
+    }
 }
 
 #[cfg(test)]

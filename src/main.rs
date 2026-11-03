@@ -9,8 +9,8 @@ mod win32;
 mod app {
     use std::fs;
     use std::path::{Path, PathBuf};
+    use std::sync::OnceLock;
 
-    use cmr4_launcher::audience;
     use cmr4_launcher::config::{self, Settings};
     use cmr4_launcher::edition::{self, Prepared};
     use cmr4_launcher::instance::{self, SecondStart};
@@ -20,7 +20,7 @@ mod app {
     use rea_launcher::log::Log;
     use rea_launcher::{fsx, paths};
     use rea_launcher_win32::gpu;
-    use rea_launcher_win32::report::{self, Mode};
+    use rea_launcher_win32::report::{self, Mode, Run};
 
     use crate::{ui, win32};
 
@@ -40,17 +40,17 @@ mod app {
         Log::new(home().join("launcher.log")).line(line);
     }
 
-    /// How a message reaches the player in this run (see
-    /// `cmr4_launcher::audience`).
+    /// How this run's messages reach the player, set from the parsed
+    /// flags ([`config::Cli::audience`], the SDK's `report::Audience`).
+    static SAYS: OnceLock<Mode> = OnceLock::new();
+
+    /// How a message reaches the player in this run. Before the flags are
+    /// parsed (a bad command line), from the raw arguments.
     pub fn mode() -> Mode {
-        let args: Vec<String> = std::env::args().skip(1).collect();
-        let audience = audience::audience(&args, win32::is_wine());
-        let interactive = audience.interactive;
-        if audience.command {
-            Mode::Command { interactive }
-        } else {
-            Mode::Play { interactive }
-        }
+        *SAYS.get_or_init(|| {
+            let args: Vec<String> = std::env::args().skip(1).collect();
+            report::audience(Run::from_args(&args, &[])).mode()
+        })
     }
 
     /// Information for the player (`--help`, `--check`).
@@ -134,6 +134,7 @@ mod app {
         log_line(concat!("CMR4Launcher ", env!("CARGO_PKG_VERSION")));
         let raw: Vec<String> = std::env::args().skip(1).collect();
         let cli = config::parse_args(raw.clone())?;
+        let _ = SAYS.set(cli.audience(win32::is_wine()).mode());
         if cli.help {
             log_line("help requested");
             note(&config::usage());

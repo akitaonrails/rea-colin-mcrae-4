@@ -22,8 +22,11 @@ rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", ta
 # configuration in the host tests.
 rea-launcher-close-hook = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.1" }
 
-[target.'cfg(windows)'.dependencies]
+# Its Windows parts are cfg(windows); who sees a message
+# (report::Audience) is portable and tested on the host.
 rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.1" }
+
+[target.'cfg(windows)'.dependencies]
 # The second-start window search (src/win32.rs): the SDK finds a window
 # by title or class only, and eframe windows share winit's class.
 windows-sys = { version = "0.61", features = [
@@ -34,8 +37,6 @@ windows-sys = { version = "0.61", features = [
 
 [dev-dependencies]
 rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.1", features = ["testing"] }
-# The pure registry helpers (VirtualStore path) are host-testable.
-rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.1" }
 
 [profile.release]
 panic = "abort"
