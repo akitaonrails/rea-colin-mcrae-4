@@ -19,7 +19,7 @@ mod app {
     use rea_launcher::identify::validate_pe32;
     use rea_launcher::log::Log;
     use rea_launcher::{fsx, paths};
-    use rea_launcher_win32::gpu;
+    use rea_launcher_win32::gpu::{self, Glx};
     use rea_launcher_win32::instance::Window;
     use rea_launcher_win32::process;
     use rea_launcher_win32::report::{self, Mode, Run};
@@ -144,8 +144,8 @@ mod app {
         }
         // Held until the game has exited: a second start brings this
         // window forward, or refuses to play while the game runs.
-        let _instance = match win32::single_instance(instance::NAME) {
-            Ok(guard) => guard,
+        let mut _instance = match win32::single_instance(instance::NAME) {
+            Ok(guard) => Some(guard),
             Err(running) => {
                 let second = running.second_start(cli.check, Window::Own(TITLE));
                 log_line(second.log_line());
@@ -162,11 +162,22 @@ mod app {
         let show_window =
             cli.settings_window || (!cli.no_window && raw.iter().all(|arg| arg == "--linux"));
         if show_window {
-            if wine {
-                match gpu::prefer_glx() {
-                    Ok(true) => log_line("Wine settings window: OpenGL through GLX (UseEGL=N)"),
-                    Ok(false) => {}
-                    Err(error) => log_line(&format!("warning: {error}")),
+            // A fresh Wine prefix draws eframe windows through EGL, which
+            // fails on many drivers: the SDK switches it to GLX and, when it
+            // had to, runs the launcher once more (the instance goes with
+            // it) so this first start already gets the window.
+            match gpu::prefer_glx_or_restart(_instance.take()) {
+                Glx::Restarted { exit_code } => {
+                    log_line(&format!(
+                        "Wine settings window: OpenGL through GLX (UseEGL=N) on a fresh prefix; started again, which exited with {exit_code}"
+                    ));
+                    return Ok(exit_code);
+                }
+                Glx::Ready { instance, warning } => {
+                    _instance = instance;
+                    if let Some(warning) = warning {
+                        log_line(&format!("warning: {warning}"));
+                    }
                 }
             }
             log_line("settings window opened");
