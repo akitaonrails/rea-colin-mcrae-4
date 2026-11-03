@@ -4,6 +4,33 @@ All notable changes to this project. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- On a fresh Wine prefix (first start through Proton, the AppImage or
+  `cmr4-play`) the settings window now opens on the first try. Before, it
+  often showed nothing until the second start.
+- If the launcher was ended while you played, starting it again no longer
+  starts a second game over the one still running from its private copy.
+  It says the game is already running instead.
+
+### Changed
+
+- A second launcher that is turned away (the game is running, or
+  `--check` while the launcher is open) now exits with code 5 instead
+  of 1, like the other rea launchers. `cmr4-play --play` while the game
+  runs also exits 5 and says "already running". Starting the launcher
+  again while its window is open still brings that window to the front.
+- Under `cmr4-play`, the settings window run and `--check --linux` no
+  longer show their own error dialog: the window or `cmr4-play` reports
+  the problem. A problem in the game run still shows a dialog.
+- Updated rea-launcher-sdk to v0.4.1. The launcher now uses the SDK's
+  shared code for deciding who sees a message, for refusing a second
+  start, for sizing gamescope from the look in `cmr4-play`, and for the
+  golden snapshot tests. The looks, `--help` and `launcher.cfg` are
+  unchanged.
+
 ## [0.3.1] - 2026-11-02
 
 ### Fixed

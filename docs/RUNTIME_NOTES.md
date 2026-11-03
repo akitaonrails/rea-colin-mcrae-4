@@ -4,6 +4,52 @@ This page distinguishes controlled runtime evidence from coverage that is
 still unknown. Portable tests and package inspection support the implementation
 but are not treated as gameplay evidence.
 
+## 2026-11-03: rea-launcher-sdk v0.4.1 bump, headless real-game check
+
+Launcher on branch `sdk-update/v0.4.1` (SDK v0.4.1), release build
+packaged with `packaging/build-windows.sh` into `.work/bump-041-dist`;
+same `cmr4.exe` (`7dca9f4c…1b41`), Wine 11.21 and gamescope 3.17.0 in
+the `gaming` box. As on 2026-11-02 (`gamescope --backend headless`,
+private prefix, `HOME`/`XDG_*` under `.work/rg041/`, PipeWire with one
+null sink and WirePlumber's device monitors off, XTest and a small
+Windows helper for input), with a new harness (`.work/rg041/bin/`): every
+run starts from `env -i`; our processes are matched by our prefix or
+runtime folder silently, listed by pid, state and name only, and only
+they are signalled. The box has no screen, so a stand-in `xrandr`
+reports a 1920x1080 desktop. The game folder's hashes were the same
+afterwards and no file in it was newer than the first run.
+
+| Check | Result |
+|---|---|
+| `--look widescreen` / `original` / `steam_deck` through `cmr4-play --play` (`REA_LOOK_SIZES`) | **VERIFIED**: gamescope 1920x1080 / 1024x768 / 1280x800, game resolution 1920x1080 / original / 1280x800, the game draws its intro (`look-*/shot.jpg`) |
+| `look = steam_deck` in `launcher.cfg`, no flag | **VERIFIED**: gamescope 1280x800, the launcher logs the look from the file |
+| Play-time error under `cmr4-play` (`--game` a missing folder) | **VERIFIED**: dialog "game folder Z:/mnt/no-such-cmr4: File not found." inside gamescope; OK ends the run |
+| Second `CMR4Launcher.exe --no-window` while the game runs | **VERIFIED**: dialog "Colin McRae Rally 04 is already running. Quit the game (Alt+F4 works)…", **exit 5**, game untouched |
+| Second `cmr4-play --play` while the game runs | **VERIFIED**: "already running", **exit 5** |
+| Launcher killed while the game runs (plain Wine, no `cmr4-play`), then a second start | **VERIFIED**: the game kept running; the second launcher got past the instance check and `find_running` refused Play: same dialog, exit 5, game untouched. Under `cmr4-play` killing the launcher ends the whole session, so this case only arises without the helper |
+| Second start while the settings window is open (private Xvfb, fresh prefix) | **VERIFIED**: exit 0, log "brought the running launcher's window forward", one window |
+| `--check` while the settings window is open | **VERIFIED**: dialog "The Colin McRae Rally 04 launcher is already open…", exit 5 |
+| First start on a fresh prefix draws the settings window (`prefer_glx_or_restart`) | **VERIFIED**: `UseEGL` absent before, `N` after; the log shows the launcher started twice, then "settings window opened"; the window drew normally (same layout as `docs/images/launcher-play.jpg`) |
+
+Quitting from the main menu, `--look widescreen`; after each, no process
+of the test was left (game, launcher, `wineserver`, gamescope, helper):
+
+| Way | Game gone / helper gone | Helper exit |
+|---|---|---|
+| The game's own Quit (Escape → exit cmr04 → YES) | 0.15 s / 0.66 s | 139 (gamescope's own exit segfault, as before) |
+| Alt+F4 (XTest), in the intro and in the menu | 0.31 s / 0.81 s | 139 |
+| Window close (`WM_DELETE_WINDOW`, as a compositor sends) | 0.07 s / 0.58 s | 139 |
+| `WM_SYSCOMMAND SC_CLOSE` | 0.45 s / 0.95 s | 139 |
+| gamescope closed (SIGTERM to our gamescope) | 0.41 s / 0.66 s | 139 |
+| Ctrl+C (SIGINT to the helper's group) | 0.06 s / 0.31 s | 143 |
+| SIGTERM to `cmr4-play` | 0.05 s / 0.31 s | 143 |
+| `cmr4-play stop` | 0.21 s / 0.22 s | 0 (stop itself 0) |
+
+Found on the way: without a screen to ask (no `xrandr` answer), the
+Widescreen look now sizes gamescope from `REA_DEFAULT_SIZE` (1024x768,
+the game then picks 1024x576) where the old local hook used 1920x1080.
+A desktop or a Deck always answers `xrandr`, so players shouldn't see it.
+
 ## 2026-11-02: headless real-game verification (owner's install, read-only)
 
 Launcher at `5a51cb6` (SDK v0.3.2), release build packaged with
@@ -372,30 +418,6 @@ cover these; none has been run with the game yet.
   second copy. Check on Windows and under Wine (without `cmr4-play`, whose
   session lock covers Linux). The launcher has no stop path of its own
   (it waits for the game), so `Running::close_gracefully` is not used.
-
-### rea-launcher-sdk v0.4.1 bump (pending)
-
-Host tests, the Windows-target tests under Wine, the release build and
-the package check cover these; to run with the game, headless, as above:
-
-- **Each look reaches the game** through `cmr4-play` now that gamescope
-  is sized by the SDK's `REA_LOOK_SIZES` (Original 1024x768, Widescreen
-  the screen, Steam Deck 1280x800), from `--look` and from `look =`.
-- **A Play-time error shows a dialog under `cmr4-play`** (wrong game
-  folder in the game run, `--no-window`): the SDK's `report::Audience`.
-  The helper's settings window (`--settings --linux`) shows none.
-- **Second start refused with exit 5** (was 1) while the game runs, and
-  `cmr4-play --play` while the game runs exits 5 ("already running;
-  nothing started"); a second start while the window is open still
-  brings it forward (exit 0, `Window::Own`).
-- **Play refused while the runtime's `cmr4.exe` still runs** after the
-  launcher was killed (`process::find_running`).
-- **Fresh prefix:** the first start draws the settings window
-  (`gpu::prefer_glx_or_restart` runs the launcher once more).
-- **Quit paths leave nothing behind:** the game's Quit, Alt+F4 and the
-  window's close, gamescope closed, SIGINT/SIGTERM to `cmr4-play`,
-  `cmr4-play stop` (the v0.4.1 close hook also needs the game's window
-  visible for its Alt+F4 state check; CMR4 doesn't use `alt_f4_state`).
 
 ## Remaining unknowns
 
