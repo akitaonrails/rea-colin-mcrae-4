@@ -373,6 +373,30 @@ cover these; none has been run with the game yet.
   session lock covers Linux). The launcher has no stop path of its own
   (it waits for the game), so `Running::close_gracefully` is not used.
 
+### rea-launcher-sdk v0.4.1 bump (pending)
+
+Host tests, the Windows-target tests under Wine, the release build and
+the package check cover these; to run with the game, headless, as above:
+
+- **Each look reaches the game** through `cmr4-play` now that gamescope
+  is sized by the SDK's `REA_LOOK_SIZES` (Original 1024x768, Widescreen
+  the screen, Steam Deck 1280x800), from `--look` and from `look =`.
+- **A Play-time error shows a dialog under `cmr4-play`** (wrong game
+  folder in the game run, `--no-window`): the SDK's `report::Audience`.
+  The helper's settings window (`--settings --linux`) shows none.
+- **Second start refused with exit 5** (was 1) while the game runs, and
+  `cmr4-play --play` while the game runs exits 5 ("already running;
+  nothing started"); a second start while the window is open still
+  brings it forward (exit 0, `Window::Own`).
+- **Play refused while the runtime's `cmr4.exe` still runs** after the
+  launcher was killed (`process::find_running`).
+- **Fresh prefix:** the first start draws the settings window
+  (`gpu::prefer_glx_or_restart` runs the launcher once more).
+- **Quit paths leave nothing behind:** the game's Quit, Alt+F4 and the
+  window's close, gamescope closed, SIGINT/SIGTERM to `cmr4-play`,
+  `cmr4-play stop` (the v0.4.1 close hook also needs the game's window
+  visible for its Alt+F4 state check; CMR4 doesn't use `alt_f4_state`).
+
 ## Remaining unknowns
 
 - **Native Windows:** startup, dgVoodoo-to-system-D3D11 behavior, native GPU
