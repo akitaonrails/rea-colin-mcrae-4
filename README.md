@@ -358,7 +358,7 @@ and checks both binaries' imports (`sdk/packaging/check-imports.sh`).
   `sdk/scripts/clean --yes`.
 - Golden snapshots in `tests/snapshots/` hold `--help`, the template and
   the launch plan of each look: regenerate with
-  `CMR4_UPDATE_SNAPSHOTS=1 cargo test --lib snapshots` and review every
+  `CMR4_UPDATE_SNAPSHOTS=1 cargo test --test snapshots` and review every
   diff.
 - Tests never open a window and never need the game. The settings window
   is tested with `egui_kittest` (`src/e2e.rs`, `src/window.rs`); every

@@ -6,13 +6,13 @@
 //! or an SDK Migration item, never be regenerated blindly.
 //!
 //! Regenerate (host only, then review every diff by eye):
-//! `CMR4_UPDATE_SNAPSHOTS=1 cargo test --lib snapshots`.
+//! `CMR4_UPDATE_SNAPSHOTS=1 cargo test --test snapshots`.
 
 use std::path::Path;
 
-use crate::components::Platform;
-use crate::config::{self, Settings};
-use crate::plan;
+use cmr4_launcher::components::Platform;
+use cmr4_launcher::config::{self, Settings};
+use cmr4_launcher::plan;
 
 const SCREEN: Option<(u32, u32)> = Some((3840, 2160));
 const RUNTIME: &str = r"C:\Users\Player\AppData\Local\CMR4Launcher\CMR4";
@@ -50,64 +50,32 @@ fn launch(
     )
 }
 
-fn check(name: &str, expected: &str, actual: &str) {
-    if std::env::var_os("CMR4_UPDATE_SNAPSHOTS").is_some() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/snapshots")
-            .join(name);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, actual).unwrap();
-        return;
-    }
-    // Snapshots are stored with LF line ends.
-    let expected = expected.replace("\r\n", "\n");
-    assert!(
-        expected == actual,
-        "{name} changed; review the diff, and update it only for an intended change:\n--- expected\n{expected}\n--- actual\n{actual}"
-    );
+/// Compares `actual` with `tests/snapshots/<name>` (the SDK's
+/// `rea_launcher::testing`: the crate version stored as `<version>`, CRLF
+/// read as LF). `CMR4_UPDATE_SNAPSHOTS=1` (or the SDK's
+/// `REA_UPDATE_SNAPSHOTS=1`) writes them instead.
+fn check(name: &str, actual: &str) {
+    rea_launcher::snapshots!()
+        .update_var("CMR4_UPDATE_SNAPSHOTS")
+        .assert(name, actual);
 }
 
 const WINE: Platform = Platform::new(true, false, None);
 
 #[test]
 fn help_and_template() {
-    check(
-        "help.txt",
-        include_str!("../tests/snapshots/help.txt"),
-        // The version changes every release; the snapshot keeps a placeholder.
-        &config::usage().replace(env!("CARGO_PKG_VERSION"), "<version>"),
-    );
-    check(
-        "template.cfg",
-        include_str!("../tests/snapshots/template.cfg"),
-        &config::template(),
-    );
+    check("help.txt", &config::usage());
+    check("template.cfg", &config::template());
 }
 
 #[test]
 fn looks() {
-    for (name, expected, flag) in [
-        (
-            "look-original.txt",
-            include_str!("../tests/snapshots/look-original.txt"),
-            "original",
-        ),
-        (
-            "look-widescreen.txt",
-            include_str!("../tests/snapshots/look-widescreen.txt"),
-            "widescreen",
-        ),
-        (
-            "look-steam-deck.txt",
-            include_str!("../tests/snapshots/look-steam-deck.txt"),
-            "steam_deck",
-        ),
+    for (name, flag) in [
+        ("look-original.txt", "original"),
+        ("look-widescreen.txt", "widescreen"),
+        ("look-steam-deck.txt", "steam_deck"),
     ] {
-        check(
-            name,
-            expected,
-            &launch("", &["--look", flag], true, WINE, None),
-        );
+        check(name, &launch("", &["--look", flag], true, WINE, None));
     }
 }
 
@@ -115,7 +83,6 @@ fn looks() {
 fn option_combinations() {
     check(
         "windows-1080p-60fps-vsync.txt",
-        include_str!("../tests/snapshots/windows-1080p-60fps-vsync.txt"),
         &launch(
             "resolution = 1920x1080\nfps_limit = 60\nvsync = on\n",
             &[],
@@ -126,7 +93,6 @@ fn option_combinations() {
     );
     check(
         "wine-16x10-no-gamepad-second-monitor.txt",
-        include_str!("../tests/snapshots/wine-16x10-no-gamepad-second-monitor.txt"),
         &launch(
             "resolution = 1920x1200\n",
             &["--controller", "off"],
@@ -137,7 +103,6 @@ fn option_combinations() {
     );
     check(
         "gamescope-unknown-build-16x9.txt",
-        include_str!("../tests/snapshots/gamescope-unknown-build-16x9.txt"),
         &launch(
             "resolution = 2560x1440\nfps_limit = off\n",
             &[],
