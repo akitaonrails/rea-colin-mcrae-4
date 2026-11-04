@@ -11,6 +11,18 @@
 
 pub use rea_launcher_win32::instance::{ALREADY_RUNNING, SecondStart};
 
+/// CMR4's own action flags beyond the family's (`--check`, `--setup`,
+/// `--download-*`): none.
+pub const OWN_ACTIONS: &[&str] = &[];
+
+/// Whether `args` (program name excluded) ask for an action, which a
+/// second start refuses with exit 5 while the window is open instead of
+/// bringing it forward: the SDK's `instance::is_action`, one list for the
+/// family.
+pub fn is_action<S: AsRef<str>>(args: &[S]) -> bool {
+    rea_launcher_win32::instance::is_action(args, OWN_ACTIONS)
+}
+
 /// The instance name: `Local\rea-launcher-CMR4Launcher`.
 pub const NAME: &str = "CMR4Launcher";
 
@@ -61,6 +73,34 @@ mod tests {
         assert_eq!((open.exit_code(), message(open)), (5, Some(ALREADY_OPEN)));
         let game = SecondStart::decide(true, || false, never);
         assert_eq!((game.exit_code(), message(game)), (5, Some(GAME_RUNNING)));
+    }
+
+    #[test]
+    fn action_flags_with_the_window_open_exit_5_and_plain_starts_focus_it() {
+        let never = || -> bool { panic!("an action must not bring a window forward") };
+        for args in [
+            &["--check"][..],
+            &["--check", "--game", r"D:\CMR4"],
+            &["--no-window", "--check"],
+        ] {
+            let second = SecondStart::decide(is_action(args), || true, never);
+            assert_eq!(second, SecondStart::WindowOpen, "{args:?}");
+            assert_eq!(second.exit_code(), 5, "{args:?}");
+            assert_eq!(message(second), Some(ALREADY_OPEN), "{args:?}");
+        }
+        for args in [
+            &[][..],
+            &["--game", r"D:\CMR4"],
+            &["--no-window"],
+            &["--linux"],
+        ] {
+            let second = SecondStart::decide(is_action(args), || unreachable!(), || true);
+            assert_eq!(
+                (second, second.exit_code()),
+                (SecondStart::Focused, 0),
+                "{args:?}"
+            );
+        }
     }
 
     #[test]

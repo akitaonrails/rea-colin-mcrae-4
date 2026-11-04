@@ -165,7 +165,7 @@ mod app {
         let mut _instance = match win32::single_instance(instance::NAME) {
             Ok(guard) => Some(guard),
             Err(running) => {
-                let second = running.second_start(cli.check, Window::Own(TITLE));
+                let second = running.second_start(instance::is_action(&raw), Window::Own(TITLE));
                 log_line(second.log_line());
                 if let Some(text) = instance::message(second) {
                     fatal(text);
