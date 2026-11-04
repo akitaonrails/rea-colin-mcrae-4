@@ -72,6 +72,9 @@ Download from the [latest release](https://github.com/akitaonrails/rea-colin-mcr
 2. Keep `CMR4Launcher.exe` and the `components` folder together.
 3. Run `CMR4Launcher.exe`.
 
+The launcher is unsigned, so the first start from a downloaded zip may show
+"Windows protected your PC": click *More info*, then *Run anyway*.
+
 ### Steam Deck
 
 1. In Desktop Mode, unzip the Windows package, e.g. into
