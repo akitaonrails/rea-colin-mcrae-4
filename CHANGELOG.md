@@ -6,6 +6,35 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+From a native Windows 10 test of the Windows launchers by an outside
+tester (rea-launcher-sdk#1).
+
+### Fixed
+
+- A mistyped option or a bad value (`--bogus-flag`, `--look invalid`)
+  started from a terminal opened a message box and the launcher waited
+  for OK, so a script with a typo hung. It now prints the error and the
+  usage and exits with code 2 (it exited 1, the code for "refused"). A
+  message box is shown only when nobody can see a terminal, such as a
+  shortcut.
+- `--check` said "Ready to play" when the runtime folder (`--runtime`)
+  was inside the game folder or the game folder itself. It now gives the
+  same refusal as Play and exits 1.
+- `launcher.log` now says when the launcher sets the high-performance GPU
+  for the private copy's `cmr4.exe` on Windows.
+
+### Changed
+
+- The README lists every registry entry the launcher writes in "Where
+  things live" and "Uninstall", including the Windows GPU choice under
+  `HKCU\Software\Microsoft\DirectX\UserGpuPreferences`, and says what to
+  do when Windows SmartScreen warns about the unsigned launcher.
+- A weekly check now reports new Xidi and DXVK releases, so the bundled
+  versions can be updated after testing.
+- Updated rea-launcher-sdk to v0.4.2 (the shared rules for bad command
+  lines and for actions such as `--check` while the launcher window is
+  open, which already exits 5 here).
+
 ## [0.4.0] - 2026-11-03
 
 ### Fixed
