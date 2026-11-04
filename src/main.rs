@@ -46,8 +46,9 @@ mod app {
     /// flags ([`config::Cli::audience`], the SDK's `report::Audience`).
     static SAYS: OnceLock<Mode> = OnceLock::new();
 
-    /// How a message reaches the player in this run. Before the flags are
-    /// parsed (a bad command line), from the raw arguments.
+    /// How a message reaches the player in this run: set right after the
+    /// flags are parsed (or failed to parse); before that, from the raw
+    /// arguments.
     pub fn mode() -> Mode {
         *SAYS.get_or_init(|| {
             let args: Vec<String> = std::env::args().skip(1).collect();
@@ -63,6 +64,10 @@ mod app {
     /// An error the launcher stops on.
     pub fn fatal(text: &str) {
         report::fatal(TITLE, text, mode());
+    }
+
+    fn first_line(text: &str) -> &str {
+        text.lines().next().unwrap_or_default()
     }
 
     fn settings_path() -> PathBuf {
@@ -135,7 +140,20 @@ mod app {
     pub fn run() -> Result<u32, String> {
         log_line(concat!("CMR4Launcher ", env!("CARGO_PKG_VERSION")));
         let raw: Vec<String> = std::env::args().skip(1).collect();
-        let cli = config::parse_args(raw.clone())?;
+        let cli = match config::parse_args(raw.clone()) {
+            Ok(cli) => cli,
+            Err(bad) => {
+                // Like a command (the terminal), never a play run's modal
+                // box: a script with a typo must not hang. Exit 2.
+                let _ = SAYS.set(report::audience(bad.run).mode());
+                log_line(&format!(
+                    "error: bad command line: {}",
+                    first_line(&bad.message)
+                ));
+                fatal(&bad.message);
+                return Ok(bad.exit_code());
+            }
+        };
         let _ = SAYS.set(cli.audience(win32::is_wine()).mode());
         if cli.help {
             log_line("help requested");

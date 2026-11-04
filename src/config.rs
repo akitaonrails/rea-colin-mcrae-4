@@ -12,7 +12,7 @@ use rea_launcher::cfg::{
 };
 pub use rea_launcher::cfg::{clear_key, read_file, set_key};
 use rea_launcher::display;
-use rea_launcher_win32::report::{Audience, Run};
+use rea_launcher_win32::report::{self, Audience, Run};
 
 pub const FILE_NAME: &str = "launcher.cfg";
 pub const DEFAULT_RESOLUTION: Resolution = Resolution::Custom(1920, 1080);
@@ -422,12 +422,31 @@ pub fn usage() -> String {
     out
 }
 
-pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Cli, String> {
+/// A command line that failed to parse: the error and the usage, reported
+/// like a command (`report::Run::bad_command_line`: the terminal, a dialog
+/// only when nobody sees it), never like a play run, whose modal box hung
+/// a script with a typo; exit [`BadCommandLine::exit_code`] (2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BadCommandLine {
+    pub message: String,
+    pub run: Run,
+}
+
+impl BadCommandLine {
+    /// `report::BAD_COMMAND_LINE`: 2, as in every rea launcher (1 means
+    /// refused).
+    pub fn exit_code(&self) -> u32 {
+        report::BAD_COMMAND_LINE as u32
+    }
+}
+
+pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Cli, BadCommandLine> {
+    let args: Vec<String> = args.into_iter().collect();
     let mut cli = Cli::default();
     let mut settings = Settings::default();
     let switches: Vec<&str> = SWITCHES.iter().map(|(flag, _)| *flag).collect();
     match spec::parse_args(
-        args,
+        args.iter().cloned(),
         KeyStyle::Underscore,
         OPTIONS,
         &switches,
@@ -444,7 +463,12 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Cli, String
             }
         }
         Err(ArgError::Help(_)) => cli.help = true,
-        Err(error) => return Err(format!("{error}\n\n{}", usage())),
+        Err(error) => {
+            return Err(BadCommandLine {
+                message: format!("{error}\n\n{}", usage()),
+                run: Run::bad_command_line(&args),
+            });
+        }
     }
     cli.settings = settings;
     Ok(cli)
@@ -455,7 +479,7 @@ mod audience_tests {
     //! Who sees a message (the SDK's `report::Audience`), for the command
     //! lines `cmr4-play`, the AppImage, Proton and Windows players use.
     use super::*;
-    use rea_launcher_win32::report::{Audience, Mode, Route, Terminal, route};
+    use rea_launcher_win32::report::{self, Audience, Mode, Route, Terminal, route};
 
     fn audience(values: &[&str], wine: bool) -> Audience {
         let cli = parse_args(values.iter().map(|value| (*value).to_string())).unwrap();
@@ -541,6 +565,40 @@ mod audience_tests {
     }
 
     #[test]
+    fn a_bad_command_line_is_printed_like_a_command_and_exits_2() {
+        // Windows 10 test (rea-launcher-sdk#1): from PowerShell a typo
+        // opened a modal box the script waited on, then exited 1.
+        let terminal = Terminal {
+            attached: true,
+            redirected: false,
+            wine: false,
+        };
+        let shortcut = Terminal {
+            attached: false,
+            redirected: false,
+            wine: false,
+        };
+        for argv in [&["--bogus-flag"][..], &["--look", "invalid"]] {
+            let bad = parse_args(argv.iter().map(|arg| (*arg).to_string())).unwrap_err();
+            assert!(bad.message.contains("CMR4Launcher [options]"), "{argv:?}");
+            let mode = Audience::of(bad.run, false).mode();
+            assert!(matches!(mode, Mode::Command { .. }), "{argv:?}: {mode:?}");
+            let printed = Route {
+                print: true,
+                dialog: false,
+            };
+            assert_eq!(route(mode, terminal), printed, "{argv:?}");
+            // Nobody sees a terminal from a shortcut: then a dialog.
+            assert!(route(mode, shortcut).dialog, "{argv:?}");
+            assert_eq!(bad.exit_code(), 2);
+            assert_eq!(bad.exit_code() as i32, report::BAD_COMMAND_LINE);
+        }
+        // The helper's game run with a typo: its log, never a box.
+        let bad = parse_args(["--no-window", "--linux", "--bogus"].map(String::from)).unwrap_err();
+        assert!(!route(Audience::of(bad.run, true).mode(), UNDER_HELPER).dialog);
+    }
+
+    #[test]
     fn a_windows_script_with_no_window_never_gets_a_dialog() {
         let script = audience(&["--no-window", "--game", "C:\\CMR4"], false);
         assert_eq!(script.mode(), Mode::Play { interactive: false });
@@ -560,7 +618,7 @@ mod tests {
     use super::*;
 
     fn args(values: &[&str]) -> Result<Cli, String> {
-        parse_args(values.iter().map(|value| (*value).to_string()))
+        parse_args(values.iter().map(|value| (*value).to_string())).map_err(|bad| bad.message)
     }
 
     const DECK: Option<(u32, u32)> = Some((1280, 800));
