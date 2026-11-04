@@ -259,9 +259,23 @@ times (`BESTTIMES_GHOSTS`) next to the runtime's `cmr4.exe`. The launcher
 never overwrites them when it updates the copy, and it never writes them
 back to the game folder.
 
-On Windows the launcher also writes the game's registry key
-(`HKLM\SOFTWARE\WOW6432Node\Codemasters\Colin McRae Rally 04`, or the same
-under `HKCU\Software\Classes\VirtualStore`).
+Registry entries the launcher writes:
+
+- **The game's key**, on Windows and in the Wine prefix:
+  `HKLM\SOFTWARE\WOW6432Node\Codemasters\Colin McRae Rally 04`, or the
+  same under `HKCU\Software\Classes\VirtualStore`.
+- **Windows only, the high-performance GPU for the private copy:** under
+  `HKCU\Software\Microsoft\DirectX\UserGpuPreferences`, the value named
+  after the runtime's `cmr4.exe` (for example
+  `…\CMR4Launcher\CMR4\cmr4.exe`) = `GpuPreference=2;`, written once when
+  that exe has no GPU choice yet. `launcher.log` says when.
+- **Wine only, inside the prefix:** `cmr4.exe`'s DLL overrides
+  (`HKCU\Software\Wine\AppDefaults\cmr4.exe\DllOverrides`, with a
+  record of the ones it wrote under
+  `HKCU\Software\rea-launcher\DllOverrides\cmr4.exe`), the
+  controller mapping (`Map Controllers` under
+  `HKLM\System\CurrentControlSet\Services\winebus`, when absent) and
+  `UseEGL` = `N` (`HKCU\Software\Wine\X11 Driver`, when absent).
 
 `launcher.log` records what the launcher did and why: the game version and
 its SHA-256, the look and settings, each bundled DLL with its SHA-256, the
@@ -319,12 +333,17 @@ with a pad. The details and the evidence behind each fix are in
    `cmr4.exe`. The steps below delete them.
 2. Delete the launcher's folder (or the AppImage).
 3. Windows: delete `%LOCALAPPDATA%\CMR4Launcher` (settings, log and the
-   private copy, a few GB). Remove the registry key listed above only if
-   you no longer play the game itself.
+   private copy, a few GB). In the registry, delete the value under
+   `HKCU\Software\Microsoft\DirectX\UserGpuPreferences` named after the
+   private copy's `cmr4.exe`, and the game's key
+   (`Codemasters\Colin McRae Rally 04`, see
+   [Where things live](#where-things-live)) only if you no longer play the
+   game itself.
 4. Linux: delete `~/.local/share/cmr4-launcher` (the prefix, with the
    private copy) and `~/.config/cmr4-launcher`, after copying the saves
    out. With Proton, removing the Steam shortcut offers to delete its
-   prefix, saves included.
+   prefix, saves included. The Wine registry entries live in the prefix
+   and go with it.
 
 Your game folder was never changed, so there is nothing to undo there.
 

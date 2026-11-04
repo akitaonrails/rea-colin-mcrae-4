@@ -16,9 +16,9 @@ mod app {
     use cmr4_launcher::instance::{self, SecondStart};
     use cmr4_launcher::window::TITLE;
     use cmr4_launcher::{GAME_EXE, components, plan, profile, runtime};
+    use rea_launcher::fsx;
     use rea_launcher::identify::validate_pe32;
     use rea_launcher::log::Log;
-    use rea_launcher::fsx;
     use rea_launcher_win32::gpu::{self, Glx};
     use rea_launcher_win32::instance::Window;
     use rea_launcher_win32::process;
@@ -383,10 +383,11 @@ mod app {
         )? {
             log_line(&line);
         }
-        if plan.prefer_fast_gpu
-            && let Err(error) = gpu::prefer_fast_gpu(&runtime_exe)
-        {
-            log_line(&format!("warning: {error}"));
+        if plan.prefer_fast_gpu {
+            match gpu::prefer_fast_gpu(&runtime_exe) {
+                Ok(wrote) => log_line(&plan::fast_gpu_log_line(&runtime_exe, wrote)),
+                Err(error) => log_line(&format!("warning: {error}")),
+            }
         }
         log_line(&format!(
             "registry: {place}, game mode {}; Wine: {wine}",

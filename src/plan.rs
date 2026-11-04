@@ -13,6 +13,31 @@ use crate::components::{
 use crate::config::{Resolution, Settings};
 use crate::registry::{self, RegWrite};
 
+/// Windows only: where the fast-GPU preference for the runtime's
+/// `cmr4.exe` goes (`rea_launcher_win32::gpu::prefer_fast_gpu`), set only
+/// when the exe has no choice yet. README "Where things live" and
+/// "Uninstall" name it.
+pub const GPU_PREFERENCES_KEY: &str = r"HKCU\Software\Microsoft\DirectX\UserGpuPreferences";
+/// The value: the high-performance GPU.
+pub const FAST_GPU: &str = "GpuPreference=2;";
+
+/// The `launcher.log` line for the fast-GPU preference of `exe`: `wrote`
+/// when the launcher set it in this run, otherwise the existing choice
+/// was kept.
+pub fn fast_gpu_log_line(exe: &Path, wrote: bool) -> String {
+    if wrote {
+        format!(
+            "registry: {GPU_PREFERENCES_KEY}: {} = {FAST_GPU} (high-performance GPU)",
+            exe.display()
+        )
+    } else {
+        format!(
+            "registry: {GPU_PREFERENCES_KEY}: {} already has a GPU choice; kept",
+            exe.display()
+        )
+    }
+}
+
 /// Everything one launch changes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Plan {
@@ -176,5 +201,25 @@ impl Plan {
             }
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_fast_gpu_preference_is_named_in_the_log() {
+        // Windows 10 test (rea-launcher-sdk#1, finding 8): the value was
+        // written with no word in launcher.log.
+        let exe = Path::new(r"C:\Users\p\AppData\Local\CMR4Launcher\CMR4\cmr4.exe");
+        assert_eq!(
+            fast_gpu_log_line(exe, true),
+            r"registry: HKCU\Software\Microsoft\DirectX\UserGpuPreferences: C:\Users\p\AppData\Local\CMR4Launcher\CMR4\cmr4.exe = GpuPreference=2; (high-performance GPU)"
+        );
+        assert_eq!(
+            fast_gpu_log_line(exe, false),
+            r"registry: HKCU\Software\Microsoft\DirectX\UserGpuPreferences: C:\Users\p\AppData\Local\CMR4Launcher\CMR4\cmr4.exe already has a GPU choice; kept"
+        );
     }
 }
