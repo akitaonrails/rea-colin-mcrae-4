@@ -59,6 +59,16 @@ pub fn game_folder(game: &Path, cwd: &Path) -> Result<PathBuf, String> {
     paths::canonical_existing(game, cwd).map_err(|error| format!("game folder {error}"))
 }
 
+/// The runtime folder, absolute and resolved (it need not exist yet); an
+/// error when it is inside the game folder (`game`, resolved) or the game
+/// folder itself. `--check` and Play both ask here, so the check refuses
+/// what Play would.
+pub fn runtime_folder(runtime: &Path, game: &Path, cwd: &Path) -> Result<PathBuf, String> {
+    let runtime = paths::resolve(runtime, cwd)?;
+    paths::check_separate(game, &runtime)?;
+    Ok(runtime)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,5 +224,31 @@ mod tests {
         assert!(paths::check_separate(&resolved, &resolved.join("runtime")).is_err());
         assert!(paths::check_separate(&resolved, &temp("elsewhere")).is_ok());
         fs::remove_dir_all(game).unwrap();
+    }
+
+    #[test]
+    fn a_runtime_inside_or_equal_to_the_game_folder_is_refused_for_check_and_play() {
+        // Windows 10 test (rea-launcher-sdk#1, finding 7): --check said
+        // "Ready to play" for these; Play refused them.
+        let root = temp("runtime-folder");
+        let game = root.join("x");
+        fs::create_dir_all(&game).unwrap();
+        let game = game_folder(&game, &root).unwrap();
+        for runtime in [
+            game.join("rt"),
+            game.clone(),
+            PathBuf::from("x"),
+            PathBuf::from("x/rt"),
+        ] {
+            let error = runtime_folder(&runtime, &game, &root).unwrap_err();
+            assert!(
+                error.contains("must be outside the game folder"),
+                "{runtime:?}: {error}"
+            );
+        }
+        let outside = runtime_folder(Path::new("CMR4"), &game, &root).unwrap();
+        assert_eq!(outside, paths::resolve(&root.join("CMR4"), &root).unwrap());
+        assert!(!outside.exists(), "nothing is created");
+        fs::remove_dir_all(root).unwrap();
     }
 }

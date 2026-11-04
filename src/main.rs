@@ -18,7 +18,7 @@ mod app {
     use cmr4_launcher::{GAME_EXE, components, plan, profile, runtime};
     use rea_launcher::identify::validate_pe32;
     use rea_launcher::log::Log;
-    use rea_launcher::{fsx, paths};
+    use rea_launcher::fsx;
     use rea_launcher_win32::gpu::{self, Glx};
     use rea_launcher_win32::instance::Window;
     use rea_launcher_win32::process;
@@ -246,7 +246,7 @@ mod app {
             .runtime
             .clone()
             .unwrap_or_else(|| home().join("CMR4"));
-        let runtime = paths::resolve(&runtime, &cwd)?;
+        let runtime = runtime::runtime_folder(&runtime, &game, &cwd)?;
         settings.game = Some(game.clone());
         settings.runtime = Some(runtime.clone());
         log_line(&format!("game: {}", game.display()));
@@ -298,7 +298,6 @@ mod app {
         for line in components::describe(&components_dir) {
             log_line(&format!("component {line}"));
         }
-        paths::check_separate(&game, &runtime)?;
         // A launcher killed while its game ran released the instance, but
         // the game may still run from this runtime copy: never sync under it.
         let runtime_exe = runtime.join(GAME_EXE);
