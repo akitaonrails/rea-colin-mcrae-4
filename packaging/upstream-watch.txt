@@ -1,0 +1,17 @@
+# Components the weekly watch-upstream workflow checks, one per line:
+#
+#   name owner/repo asset-name-prefix
+#
+# `name` is a pin in packaging/components.pins whose url is a file that
+# owner/repo's releases upload (https://github.com/owner/repo/releases/download/…).
+# Every pin of a GitHub release belongs here (launcher-check unwatched-pins).
+# A changed release opens an issue; the pin moves only in a PR, after
+# playing with the new version (Xidi 5 is expected to show up first).
+#
+# DXVK's releases upload dxvk-X.Y.Z.tar.gz first, then dxvk-native-…; the
+# first asset matching the prefix is the one compared.
+# dgvoodoo is this repository's own "thirdparty" release (no upstream to
+# watch: the 2.80 archive is gone upstream).
+
+xidi samuelgr/Xidi Xidi-
+dxvk doitsujin/dxvk dxvk-
