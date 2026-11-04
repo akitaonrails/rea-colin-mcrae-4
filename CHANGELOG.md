@@ -6,6 +6,8 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-03
+
 From a native Windows 10 test of the Windows launchers by an outside
 tester (rea-launcher-sdk#1).
 
@@ -388,7 +390,8 @@ Rally 04 on Windows 10/11 and on Linux (Wine, Proton, AppImage).
 - Windows zip and AppImage built in CI from pinned component archives, with
   a package inventory check that rejects unlisted files and game assets.
 
-[Unreleased]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.3.1...v0.4.0
 [0.2.0]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/akitaonrails/rea-colin-mcrae-4/releases/tag/v0.1.0
