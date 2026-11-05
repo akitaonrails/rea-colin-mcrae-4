@@ -6,6 +6,8 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-05
+
 Fewer antivirus false positives on Windows: a player's antivirus flagged
 another rea launcher, and this one had the same two habits.
 
@@ -405,7 +407,8 @@ Rally 04 on Windows 10/11 and on Linux (Wine, Proton, AppImage).
 - Windows zip and AppImage built in CI from pinned component archives, with
   a package inventory check that rejects unlisted files and game assets.
 
-[Unreleased]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.3.1...v0.4.0
 [0.2.0]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.1.0...v0.2.0
