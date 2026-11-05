@@ -275,6 +275,7 @@ name = "cmr4-launcher"
 version = "0.4.1"
 dependencies = [
  "rea-launcher",
+ "rea-launcher-build",
  "rea-launcher-close-hook",
  "rea-launcher-ui",
  "rea-launcher-win32",

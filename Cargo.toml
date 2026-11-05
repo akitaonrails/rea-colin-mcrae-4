@@ -26,6 +26,11 @@ rea-launcher-close-hook = { git = "https://github.com/akitaonrails/rea-launcher-
 # (report::Audience) is portable and tested on the host.
 rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.3" }
 
+# Version information, icon and manifest in CMR4Launcher.exe (build.rs),
+# so antivirus heuristics see a named, versioned program.
+[build-dependencies]
+rea-launcher-build = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.3" }
+
 [dev-dependencies]
 rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.3", features = ["testing"] }
 
