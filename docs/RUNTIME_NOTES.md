@@ -4,6 +4,38 @@ This page distinguishes controlled runtime evidence from coverage that is
 still unknown. Portable tests and package inspection support the implementation
 but are not treated as gameplay evidence.
 
+## 2026-11-05: rea-launcher-sdk v0.4.3 bump, close hook loaded with the game
+
+The close hook no longer comes from the launcher (`Running::message_hook`
+from outside, which antivirus heuristics take for a keylogger): the
+private copy's `cmr4.exe` imports `rea_close_hook.dll` (new `.reahook`
+section, `rea_close_hook::import_into`), the DLL sits next to it, and
+`REA_CLOSE_HOOK_ATTACH=1` makes it install the hook itself. Checked with
+the release build packaged by `packaging/build-windows.sh` into
+`.work/bump-043-dist`, the same `cmr4.exe` (`7dca9f4c…1b41`), Wine 11.21
+and gamescope 3.17.0 in the `gaming` box, with the 2026-11-03 harness
+(`.work/rg043/bin/`: `env -i`, fresh private prefix, `gamescope --backend
+headless`, PipeWire with one null sink, XTest and the Windows helper for
+input, only our own processes listed or signalled). Logs and screenshots
+in `.work/rg043/logs/` (local, not in Git).
+
+| Check | Result |
+|---|---|
+| The game starts from the rewritten exe (`--look widescreen`, fresh prefix) | **VERIFIED**: intro drawn (`intro-xaltf4/shot.jpg`), main menu reached (`menu-*/menu.jpg`); `launcher.log` says "close hook: rea_close_hook.dll added to the runtime cmr4.exe's imports" and gives the game `REA_CLOSE_HOOK` and `REA_CLOSE_HOOK_ATTACH=1` |
+| Runtime `cmr4.exe` against the player's | **VERIFIED**: 4,096 bytes longer (the `.reahook` section); past the headers the only changed byte is the widescreen fix's (0x77829); the next starts reused it unchanged |
+| Alt+F4 (XTest) in the intro | **VERIFIED**: game gone 0.34 s, helper 1.10 s, game exit code 0 |
+| Alt+F4 (XTest) in the main menu | **VERIFIED**: 0.32 s / 0.82 s |
+| Window close (`WM_DELETE_WINDOW`, as a compositor sends) | **VERIFIED**: 0.09 s / 0.84 s |
+| `WM_SYSCOMMAND SC_CLOSE` | **VERIFIED**: 0.59 s / 1.35 s |
+| The game's own Quit (Escape → YES) | **VERIFIED**: 0.46 s / 0.71 s |
+
+After every run no process of the test was left (game, launcher,
+`wineserver`, gamescope, helper); the helper's exit code was gamescope's
+own exit segfault (139), as before. The game folder's hashes were the
+same afterwards and no file in it was newer than the first run. Not
+checked: native Windows (the SDK's `attach` test covers the mechanism
+under Wine only).
+
 ## 2026-11-03: rea-launcher-sdk v0.4.1 bump, headless real-game check
 
 Launcher on branch `sdk-update/v0.4.1` (SDK v0.4.1), release build
