@@ -5,7 +5,7 @@
 
 patch sets: (none)
 game renders: 1280x800
-wrappers installed: D3D9.dll, d3d11.dll, dxgi.dll, dinput8.dll
+wrappers installed: D3D9.dll, rea_close_hook.dll, d3d11.dll, dxgi.dll, dinput8.dll
 wrappers taken out: (none)
 arguments: (none)
 prefer fast GPU: false
@@ -41,6 +41,7 @@ dxgi = native,builtin
 
 [environment]
 REA_CLOSE_HOOK=class=PC_CMR4;strategy=terminate
+REA_CLOSE_HOOK_ATTACH=1
 WINEDLLOVERRIDES=dinput8,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d
 
 [file dgVoodoo.conf]

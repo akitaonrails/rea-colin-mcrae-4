@@ -326,9 +326,26 @@ mod app {
         ));
 
         // Always from the game's own bytes, so switching the fix off needs
-        // no restore step.
-        if fs::read(&runtime_exe).ok().as_deref() != Some(exe.bytes.as_slice()) {
-            fsx::write_atomic(&runtime_exe, &exe.bytes)
+        // no restore step. The close hook goes into its imports after the
+        // fix: Windows loads the hook with the game, and the launcher
+        // never touches the running game.
+        let runtime_bytes = match components::with_close_hook(&exe.bytes) {
+            Ok(bytes) => {
+                log_line(&format!(
+                    "close hook: {} added to the runtime cmr4.exe's imports",
+                    components::CLOSE_HOOK_DLL
+                ));
+                bytes
+            }
+            Err(error) => {
+                log_line(&format!(
+                    "warning: {error}; Alt+F4 and window close may not end the game"
+                ));
+                exe.bytes.clone()
+            }
+        };
+        if fs::read(&runtime_exe).ok().as_deref() != Some(runtime_bytes.as_slice()) {
+            fsx::write_atomic(&runtime_exe, &runtime_bytes)
                 .map_err(|error| format!("cannot write {error}"))?;
         }
         // gamescope exposes one output; elsewhere avoid a portrait primary monitor.
@@ -401,14 +418,7 @@ mod app {
             choose_gamepad(&options_file);
         }
         log_line("starting game");
-        let code = win32::run_game(
-            &runtime_exe,
-            &runtime,
-            &plan.env,
-            &plan.args,
-            &components_dir.join(components::CLOSE_HOOK_DLL),
-            log_line,
-        )?;
+        let code = win32::run_game(&runtime_exe, &runtime, &plan.env, &plan.args)?;
         log_line(&format!("game exited with {code}"));
         if plan.gamepad_profile {
             // A first run creates OPTIONS while playing; set it up for the next.

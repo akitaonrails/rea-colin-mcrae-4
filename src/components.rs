@@ -20,9 +20,12 @@ pub const DGVOODOO_DLLS: [&str; 1] = ["D3D9.dll"];
 pub const DXVK_DLLS: [&str; 2] = ["d3d11.dll", "dxgi.dll"];
 pub const XIDI_DLL: &str = "dinput8.dll";
 /// The SDK's close hook (`rea-launcher-close-hook`), which lets Alt+F4
-/// and window close end the game. It is loaded from the package and never
-/// copied into the runtime.
-pub const CLOSE_HOOK_DLL: &str = "rea_close_hook.dll";
+/// and window close end the game. It is installed next to the runtime's
+/// `cmr4.exe`, whose import table names it ([`with_close_hook`]), so
+/// Windows loads it with the game and it attaches itself
+/// (`REA_CLOSE_HOOK_ATTACH=1`): the launcher never touches the running
+/// game, which antivirus heuristics would take for a keylogger.
+pub const CLOSE_HOOK_DLL: &str = rea_close_hook::DLL;
 /// Its configuration, set on the game as `REA_CLOSE_HOOK`: CMR04's window
 /// procedure swallows `WM_CLOSE` and its loop ignores `WM_QUIT`, and the
 /// game has no clean shutdown path to call, so a close request (the
@@ -32,6 +35,16 @@ pub const CLOSE_HOOK_DLL: &str = "rea_close_hook.dll";
 /// the same thread.
 pub const CLOSE_HOOK_CONFIG: &str = "class=PC_CMR4;strategy=terminate";
 const OWNERSHIP_FILE: &str = ".cmr4-launcher-components";
+
+/// The runtime's `cmr4.exe` from `bytes` (the game's own, with the
+/// widescreen fix or not: [`crate::edition::prepare`]) with
+/// [`CLOSE_HOOK_DLL`] in its import table. Built from the player's bytes
+/// on every start, after the patches; an exe that already imports it is
+/// returned unchanged.
+pub fn with_close_hook(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    rea_close_hook::import_into(bytes)
+        .map_err(|error| format!("cannot add the close hook to cmr4.exe's imports: {error}"))
+}
 
 /// Xidi's view of the pad, following the CMR3 launcher's rally mapper.
 ///
@@ -91,6 +104,7 @@ pub fn app_override_dlls(controller: bool) -> Vec<&'static str> {
 
 pub fn validate(components: &Path, controller: bool, wine: bool) -> Result<(), String> {
     let mut names = DGVOODOO_DLLS.to_vec();
+    names.push(CLOSE_HOOK_DLL);
     if controller {
         names.push(XIDI_DLL);
     }
@@ -250,7 +264,7 @@ pub fn install(
     let wine = platform.wine;
     validate(components, settings.controller(), wine)?;
     let mut ledger = Ledger::load(game, runtime, OWNERSHIP_FILE);
-    for name in DGVOODOO_DLLS {
+    for name in DGVOODOO_DLLS.into_iter().chain([CLOSE_HOOK_DLL]) {
         install_wrapper(&mut ledger, runtime, components, name)?;
     }
     for name in DXVK_DLLS {
@@ -316,7 +330,11 @@ mod tests {
 
     fn write_components(path: &Path) {
         fs::create_dir_all(path).unwrap();
-        for name in DGVOODOO_DLLS.into_iter().chain(DXVK_DLLS).chain([XIDI_DLL]) {
+        for name in DGVOODOO_DLLS
+            .into_iter()
+            .chain(DXVK_DLLS)
+            .chain([XIDI_DLL, CLOSE_HOOK_DLL])
+        {
             fs::write(path.join(name), format!("bundle {name}")).unwrap();
         }
     }
@@ -567,7 +585,14 @@ mod tests {
                 .iter()
                 .any(|l| l.starts_with("dinput8.dll: ") && l.ends_with("(Xidi 4.3.1)"))
         );
-        assert_eq!(lines[4], "rea_close_hook.dll: not bundled");
+        assert!(
+            lines[4].starts_with("rea_close_hook.dll: ")
+                && lines[4].ends_with("(rea-launcher-close-hook)"),
+            "{}",
+            lines[4]
+        );
+        fs::remove_file(components.join(CLOSE_HOOK_DLL)).unwrap();
+        assert_eq!(describe(&components)[4], "rea_close_hook.dll: not bundled");
         fs::remove_dir_all(components).unwrap();
     }
 
@@ -607,6 +632,13 @@ mod tests {
         for name in DGVOODOO_DLLS.into_iter().chain([XIDI_DLL]) {
             fs::write(components.join(name), name).unwrap();
         }
+        // The close hook is needed on every platform.
+        assert!(
+            validate(&components, true, false)
+                .unwrap_err()
+                .contains(CLOSE_HOOK_DLL)
+        );
+        fs::write(components.join(CLOSE_HOOK_DLL), "hook").unwrap();
         assert_eq!(validate(&components, true, false), Ok(()));
         assert!(
             validate(&components, true, true)
@@ -617,13 +649,87 @@ mod tests {
     }
 
     #[test]
+    fn the_close_hook_goes_next_to_the_runtime_exe_on_every_platform() {
+        let game = temp("hook-game");
+        let components = temp("hook-components");
+        fs::create_dir_all(&game).unwrap();
+        write_components(&components);
+        for (n, (wine, controller)) in [(false, true), (true, true), (true, false), (false, false)]
+            .into_iter()
+            .enumerate()
+        {
+            let runtime = temp(&format!("hook-runtime-{n}"));
+            fs::create_dir_all(&runtime).unwrap();
+            let settings = Settings {
+                controller: Some(controller),
+                ..Settings::default()
+            };
+            let platform = Platform::new(wine, false, None);
+            for _ in 0..2 {
+                install(&game, &runtime, &components, &settings, true, &platform).unwrap();
+                assert_eq!(
+                    fs::read(runtime.join(CLOSE_HOOK_DLL)).unwrap(),
+                    b"bundle rea_close_hook.dll"
+                );
+            }
+            // A new launcher's hook replaces the one an older one installed.
+            fs::write(components.join(CLOSE_HOOK_DLL), "newer hook").unwrap();
+            install(&game, &runtime, &components, &settings, true, &platform).unwrap();
+            assert_eq!(
+                fs::read(runtime.join(CLOSE_HOOK_DLL)).unwrap(),
+                b"newer hook"
+            );
+            fs::write(components.join(CLOSE_HOOK_DLL), "bundle rea_close_hook.dll").unwrap();
+            fs::remove_dir_all(runtime).unwrap();
+        }
+        for path in [game, components] {
+            fs::remove_dir_all(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_file_that_is_not_an_exe_gets_no_close_hook() {
+        let error = with_close_hook(b"not a PE file").unwrap_err();
+        assert!(error.contains("close hook"), "{error}");
+    }
+
+    /// Windows target (`scripts/wine-test`): a real PE32 (this test
+    /// program, linked like the game) gains the import once, and every
+    /// byte of its sections stays where it was, so a patch applied before
+    /// is kept.
+    #[cfg(windows)]
+    #[test]
+    fn the_close_hook_is_imported_once_and_keeps_the_patched_bytes() {
+        use rea_launcher::pe::edit;
+        let exe = fs::read(std::env::current_exe().unwrap()).unwrap();
+        let hooked = with_close_hook(&exe).unwrap();
+        assert_ne!(hooked, exe);
+        let imports = edit::imports(&hooked).unwrap();
+        assert!(
+            imports
+                .iter()
+                .any(|import| import.dll.eq_ignore_ascii_case(CLOSE_HOOK_DLL)),
+            "{imports:?}"
+        );
+        assert_eq!(with_close_hook(&hooked).unwrap(), hooked, "added once");
+        // Past the headers, the original file is a prefix of the new one
+        // (code, data and the widescreen site at 0x77826 don't move).
+        let headers = 0x1000.min(exe.len());
+        assert_eq!(&hooked[headers..exe.len()], &exe[headers..]);
+    }
+
+    #[test]
     fn first_time_runtime_only_wrapper_conflicts_are_refused() {
         let game = temp("conflict-game");
         let runtimes = temp("conflict-runtimes");
         let components = temp("conflict-components");
         fs::create_dir_all(&game).unwrap();
         write_components(&components);
-        for name in DGVOODOO_DLLS.into_iter().chain(DXVK_DLLS).chain([XIDI_DLL]) {
+        for name in DGVOODOO_DLLS
+            .into_iter()
+            .chain(DXVK_DLLS)
+            .chain([XIDI_DLL, CLOSE_HOOK_DLL])
+        {
             let runtime = runtimes.join(name);
             fs::create_dir_all(&runtime).unwrap();
             fs::write(runtime.join(name), b"user DLL").unwrap();

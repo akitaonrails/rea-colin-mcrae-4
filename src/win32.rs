@@ -124,16 +124,16 @@ pub fn single_instance(name: &str) -> Result<Guard, AlreadyRunning> {
 /// Starts the game and waits for it. Under Wine the game's own environment
 /// carries the DLL overrides, so it works without the Linux helper. CMR04
 /// ignores WM_CLOSE and has no OS-level quit path, so Alt+F4 and the
-/// compositor's close action do nothing: the SDK's close-hook DLL, hooked
-/// into the game's main thread and configured by `REA_CLOSE_HOOK` (in
-/// `env`, from the plan), ends the process on those requests.
+/// compositor's close action do nothing: the SDK's close-hook DLL, in the
+/// runtime `cmr4.exe`'s imports (`components::with_close_hook`), attaches
+/// itself (`REA_CLOSE_HOOK_ATTACH=1`) and, configured by `REA_CLOSE_HOOK`
+/// (both in `env`, from the plan), ends the process on those requests.
+/// Nothing here touches the running game.
 pub fn run_game(
     exe: &Path,
     workdir: &Path,
     env: &[(&str, String)],
     args: &[String],
-    close_hook: &Path,
-    log: impl Fn(&str),
 ) -> Result<u32, String> {
     let mut launch = Launch::new(exe).cwd(workdir);
     for arg in args {
@@ -142,20 +142,7 @@ pub fn run_game(
     for (name, value) in env {
         launch = launch.env(name, value);
     }
-    let game = launch.spawn()?;
-    let export = std::ffi::CString::new(rea_close_hook::EXPORT)
-        .map_err(|error| format!("close hook export name: {error}"))?;
-    let _hook = match game.message_hook(close_hook, &export) {
-        Ok(hook) => {
-            log("close hook installed (Alt+F4 and window close end the game)");
-            Some(hook)
-        }
-        Err(error) => {
-            log(&format!("warning: {error}"));
-            None
-        }
-    };
-    game.wait()
+    launch.run()
 }
 
 #[cfg(test)]

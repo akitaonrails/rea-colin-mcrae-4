@@ -598,15 +598,20 @@ fn hostile_game_and_runtime_paths_sync_and_resolve() {
         reg(&plan, "INSTALL_PATH"),
         RegValue::String(runtime.display().to_string())
     );
-    // On Windows the only environment change is the close hook's setup.
+    // On Windows the only environment changes are the close hook's setup
+    // and its self-attach switch (it is in cmr4.exe's imports).
     assert!(plan.prefer_fast_gpu);
     assert_eq!(
         plan.env,
-        [(
-            "REA_CLOSE_HOOK",
-            "class=PC_CMR4;strategy=terminate".to_string()
-        )]
+        [
+            (
+                "REA_CLOSE_HOOK",
+                "class=PC_CMR4;strategy=terminate".to_string()
+            ),
+            ("REA_CLOSE_HOOK_ATTACH", "1".to_string())
+        ]
     );
+    assert!(plan.wrappers.contains(&"rea_close_hook.dll"));
     assert_eq!(plan.taken_out, ["d3d11.dll", "dxgi.dll"]);
 }
 
@@ -635,6 +640,7 @@ fn the_plan_keeps_first_run_defaults_and_the_players_overrides() {
                 "REA_CLOSE_HOOK",
                 "class=PC_CMR4;strategy=terminate".to_string()
             ),
+            ("REA_CLOSE_HOOK_ATTACH", "1".to_string()),
             (
                 "WINEDLLOVERRIDES",
                 "dinput8,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d;xinput1_3=n".to_string()

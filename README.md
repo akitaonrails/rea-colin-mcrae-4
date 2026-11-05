@@ -33,7 +33,7 @@ analogue triggers. Click to watch (2⅓ minutes, with sound).*
 | The pad works in menus but not in a race: with Wine alone the buttons reached the game but the stick and triggers didn't. | Bundled Xidi presents a classic gamepad. The left stick steers, RT and LT are analogue pedals, and a thumb resting on the stick can't open the throttle. |
 | Every new player had to set up the pad, and choosing it in the game's menu can freeze the game under Wine. | For a profile whose controls were never set up, the launcher selects your pad, analogue pedals and the game's axis tuning, so you can drive straight away. A profile you set up yourself is left alone. |
 | An unknown version of `cmr4.exe` could be patched by guesswork. | The launcher patches only the builds it knows. Any other version still plays, with the game's own view, and the window offers a button to report it. |
-| Patches, wrappers and updates could damage your install or overwrite your saves. | The game folder is only read. A private copy holds the patched `cmr4.exe`, the wrappers, settings and saves; later launches update it without touching your saves, settings or DLL mods you added yourself. |
+| Patches, wrappers and updates could damage your install or overwrite your saves. | The game folder is only read. A private copy holds the patched `cmr4.exe` (which also loads the close hook), the wrappers, settings and saves; later launches update it without touching your saves, settings or DLL mods you added yourself. |
 
 ## Screenshots
 
@@ -282,7 +282,8 @@ Registry entries the launcher writes:
 
 `launcher.log` records what the launcher did and why: the game version and
 its SHA-256, the look and settings, each bundled DLL with its SHA-256, the
-DLL overrides and close-hook setup (`REA_CLOSE_HOOK`) given to the game,
+DLL overrides and close-hook setup (`REA_CLOSE_HOOK`,
+`REA_CLOSE_HOOK_ATTACH`) given to the game,
 the monitor and dgVoodoo output it chose, and the `gamepad setup:` step. It starts afresh past 1 MiB. Remove personal
 paths before posting it.
 

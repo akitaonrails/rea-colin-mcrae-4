@@ -84,11 +84,16 @@ The launcher uses the tested CMR04 setup rather than generic CMR1 options:
   (borderless); gamescope and native Windows use normal fullscreen.
 - **Closing:** the window procedure (0x501EF0) returns 0 for `WM_CLOSE` and
   swallows Alt-key presses other than Tab/Enter; the main loop (0x503000)
-  ignores `WM_QUIT`. The launcher installs a `WH_GETMESSAGE` hook from
-  the SDK's `rea_close_hook.dll` (`REA_CLOSE_HOOK=class=PC_CMR4;strategy=terminate`;
-  CMR4's own `cmr4close.dll` until 0.3.0) on the game's main thread that ends the process on
-  `SC_CLOSE` or Alt+F4 aimed at the `PC_CMR4` window. Plain `WM_CLOSE` is
-  ignored because the intro movie's window receives one on the same thread.
+  ignores `WM_QUIT`. The SDK's `rea_close_hook.dll`
+  (`REA_CLOSE_HOOK=class=PC_CMR4;strategy=terminate`; CMR4's own
+  `cmr4close.dll` until 0.3.0) puts a `WH_GETMESSAGE` hook on the game's
+  main thread that ends the process on `SC_CLOSE` or Alt+F4 aimed at the
+  `PC_CMR4` window. Plain `WM_CLOSE` is ignored because the intro movie's
+  window receives one on the same thread. Since 0.4.2 the DLL is in the
+  private copy's `cmr4.exe` imports (`rea_close_hook::import_into`, a new
+  `.reahook` section) and installs the hook itself
+  (`REA_CLOSE_HOOK_ATTACH=1`); until then the launcher installed it from
+  outside, which antivirus heuristics take for a keylogger.
 - **Gamepad:** CMR04 reads a DirectInput joystick, requests X/Y/Z/RX/RY/RZ, a
   hat and buttons, and sets every axis to 0..255. Analogue pedals use one axis
   for accelerate and brake. Xidi's `CMR04Gamepad` keeps StandardGamepad's

@@ -8,7 +8,8 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use crate::components::{
-    self, CLOSE_HOOK_CONFIG, DGVOODOO_DLLS, DXVK_DLLS, Platform, XIDI_CONF, XIDI_DLL,
+    self, CLOSE_HOOK_CONFIG, CLOSE_HOOK_DLL, DGVOODOO_DLLS, DXVK_DLLS, Platform, XIDI_CONF,
+    XIDI_DLL,
 };
 use crate::config::{Resolution, Settings};
 use crate::registry::{self, RegWrite};
@@ -88,6 +89,7 @@ pub fn plan(
     let controller = settings.controller();
     let game_mode = registry::game_mode(settings.resolution(), widescreen);
     let mut wrappers = DGVOODOO_DLLS.to_vec();
+    wrappers.push(CLOSE_HOOK_DLL);
     let mut taken_out = Vec::new();
     if platform.wine {
         wrappers.extend(DXVK_DLLS);
@@ -105,9 +107,13 @@ pub fn plan(
         taken_out.push(XIDI_DLL);
         files.push(("Xidi.ini", None));
     }
-    // The close hook (components::CLOSE_HOOK_DLL) reads its setup from
-    // the game's environment, on Windows and under Wine alike.
-    let mut env = vec![(rea_close_hook::ENV, CLOSE_HOOK_CONFIG.to_owned())];
+    // The close hook (components::CLOSE_HOOK_DLL, in the runtime exe's
+    // imports) reads its setup from the game's environment, on Windows and
+    // under Wine alike, and attaches itself to the game's window thread.
+    let mut env = vec![
+        (rea_close_hook::ENV, CLOSE_HOOK_CONFIG.to_owned()),
+        (rea_close_hook::ATTACH_ENV, "1".to_owned()),
+    ];
     let mut winebus = Vec::new();
     let mut app_dll_overrides = Vec::new();
     let mut app_dll_overrides_removed = Vec::new();
