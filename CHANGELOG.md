@@ -6,6 +6,21 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+Fewer antivirus false positives on Windows: a player's antivirus flagged
+another rea launcher, and this one had the same two habits.
+
+### Changed
+
+- `CMR4Launcher.exe` now says what it is: its name, version, publisher
+  and icon show in Explorer's Properties, so antivirus programs are less
+  likely to flag it.
+- The close hook that lets Alt+F4 and closing the window end the game is
+  now loaded by the game itself: the private copy's `cmr4.exe` lists
+  `rea_close_hook.dll`, which now sits next to it. Before, the launcher
+  reached into the running game to install it, which antivirus programs
+  can mistake for a keylogger. Alt+F4 and window close work as before.
+- Updated rea-launcher-sdk to v0.4.3.
+
 ## [0.4.1] - 2026-11-03
 
 From a native Windows 10 test of the Windows launchers by an outside
