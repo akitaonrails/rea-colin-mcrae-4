@@ -27,6 +27,18 @@ PIN_FILE=$HERE/components.pins
 pin_verify "$PKG/components/D3D9.dll" "$(pin_sha dgvoodoo-d3d9)"
 [ -s "$TMP/xidi/Xidi-v4.3.1/Win32/dinput8.dll" ]
 cp "$TMP/xidi/Xidi-v4.3.1/Win32/dinput8.dll" "$PKG/components/dinput8.dll"
+cabextract -q -d "$TMP/vc" "$CACHE/VC_redist.x86.exe"
+for cab in "$TMP"/vc/a*; do
+  if cabextract -l "$cab" 2>/dev/null | grep -q 'vcruntime140.dll_x86'; then
+    cabextract -q -d "$TMP/vcdll" -F 'msvcp140.dll_x86' -F 'msvcp140_atomic_wait.dll_x86' \
+      -F 'concrt140.dll_x86' -F 'vcruntime140.dll_x86' "$cab"
+    break
+  fi
+done
+for dll in msvcp140 msvcp140_atomic_wait concrt140 vcruntime140; do
+  [ -s "$TMP/vcdll/$dll.dll_x86" ]
+  cp "$TMP/vcdll/$dll.dll_x86" "$PKG/components/$dll.dll"
+done
 for name in d3d11.dll dxgi.dll; do
   [ -s "$TMP/dxvk/dxvk-3.1.1/x32/$name" ]
   cp "$TMP/dxvk/dxvk-3.1.1/x32/$name" "$PKG/components/$name"

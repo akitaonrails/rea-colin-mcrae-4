@@ -22,7 +22,7 @@ jobs:
     # and the AppImage checked against the allowlist.
     uses: akitaonrails/rea-launcher-sdk/.github/workflows/launcher-ci.yml@v0.4.3
     with:
-      apt-packages: gcc-mingw-w64-i686 lld zip unzip
+      apt-packages: gcc-mingw-w64-i686 lld zip unzip cabextract
       shell-tests: linux/tests/*.sh packaging/tests/*.sh
       wine-tests: true
       package-command: |

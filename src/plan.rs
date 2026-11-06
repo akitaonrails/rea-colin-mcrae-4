@@ -102,9 +102,11 @@ pub fn plan(
     )];
     if controller {
         wrappers.push(XIDI_DLL);
+        wrappers.extend(components::XIDI_VC_DLLS);
         files.push(("Xidi.ini", Some(XIDI_CONF.to_owned())));
     } else {
         taken_out.push(XIDI_DLL);
+        taken_out.extend(components::XIDI_VC_DLLS);
         files.push(("Xidi.ini", None));
     }
     // The close hook (components::CLOSE_HOOK_DLL, in the runtime exe's
@@ -120,7 +122,7 @@ pub fn plan(
     if platform.wine {
         app_dll_overrides = components::app_override_dlls(controller);
         if !controller {
-            app_dll_overrides_removed.push("dinput8");
+            app_dll_overrides_removed.extend(components::XIDI_OVERRIDE_DLLS);
         }
         env.push((
             rea_launcher::wine::DLL_OVERRIDES,

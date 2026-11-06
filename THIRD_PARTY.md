@@ -53,6 +53,7 @@ personality rights for the people shown.
 | Component | Version and pin | License / notices | Official source |
 | --- | --- | --- | --- |
 | Xidi | 4.3.1; SHA-256 `78120f44baa816fc264fb722495776aab437a36be515e42345428b7f32ac17ff` | BSD-3-Clause; `licenses/Xidi/LICENSE` and `ThirdParty` notices | https://github.com/samuelgr/Xidi/releases/tag/v4.3.1 |
+| Microsoft Visual C++ 2015–2022 Redistributable (x86) | `msvcp140.dll`, `msvcp140_atomic_wait.dll`, `concrt140.dll`, `vcruntime140.dll` from `VC_redist.x86.exe` (SHA-256 `0c09f2611660441084ce0df425c51c11e147e6447963c3690f97e0b25c55ed64`) | Microsoft Visual Studio Distributable Code terms (redistributable binaries) | https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist |
 | dgVoodoo2 | Tested 2.80 D3D9.dll; SHA-256 `6f0eae6d0fbe836490b1aa3361304d2398fdb5d815a929e126b5ae7b13b16e47`, from `dgVoodoo2_80.zip` (`cec7e2c8…9d30`) in this repository's `thirdparty` release | Copyright Dege; **no licence text**: bundled by the owner's recorded exception (the 2.80 archive is gone upstream and 2.87.6 crashed CMR04); provenance and notice in `packaging/mirror/README.md` and `licenses/dgVoodoo2/README.md` | https://dege.freeweb.hu/dgVoodoo2/dgVoodoo2/ |
 | DXVK | 3.1.1; SHA-256 `40565b4a724aadc4433fa4e010b4b23916d9b1f1baeee64e17186db94f54e608` | zlib/libpng; `licenses/DXVK/LICENSE`; x32 d3d11/dxgi installed only under Wine/Proton | https://github.com/doitsujin/dxvk/releases/tag/v3.1.1 |
 

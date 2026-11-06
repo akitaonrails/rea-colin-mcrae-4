@@ -419,7 +419,14 @@ mod app {
         }
         log_line("starting game");
         let code = win32::run_game(&runtime_exe, &runtime, &plan.env, &plan.args)?;
-        log_line(&format!("game exited with {code}"));
+        log_line(&format!("game exited with {code} (0x{code:08x})"));
+        if code >= 0xC000_0000 {
+            fatal(&format!(
+                "{GAME_EXE} stopped unexpectedly (Windows status 0x{code:08X}).\n\n\
+                 Launcher log: {}",
+                home().join("launcher.log").display()
+            ));
+        }
         if plan.gamepad_profile {
             // A first run creates OPTIONS while playing; set it up for the next.
             choose_gamepad(&options_file);

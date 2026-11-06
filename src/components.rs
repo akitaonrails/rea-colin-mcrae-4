@@ -19,6 +19,19 @@ use crate::registry;
 pub const DGVOODOO_DLLS: [&str; 1] = ["D3D9.dll"];
 pub const DXVK_DLLS: [&str; 2] = ["d3d11.dll", "dxgi.dll"];
 pub const XIDI_DLL: &str = "dinput8.dll";
+pub const XIDI_VC_DLLS: [&str; 4] = [
+    "msvcp140.dll",
+    "msvcp140_atomic_wait.dll",
+    "concrt140.dll",
+    "vcruntime140.dll",
+];
+pub const XIDI_OVERRIDE_DLLS: [&str; 5] = [
+    "dinput8",
+    "msvcp140",
+    "msvcp140_atomic_wait",
+    "concrt140",
+    "vcruntime140",
+];
 /// The SDK's close hook (`rea-launcher-close-hook`), which lets Alt+F4
 /// and window close end the game. It is installed next to the runtime's
 /// `cmr4.exe`, whose import table names it ([`with_close_hook`]), so
@@ -86,15 +99,16 @@ dinput8.dll = C:\Windows\system32\dinput8.dll
 ActiveVirtualControllerMask = 0x01
 ";
 
-pub const WINE_OVERRIDES: &str = "dinput8,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d";
+pub const WINE_OVERRIDES: &str = "dinput8,msvcp140,msvcp140_atomic_wait,concrt140,vcruntime140,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d";
 
 /// The DLLs `WINE_OVERRIDES` loads native-then-builtin, for Wine's
 /// per-program overrides of `cmr4.exe` (Wine's loader ignores
 /// `WINEDLLOVERRIDES` in the game's environment block). Xidi's `dinput8`
-/// only with the gamepad on; `dsound` keeps a player's DSOAL.
+/// and its VC++ runtime DLLs only with the gamepad on; `dsound` keeps a
+/// player's DSOAL.
 pub fn app_override_dlls(controller: bool) -> Vec<&'static str> {
     let mut dlls = if controller {
-        vec!["dinput8"]
+        XIDI_OVERRIDE_DLLS.to_vec()
     } else {
         Vec::new()
     };
@@ -107,6 +121,7 @@ pub fn validate(components: &Path, controller: bool, wine: bool) -> Result<(), S
     names.push(CLOSE_HOOK_DLL);
     if controller {
         names.push(XIDI_DLL);
+        names.extend(XIDI_VC_DLLS);
     }
     if wine {
         names.extend(DXVK_DLLS);
@@ -285,17 +300,21 @@ pub fn install(
     .map_err(|error| format!("cannot write dgVoodoo.conf: {error}"))?;
 
     if settings.controller() {
-        install_wrapper(&mut ledger, runtime, components, XIDI_DLL)?;
+        for name in [XIDI_DLL].into_iter().chain(XIDI_VC_DLLS) {
+            install_wrapper(&mut ledger, runtime, components, name)?;
+        }
         fsx::write_atomic(&runtime.join("Xidi.ini"), XIDI_CONF)
             .map_err(|error| format!("cannot write Xidi.ini: {error}"))?;
     } else {
-        take_out(
-            &mut ledger,
-            XIDI_DLL,
-            &format!(
-                "runtime {XIDI_DLL} is not the launcher-installed Xidi; refusing to replace or remove a modified DLL"
-            ),
-        )?;
+        for name in [XIDI_DLL].into_iter().chain(XIDI_VC_DLLS) {
+            take_out(
+                &mut ledger,
+                name,
+                &format!(
+                    "runtime {name} is not the launcher-installed Xidi; refusing to replace or remove a modified DLL"
+                ),
+            )?;
+        }
         if fs::read(runtime.join("Xidi.ini")).is_ok_and(|bytes| bytes == XIDI_CONF.as_bytes()) {
             fsx::remove(&runtime.join("Xidi.ini"))
                 .map_err(|error| format!("cannot remove owned Xidi.ini: {error}"))?;
@@ -334,6 +353,7 @@ mod tests {
             .into_iter()
             .chain(DXVK_DLLS)
             .chain([XIDI_DLL, CLOSE_HOOK_DLL])
+            .chain(XIDI_VC_DLLS)
         {
             fs::write(path.join(name), format!("bundle {name}")).unwrap();
         }
@@ -629,7 +649,11 @@ mod tests {
         assert!(error.contains("dxgi.dll"));
         assert!(validate(&components, false, true).is_err());
         assert!(validate(&components, true, false).is_err());
-        for name in DGVOODOO_DLLS.into_iter().chain([XIDI_DLL]) {
+        for name in DGVOODOO_DLLS
+            .into_iter()
+            .chain([XIDI_DLL])
+            .chain(XIDI_VC_DLLS)
+        {
             fs::write(components.join(name), name).unwrap();
         }
         // The close hook is needed on every platform.

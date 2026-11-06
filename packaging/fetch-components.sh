@@ -7,6 +7,6 @@ CACHE=${1:-${CMR4_CACHE:-$HOME/.cache/cmr4-launcher}}
 . "$HERE/../sdk/packaging/pins.sh"
 PIN_FILE=$HERE/components.pins
 PIN_CACHE=
-for name in xidi dxvk dgvoodoo; do
+for name in xidi vcredist dxvk dgvoodoo; do
   echo "verified $name: $(pin_fetch "$name" "$CACHE")"
 done

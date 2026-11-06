@@ -16,6 +16,10 @@ docs/images/launcher-play.jpg
 components/D3D9.dll
 components/rea_close_hook.dll
 components/dinput8.dll
+components/msvcp140.dll
+components/msvcp140_atomic_wait.dll
+components/concrt140.dll
+components/vcruntime140.dll
 components/d3d11.dll
 components/dxgi.dll
 linux/cmr4-play x

@@ -318,18 +318,39 @@ fn gamepad_switch_and_flag_reach_xidi_the_environment_and_winebus() {
     assert_eq!(on.winebus, [("Map Controllers", 1)]);
     assert_eq!(
         env(&on, "WINEDLLOVERRIDES"),
-        Some("dinput8,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d")
+        Some(
+            "dinput8,msvcp140,msvcp140_atomic_wait,concrt140,vcruntime140,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d"
+        )
     );
     // Wine's loader ignores WINEDLLOVERRIDES in the game's environment
     // block (SDK v0.3.3): the same DLLs go into cmr4.exe's per-program
     // overrides, and Xidi's is taken back when the gamepad is off.
     assert_eq!(
         on.app_dll_overrides,
-        ["dinput8", "dsound", "d3d9", "d3d11", "dxgi"]
+        [
+            "dinput8",
+            "msvcp140",
+            "msvcp140_atomic_wait",
+            "concrt140",
+            "vcruntime140",
+            "dsound",
+            "d3d9",
+            "d3d11",
+            "dxgi"
+        ]
     );
     assert!(on.app_dll_overrides_removed.is_empty());
     assert_eq!(off.app_dll_overrides, ["dsound", "d3d9", "d3d11", "dxgi"]);
-    assert_eq!(off.app_dll_overrides_removed, ["dinput8"]);
+    assert_eq!(
+        off.app_dll_overrides_removed,
+        [
+            "dinput8",
+            "msvcp140",
+            "msvcp140_atomic_wait",
+            "concrt140",
+            "vcruntime140"
+        ]
+    );
 }
 
 #[test]
@@ -643,7 +664,7 @@ fn the_plan_keeps_first_run_defaults_and_the_players_overrides() {
             ("REA_CLOSE_HOOK_ATTACH", "1".to_string()),
             (
                 "WINEDLLOVERRIDES",
-                "dinput8,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d;xinput1_3=n".to_string()
+                "dinput8,msvcp140,msvcp140_atomic_wait,concrt140,vcruntime140,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d;xinput1_3=n".to_string()
             )
         ]
     );

@@ -6,7 +6,7 @@
 patch sets: (none)
 game renders: 1920x1200
 wrappers installed: D3D9.dll, rea_close_hook.dll, d3d11.dll, dxgi.dll
-wrappers taken out: dinput8.dll
+wrappers taken out: dinput8.dll, msvcp140.dll, msvcp140_atomic_wait.dll, concrt140.dll, vcruntime140.dll
 arguments: (none)
 prefer fast GPU: false
 gamepad profile setup: false
@@ -37,6 +37,10 @@ d3d9 = native,builtin
 d3d11 = native,builtin
 dxgi = native,builtin
 dinput8: ours removed
+msvcp140: ours removed
+msvcp140_atomic_wait: ours removed
+concrt140: ours removed
+vcruntime140: ours removed
 
 [environment]
 REA_CLOSE_HOOK=class=PC_CMR4;strategy=terminate
