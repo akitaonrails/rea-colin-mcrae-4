@@ -6,6 +6,8 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-11-07
+
 ### Changed
 
 - Updated rea-launcher-sdk to v0.4.4: the AppImage's portable Wine is
@@ -426,7 +428,8 @@ Rally 04 on Windows 10/11 and on Linux (Wine, Proton, AppImage).
 - Windows zip and AppImage built in CI from pinned component archives, with
   a package inventory check that rejects unlisted files and game assets.
 
-[Unreleased]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.3...v0.4.4
 [0.4.2]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.3.1...v0.4.0
