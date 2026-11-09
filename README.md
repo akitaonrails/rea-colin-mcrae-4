@@ -33,6 +33,7 @@ analogue triggers. Click to watch (2⅓ minutes, with sound).*
 | The pad works in menus but not in a race: with Wine alone the buttons reached the game but the stick and triggers didn't. | Bundled Xidi presents a classic gamepad. The left stick steers, RT and LT are analogue pedals, and a thumb resting on the stick can't open the throttle. |
 | Every new player had to set up the pad, and choosing it in the game's menu can freeze the game under Wine. | For a profile whose controls were never set up, the launcher selects your pad, analogue pedals and the game's axis tuning, so you can drive straight away. A profile you set up yourself is left alone. |
 | An unknown version of `cmr4.exe` could be patched by guesswork. | The launcher patches only the builds it knows. Any other version still plays, with the game's own view, and the window offers a button to report it. |
+| You have the game's installer, not an installed game, and setup programs ask questions or hang under Wine. | Point it at the supported installer's folder: the launcher unpacks the game once with the bundled innoextract, without running the installer, and plays from there. |
 | Patches, wrappers and updates could damage your install or overwrite your saves. | The game folder is only read. A private copy holds the patched `cmr4.exe` (which also loads the close hook), the wrappers, settings and saves; later launches update it without touching your saves, settings or DLL mods you added yourself. |
 
 ## Screenshots
@@ -45,8 +46,32 @@ analogue triggers. Click to watch (2⅓ minutes, with sound).*
 
 ## What you need
 
-An installed Windows copy of **Colin McRae Rally 04** with `cmr4.exe` in its
-folder. No installer, disc, executable, media or game data is supplied here.
+Your own copy of **Colin McRae Rally 04**, in one of two forms:
+
+- **An installed game:** a folder with `cmr4.exe` in it.
+- **The game's installer** (the one the launcher supports, below): point
+  the launcher at its folder and it unpacks the game once, on the first
+  **Play**, into a folder of its own. The installer is never run: no setup
+  dialogs, no installer code. The launcher reads it with the bundled
+  [innoextract](https://constexpr.org/innoextract/), and the installer's
+  folder is only read. Unpacking needs about **2.9 GB** free next to the
+  launcher's private copy (2.7 GB for the game, plus room to work) and
+  takes a few minutes. Afterwards the Game folder setting points at the
+  unpacked game, so the installer files are no longer needed.
+
+| Supported installer | Files in its folder |
+| --- | --- |
+| Magipack's repack ("Colin McRae Rally 04 Repack", EN/FR/DE/ES/IT), a third-party build the project owner chose to support | `Colin McRae Rally 04_Repack_Setup.exe` and its three `…_Setup-1.bin` to `-3.bin` parts |
+
+The repack's own dgVoodoo files (`D3D9.dll`, `dgVoodoo.conf`,
+`dgVoodooCpl.exe`) are left out of the unpacked game, because the launcher
+brings its own tested dgVoodoo. Any other installer is left alone: the
+window and `launcher.log` show its code (the setup program's SHA-256) and
+the **Report this installer…** button, so it can be considered. Discs and
+other installers: install the game the usual way and point the launcher at
+the installed folder.
+
+No installer, disc, executable, media or game data is supplied here.
 
 The launcher knows `cmr4.exe` version 1.0.0.0, also with the community 16:9
 fix already applied, and applies the widescreen fix only to it. Any other
@@ -120,15 +145,19 @@ Variables, gamescope and the prefix are in [linux/README.md](linux/README.md).
 
 ## First run
 
-1. On **Play**, press **Browse…** and pick the folder with `cmr4.exe`.
-   Under Wine your Linux files are drive `Z:`, e.g.
-   `Z:\home\you\Games\CMR04`.
+1. On **Play**, press **Browse…** and pick the folder with `cmr4.exe`, or
+   the folder with the supported installer. Under Wine your Linux files
+   are drive `Z:`, e.g. `Z:\home\you\Games\CMR04`.
 2. Pick a look. The window starts on the one recommended for your screen:
    **Widescreen**, or **Steam Deck** on a 1280x800 screen.
 3. Press **Play** (or Enter, or Start on a pad).
 
 The first launch copies the game into the private copy (a few GB); later
-launches copy only what changed.
+launches copy only what changed. With an installer, the first **Play**
+first unpacks the game, with a progress window and a **Stop unpacking**
+button (Escape, or B on a pad); stopping removes what was copied so far.
+The window opens whenever someone may be watching, also under the Linux
+helper; `launcher.log` records each step.
 
 ## The settings window
 
@@ -201,7 +230,7 @@ lives is under [Where things live](#where-things-live).
 
 | `launcher.cfg` / flag | In the window | Values | Unset | What it changes |
 | --- | --- | --- | --- | --- |
-| `game` / `--game` | Play: Game folder | a folder | the launcher's own folder, if `cmr4.exe` is there | The folder of your installed game. It is only read, never changed. |
+| `game` / `--game` | Play: Game folder | a folder | the launcher's own folder, if `cmr4.exe` is there | The folder of your installed game, or of the supported installer (unpacked once, never run; then this setting points at the unpacked game). It is only read, never changed. |
 | `look` / `--look` | Play: Look | `original`, `widescreen`, `steam_deck` | no look: the values below | Sets the look's resolution and frame-rate cap. Values set next to it win. |
 | `resolution` / `--resolution` | Picture: Resolution | `WxH` (320x240 to 7680x4320) or `original` | the launcher picks one from your screen and saves it | The picture size. A 16:9 size shows the full widescreen view; other shapes keep the game's own view. |
 | `fps_limit` / `--fps-limit` | Picture: Frame-rate cap | 0 to 1000; `0` or `off` is no cap | no cap | The most frames per second the game draws. |
@@ -218,7 +247,10 @@ ignored, because the resolution now decides.
 
 With no options the settings window opens. Any option skips the window and
 plays. Options override `launcher.cfg` for that run only; the one
-remembered is the game folder (`--game`). When neither the file nor
+remembered is the game folder (`--game`). After unpacking an installer,
+the saved game folder is changed to the unpacked game, except when the
+folder came from `--game`: then the launcher only says where the game is
+(in `launcher.log`), and the next `--game` should name that folder. When neither the file nor
 `--resolution`/`--look` sets a resolution, the one the launcher picks from
 the screen is saved too, except inside gamescope, whose screen is only
 gamescope's own size.
@@ -227,7 +259,7 @@ The launcher's own switches:
 
 | Switch | What it does |
 | --- | --- |
-| `--check` | Checks the game and the settings without playing; the result goes to `launcher.log` and the terminal (or a dialog). Fails (exit 5) while another launcher is open. |
+| `--check` | Checks the game and the settings without playing; the result goes to `launcher.log` and the terminal (or a dialog). For an installer it says where the game will be unpacked and how much space that needs, and fails when there isn't enough; it never unpacks. Fails (exit 5) while another launcher is open. |
 | `--no-window` | Plays with the saved settings and the flags given. |
 | `--settings` | Opens only the settings window (the Linux helper uses it). |
 | `--linux` | Says the Linux helper (`cmr4-play`) started the launcher. |
@@ -248,6 +280,7 @@ private copy (after a launcher was ended while playing).
 | --- | --- | --- |
 | Settings (`launcher.cfg`) and log (`launcher.log`) | `%LOCALAPPDATA%\CMR4Launcher\` | in the prefix, `drive_c/users/<you>/AppData/Local/CMR4Launcher/` |
 | The launcher's copy of the game (runtime) | `%LOCALAPPDATA%\CMR4Launcher\CMR4` (or `runtime`) | in the prefix, `drive_c/users/<you>/AppData/Local/CMR4Launcher/CMR4` |
+| The game unpacked from an installer | beside the runtime: `%LOCALAPPDATA%\CMR4Launcher\CMR4-game` (or `<runtime>-game`) | in the prefix, `…/CMR4Launcher/CMR4-game` |
 | Your saves | inside the runtime, next to its `cmr4.exe` | the same |
 | Wine prefix | — | `~/.local/share/cmr4-launcher/prefix` |
 | `cmr4-play`'s files (the window's error output, the session lock) | — | `~/.config/cmr4-launcher` |
@@ -294,6 +327,17 @@ paths before posting it.
   (or open the [Unknown edition](https://github.com/akitaonrails/rea-colin-mcrae-4/issues/new?template=unknown-edition.yml)
   form) and give the code it shows and where your copy comes from. Don't
   attach `cmr4.exe`.
+- **"… is an installer this launcher doesn't know, so it was left
+  alone":** the folder holds an Inno Setup installer other than the
+  supported one. Install the game the usual way and choose the installed
+  folder, or press **Report this installer…** to send its code.
+- **"… is missing" or "… has N bytes instead of …":** a part of the
+  installer is missing or incomplete; copy or download it again. The
+  launcher checks every unpacked file's checksum too, and a damaged part
+  stops the unpack with nothing left behind.
+- **"Unpacking the game needs about 2.9 GB free":** free some space on
+  the private copy's drive, or choose a private copy folder on another
+  drive (the unpacked game sits next to it).
 - **The pad doesn't drive:** keep the Gamepad on, wake the pad before
   launching, check the `gamepad setup:` line in the log, and set the
   controls once in Options → Controllers as described above.
@@ -336,8 +380,9 @@ with a pad. The details and the evidence behind each fix are in
    `CHAMPIONSHIP_SLOT_*` and `BESTTIMES_GHOSTS` next to the runtime's
    `cmr4.exe`. The steps below delete them.
 2. Delete the launcher's folder (or the AppImage).
-3. Windows: delete `%LOCALAPPDATA%\CMR4Launcher` (settings, log and the
-   private copy, a few GB). In the registry, delete the value under
+3. Windows: delete `%LOCALAPPDATA%\CMR4Launcher` (settings, log, the
+   private copy and, if you used an installer, the unpacked game; a few
+   GB each). In the registry, delete the value under
    `HKCU\Software\Microsoft\DirectX\UserGpuPreferences` named after the
    private copy's `cmr4.exe`, and the game's key
    (`Codemasters\Colin McRae Rally 04`, see
@@ -349,7 +394,8 @@ with a pad. The details and the evidence behind each fix are in
    prefix, saves included. The Wine registry entries live in the prefix
    and go with it.
 
-Your game folder was never changed, so there is nothing to undo there.
+Your game folder (or installer folder) was never changed, so there is
+nothing to undo there.
 
 ## For developers
 

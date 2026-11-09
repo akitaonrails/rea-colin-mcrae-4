@@ -4,6 +4,27 @@ This page distinguishes controlled runtime evidence from coverage that is
 still unknown. Portable tests and package inspection support the implementation
 but are not treated as gameplay evidence.
 
+## 2026-11-09: playing from the Magipack repack (rea-launcher-sdk v0.5.0)
+
+Debug i686 build under Wine 11.21 in the `gaming` box, headless (`env -i`,
+private prefixes, Wine's null graphics driver); the repack and the
+installed game only read. Details of the repack in `RESEARCH.md`,
+"Installers".
+
+| Check | Result |
+|---|---|
+| Unpack through `unpack::run` with the pinned innoextract.exe, no window (`wine-test`, opt-in real-installer test) | **VERIFIED**: 89.5 s with a second start; `p206.big#base` kept twice, dgVoodoo's three files dropped, `cmr4.exe` 1.0.0.0; `diff -r` with the installed copy shows only the installed copy's save files and our marker |
+| `--check --linux --game <repack>`, new runtime | **VERIFIED**: "Ready to play from the installer", names the repack and its SHA-256, the destination (`<runtime>-game`), "needs about 2.9 GB free there (… free now)", "Nothing was unpacked by this check"; nothing created |
+| `--check` with the unpack already there | **VERIFIED**: "It is already unpacked into …; Play uses that copy." |
+| `--check --game <unpacked folder>` | **VERIFIED**: `cmr4.exe 1.0.0.0; widescreen fix applied`, exit 0 |
+| A play start with `launcher.cfg` naming the repack (unpack reused) | **VERIFIED**: `launcher.cfg`'s `game` now names `…\CMR4-game`, its other lines kept; `launcher.log` says "The game was unpacked into …. The game folder setting now points there; the installer files are no longer needed." (The run then stopped at the debug build's missing DLLs, on purpose, before any game start.) |
+
+Pending (needs a person or a full package): the progress window during a
+real first-start unpack on Windows and in the AppImage (with the time it
+takes there), Stop unpacking on a real unpack, and a game run from the
+unpacked copy (it is byte-identical to the installed game the earlier
+notes played).
+
 ## 2026-11-09: Xidi 5.0.0 (#1)
 
 Release build with Xidi 5.0.0 (the `dinput8.dll` wrapper and its

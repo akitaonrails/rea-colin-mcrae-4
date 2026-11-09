@@ -6,6 +6,31 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Play from the game's installer: point the launcher at the folder of
+  Magipack's Colin McRae Rally 04 repack and the first **Play** unpacks
+  the game once, with a progress window and a **Stop unpacking** button,
+  into a folder beside the private copy (`CMR4-game`; about 2.9 GB free
+  needed). The installer is never run, and its files are only read. Then
+  the Game folder setting points at the unpacked game, so the installer
+  files are no longer needed (with `--game`, the launcher only says where
+  the game is). The repack's own dgVoodoo files are left out (the launcher
+  brings its tested one), and its optional livery doesn't replace the
+  default Peugeot 206 files. Verified: the unpacked game is identical to
+  an installed copy.
+- The settings window accepts that installer's folder ("Found the Magipack
+  repack…"); any other installer is left alone, with its code and a
+  **Report this installer…** button. `--check` says where the game will
+  be unpacked and how much space it needs, and never unpacks.
+- innoextract 1.9 (zlib) is bundled in the Windows zip and the AppImage
+  (`components/innoextract.exe`, licences in `licenses/innoextract/`),
+  checked at start and listed in `launcher.log`.
+
+### Changed
+
+- Updated rea-launcher-sdk to v0.5.0 (installer support).
+
 ## [0.4.5] - 2026-11-09
 
 ### Changed

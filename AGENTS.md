@@ -45,6 +45,13 @@ tag in `sdk/VERSION`.
   `dgvoodoo` in `packaging/components.pins`), never in Git; see
   `packaging/mirror/README.md`. No other licence-less payload is allowed;
   the official 2.80 archive is gone upstream and 2.87.6 crashed CMR04.
+- **One supported installer** (owner decision, 2026-11-09): Magipack's
+  repack, unpacked with the bundled innoextract into `<runtime>-game` and
+  never run (`src/source.rs`, sdk `docs/playbooks/installers.md`). A new
+  installer goes into `source::INSTALLERS` only after its unpacked game
+  was compared with an installed copy, with its `prefer`/`drop` lists
+  (`docs/RESEARCH.md`, "Installers"). After an unpack the saved `game`
+  points at the unpacked folder, except when the folder came from `--game`.
 - **Packages** are built only in CI output folders or `.work/`, never the
   repository root, and the package check (`packaging/package.allow`)
   rejects unlisted files and every game asset.

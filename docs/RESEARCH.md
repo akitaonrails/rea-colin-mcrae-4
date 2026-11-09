@@ -184,6 +184,54 @@ here was run in the game for this survey. Checks still to do are in
   (`FullscreenAttributes = fake`), so Alt+Tab doesn't change modes. What
   the game does when it loses focus (pause, audio) was not checked.
 
+## Installers
+
+A player who has the game's installer instead of an installed game points
+the launcher at the installer's folder. The launcher never runs it: it
+reads it with the bundled innoextract 1.9 (`components/innoextract.exe`,
+pinned in `packaging/components.pins`) into `<runtime>-game`, checks the
+result is a `cmr4.exe` it knows, and plays from there
+(`src/source.rs`, `rea_launcher::installer`, sdk
+`docs/playbooks/installers.md`).
+
+**Owner decision (2026-11-09):** support Magipack's repack, the owner's
+copy. Repacks are third-party builds of the game; this one is supported
+because the owner chose to, and its unpacked game was checked against an
+installed copy file by file (below). It carries no DRM change the
+launcher relies on: its `cmr4.exe` is the same 1.0.0.0 (1.01) build as
+the installed copy.
+
+| | Magipack repack ("Colin McRae Rally 04", EN/FR/DE/ES/IT) |
+|---|---|
+| Setup program | `Colin McRae Rally 04_Repack_Setup.exe`, 651 KB, SHA-256 `05ad4eb2d39672b1856413a74fb937d6fec9ebbd8dc09a3437ee3d2e89b9a96c` |
+| Data parts (exact sizes) | `…_Setup-1.bin` 735,348,224; `…_Setup-2.bin` 736,000,000; `…_Setup-3.bin` 461,475,044 |
+| Inno Setup | setup data 5.4.2 (unicode), one language (English), not passworded (`innoextract --info`) |
+| Repack notes | "Patch v1.01", optional dgVoodoo widescreen, an optional Peugeot 206 OMV livery (off by default), advanced particles, EAX on Windows 7+ |
+| Unpacked `app/` | 2,675,404,801 bytes as innoextract lists it; 2,671,281,536 after the lists below |
+| `cmr4.exe` | `7dca9f4c…1b41`, the known 1.0.0.0 build |
+| `prefer` | `base`: the optional livery (component `base\p206`) installs `Data/Cars/P206/p206.big` and `Data/Cars/P206/Two_play/p206.big` too (innoextract marks the default ones "overwritten"); the default install keeps `base`'s copies, 3,641,344 and 772,096 bytes |
+| `drop` | `D3D9.dll`, `dgVoodoo.conf`, `dgVoodooCpl.exe`: the repack's own dgVoodoo setup. Kept, the launcher would treat the DLL as the player's own and never replace it with the tested 2.80 one |
+
+**Verification (2026-11-09).** The repack (read-only) was unpacked through
+the launcher's own code path, `unpack::run` with the pinned Windows
+innoextract.exe, under `sdk/scripts/wine-test` (Wine 11.21, headless,
+`CMR4_REAL_*` opt-in test `unpack::tests::the_owners_repack_unpacks_into_a_known_game`)
+into `.work/inst/CMR4-game`: 89.5 s for the unpack and a second start
+(which only re-checked the game). The launcher kept
+`Data/Cars/P206/p206.big#base` and `Data/Cars/P206/Two_play/p206.big#base`
+(3,641,344 and 772,096 bytes) and removed the three dgVoodoo files.
+`diff -r` against the owner's installed copy
+(`…/games/Colin-McRae-Rally-04`): **every file identical**; the only
+differences are files the game writes while playing, present only in the
+installed copy (`OPTIONS`, `CHAMPIONSHIP_SLOT_1`, `BESTTIMES_GHOSTS`,
+`netopts`, `SpecSelection.bin`), and the launcher's `.rea-unpacked` marker.
+The repack's DSOAL files (`dsound.dll`, `dsoal-aldrv.dll`, `alsoft.ini`) are
+the installed copy's too, and stay (the player's own DLLs). The unpack
+output was deleted afterwards.
+
+Any other Inno Setup installer is left alone and reported with its
+SHA-256; discs and other installers are installed the usual way.
+
 ## Compatibility pins and the hosted archive
 
 `packaging/components.pins` records official downloads. Archives are cached,
