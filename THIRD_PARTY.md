@@ -57,6 +57,16 @@ personality rights for the people shown.
 | dgVoodoo2 | Tested 2.80 D3D9.dll; SHA-256 `6f0eae6d0fbe836490b1aa3361304d2398fdb5d815a929e126b5ae7b13b16e47`, from `dgVoodoo2_80.zip` (`cec7e2c8…9d30`) in this repository's `thirdparty` release | Copyright Dege; **no licence text**: bundled by the owner's recorded exception (the 2.80 archive is gone upstream and 2.87.6 crashed CMR04); provenance and notice in `packaging/mirror/README.md` and `licenses/dgVoodoo2/README.md` | https://dege.freeweb.hu/dgVoodoo2/dgVoodoo2/ |
 | DXVK | 3.1.1; SHA-256 `40565b4a724aadc4433fa4e010b4b23916d9b1f1baeee64e17186db94f54e608` | zlib/libpng; `licenses/DXVK/LICENSE`; x32 d3d11/dxgi installed only under Wine/Proton | https://github.com/doitsujin/dxvk/releases/tag/v3.1.1 |
 
+## Bundled installer unpacker
+
+| Component | Version and pin | License / notices | Official source |
+| --- | --- | --- | --- |
+| innoextract | 1.9, the official Windows build: `innoextract.exe` (SHA-256 `946bd06d8b3722a791fea4d84f496139eef6faef61640924cb72f5f1998a68e1`) from `innoextract-1.9-windows.zip` (`6989342c9b026a00a72a38f23b62a8e6a22cc5de69805cf47d68ac2fec993065`), in `components/` of the Windows zip and the AppImage | zlib (innoextract); built with Boost (Boost Software License 1.0), liblzma (public domain / its COPYING) and libstdc++ (GPL-3.0 with the GCC Runtime Library Exception); all five texts in `licenses/innoextract/` | https://constexpr.org/innoextract/ and https://github.com/dscharrer/innoextract/releases/tag/1.9 |
+
+The launcher runs innoextract only to unpack the one installer it supports
+(the Magipack repack, `src/source.rs`) into a folder of its own; the
+installer is never run and its files are only read.
+
 dgVoodoo2 2.87.6 is not used: controlled
 CMR04 tests crashed with it. What has and hasn't been verified in the game
 is in `docs/RUNTIME_NOTES.md`.

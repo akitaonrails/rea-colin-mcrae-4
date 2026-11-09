@@ -16,10 +16,11 @@ done
 chmod +x "$PKG/linux/cmr4-play"
 $SMOKE "$PKG" "$ALLOW" >/dev/null
 echo "ok   complete allowlisted package passes"
-for required in linux/rea-play.sh components/rea_close_hook.dll licenses/Xidi/LICENSE; do
+for required in linux/rea-play.sh components/rea_close_hook.dll licenses/Xidi/LICENSE \
+  components/innoextract.exe licenses/innoextract/innoextract.LICENSE.txt; do
   grep -qx "$required\( .*\)\{0,1\}" "$ALLOW" || { echo "$required is not allowlisted" >&2; exit 1; }
 done
-echo "ok   the play library, close hook and licences are shipped"
+echo "ok   the play library, close hook, innoextract and licences are shipped"
 mkdir -p "$PKG/Game"
 echo asset > "$PKG/Game/track.dat"
 if $SMOKE "$PKG" "$ALLOW" >/dev/null 2>&1; then
@@ -45,6 +46,12 @@ if $SMOKE "$PKG" "$ALLOW" >/dev/null 2>&1; then
   echo "missing Xidi main binary passed" >&2; exit 1
 fi
 cp "$T/Xidi.32.dll" "$PKG/components/Xidi.32.dll"
+cp "$PKG/components/dinput8.dll" "$T/dinput8.dll"
+rm "$PKG/components/innoextract.exe"
+if $SMOKE "$PKG" "$ALLOW" >/dev/null 2>&1; then
+  echo "missing innoextract passed" >&2; exit 1
+fi
+echo fixture > "$PKG/components/innoextract.exe"
 rm "$PKG/components/dinput8.dll"
 if $SMOKE "$PKG" "$ALLOW" >/dev/null 2>&1; then
   echo "missing component passed" >&2; exit 1
@@ -54,7 +61,15 @@ echo "ok   missing required component fails"
 # moving tag.
 . "$ROOT/sdk/packaging/pins.sh"
 PIN_FILE=$HERE/../components.pins
-for name in xidi dxvk dgvoodoo-d3d9; do pin_sha "$name" >/dev/null; done
+for name in xidi dxvk dgvoodoo-d3d9 innoextract innoextract-exe; do pin_sha "$name" >/dev/null; done
+# innoextract's pins are the SDK's verified ones, unchanged.
+. "$ROOT/sdk/packaging/innoextract.sh"
+innoextract_pins > "$T/innoextract.pins"
+for name in innoextract innoextract-exe; do
+  [ "$(pin_sha "$name")" = "$(PIN_FILE=$T/innoextract.pins pin_sha "$name")" ] \
+    || { echo "$name differs from the SDK's pin" >&2; exit 1; }
+done
+echo "ok   innoextract is pinned as the SDK verified it"
 echo "ok   component pins parse"
 for pins in "$HERE/../components.pins" "$ROOT/sdk/packaging/appimage/tools.pins"; do
   if grep -n 'releases/download/continuous/' "$pins" >&2; then

@@ -51,4 +51,8 @@ cp "$HERE/mirror/README.md" "$PKG/licenses/dgVoodoo2/README.md"
 cp "$TMP/xidi/Xidi-v5.0.0/LICENSE" "$TMP/xidi/Xidi-v5.0.0/README.md" "$PKG/licenses/Xidi/"
 cp "$TMP/xidi/Xidi-v5.0.0/ThirdParty/"* "$PKG/licenses/Xidi/ThirdParty/"
 cp "$HERE/DXVK-LICENSE" "$PKG/licenses/DXVK/LICENSE"
+# innoextract 1.9: components/innoextract.exe (checked against its pin) and
+# licenses/innoextract/*.txt; it unpacks the supported installer.
+. "$HERE/../sdk/packaging/innoextract.sh"
+innoextract_bundle "$PKG" "$CACHE"
 echo "installed pinned components into $PKG/components"

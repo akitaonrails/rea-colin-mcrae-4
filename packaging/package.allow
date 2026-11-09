@@ -23,6 +23,7 @@ components/concrt140.dll
 components/vcruntime140.dll
 components/d3d11.dll
 components/dxgi.dll
+components/innoextract.exe
 linux/cmr4-play x
 linux/rea-play.sh
 linux/README.md
@@ -33,3 +34,8 @@ licenses/Xidi/README.md
 licenses/Xidi/ThirdParty/Boost_LICENSE
 licenses/Xidi/ThirdParty/Hookshot_LICENSE
 licenses/Xidi/ThirdParty/XstdBitSet_LICENSE
+licenses/innoextract/innoextract.LICENSE.txt
+licenses/innoextract/Boost.LICENSE_1_0.txt
+licenses/innoextract/liblzma.COPYING.txt
+licenses/innoextract/libstdc++.COPYING3.txt
+licenses/innoextract/libstdc++.COPYING.RUNTIME.txt

@@ -21,3 +21,9 @@ dxvk https://github.com/doitsujin/dxvk/releases/download/v3.1.1/dxvk-3.1.1.tar.g
 # See packaging/mirror/README.md.
 dgvoodoo https://github.com/akitaonrails/rea-colin-mcrae-4/releases/download/thirdparty/dgVoodoo2_80.zip cec7e2c8eeaec0065cc8f41d8e0f176ae28d55074c4295ce3670589dc9f29d30
 dgvoodoo-d3d9 - 6f0eae6d0fbe836490b1aa3361304d2398fdb5d815a929e126b5ae7b13b16e47
+
+# innoextract 1.9 (zlib; Boost, liblzma, libstdc++ runtime exception):
+# innoextract.exe unpacks the supported installer (src/source.rs), and its
+# license/ folder ships (sdk/packaging/innoextract.sh innoextract_pins).
+innoextract https://github.com/dscharrer/innoextract/releases/download/1.9/innoextract-1.9-windows.zip 6989342c9b026a00a72a38f23b62a8e6a22cc5de69805cf47d68ac2fec993065 https://constexpr.org/innoextract/files/innoextract-1.9-windows.zip mirror
+innoextract-exe - 946bd06d8b3722a791fea4d84f496139eef6faef61640924cb72f5f1998a68e1
