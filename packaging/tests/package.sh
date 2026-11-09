@@ -39,6 +39,12 @@ if $SMOKE "$PKG" "$ALLOW" >/dev/null 2>&1; then
 fi
 chmod +x "$PKG/linux/cmr4-play"
 echo "ok   the helper must be executable"
+cp "$PKG/components/Xidi.32.dll" "$T/Xidi.32.dll"
+rm "$PKG/components/Xidi.32.dll"
+if $SMOKE "$PKG" "$ALLOW" >/dev/null 2>&1; then
+  echo "missing Xidi main binary passed" >&2; exit 1
+fi
+cp "$T/Xidi.32.dll" "$PKG/components/Xidi.32.dll"
 rm "$PKG/components/dinput8.dll"
 if $SMOKE "$PKG" "$ALLOW" >/dev/null 2>&1; then
   echo "missing component passed" >&2; exit 1

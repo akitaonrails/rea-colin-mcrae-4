@@ -9,7 +9,6 @@ use std::path::Path;
 
 use crate::components::{
     self, CLOSE_HOOK_CONFIG, CLOSE_HOOK_DLL, DGVOODOO_DLLS, DXVK_DLLS, Platform, XIDI_CONF,
-    XIDI_DLL,
 };
 use crate::config::{Resolution, Settings};
 use crate::registry::{self, RegWrite};
@@ -101,11 +100,11 @@ pub fn plan(
         Some(components::dgvoodoo_conf(settings, widescreen, platform)),
     )];
     if controller {
-        wrappers.push(XIDI_DLL);
+        wrappers.extend(components::XIDI_DLLS);
         wrappers.extend(components::XIDI_VC_DLLS);
         files.push(("Xidi.ini", Some(XIDI_CONF.to_owned())));
     } else {
-        taken_out.push(XIDI_DLL);
+        taken_out.extend(components::XIDI_DLLS);
         taken_out.extend(components::XIDI_VC_DLLS);
         files.push(("Xidi.ini", None));
     }

@@ -6,6 +6,17 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Updated Xidi, the gamepad bridge, from 4.3.1 to 5.0.0 (#1). Xidi 5
+  needs its main file, `Xidi.32.dll`, next to the game as well, so the
+  launcher now installs both and takes both out again when the gamepad is
+  turned off. `Xidi.ini` no longer has an `[Import]` section, which Xidi 5
+  would report as a configuration error. The pad layout the game sees is
+  unchanged, so saved controller bindings keep working, and game copies
+  made by earlier releases are upgraded in place (an earlier release's
+  `Xidi.ini` is also taken out when the gamepad is off).
+
 ## [0.4.4] - 2026-11-07
 
 ### Changed

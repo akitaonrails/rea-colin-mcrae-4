@@ -11,7 +11,7 @@ it (surveyed 2026-11-02; PCGamingWiki read through Wayback snapshots).
 | Registry widescreen (PCGW) | Sets Width/Height to a 16:9 mode: Vert- (crops the view) | — (a setting) | — | Used for every non-16:9 shape (the game's own view); the launcher writes Width/Height |
 | dgVoodoo2 (Dege) | D3D9 → D3D11 wrapper: forced output size, scaling, fps cap, vsync, monitor | no licence text | yes, but 2.80 archive gone; 2.87.6 crashed CMR04 | **Bundled 2.80 `D3D9.dll`** from our `thirdparty` release (owner exception) |
 | DXVK | D3D11 → Vulkan under Wine/Proton | zlib | yes | **Bundled** 3.1.1 x32, Wine only |
-| Xidi | DirectInput from XInput pads with a custom mapping | BSD-3-Clause | yes | **Bundled** 4.3.1 with the `CMR04Gamepad` mapping |
+| Xidi | DirectInput from XInput pads with a custom mapping | BSD-3-Clause | yes | **Bundled** 5.0.0 (`dinput8.dll` + `Xidi.32.dll`) with the `CMR04Gamepad` mapping |
 | DSOAL (+ OpenAL Soft) | DirectSound3D/EAX through OpenAL | LGPL-2.1+ | yes | **Kept when the player installed it** (runtime keeps any `.dll`; `dsound=n,b`); not bundled: the game works without it, and bundling an LGPL HRTF setup is a separate decision for the owner |
 | PCGW "force feedback restore module" | XInput rumble | unknown | unknown | Not used: Xidi covers input; rumble untested |
 | PCGW FOV camera hack | Wider in-car FOV | unknown | no | Not used: changes the look beyond Original/widescreen; no request |
@@ -207,14 +207,19 @@ CMR04 imports D3D9 and the working test needs only this dgVoodoo DLL. Unused
 D3D8.dll, D3DImm.dll, and DDraw.dll are not packaged or installed. The
 configuration disables the dgVoodoo watermark.
 
-### Xidi 4.3.1
+### Xidi 5.0.0
 
-- URL: <https://github.com/samuelgr/Xidi/releases/download/v4.3.1/Xidi-v4.3.1.zip>
-- SHA-256: `78120f44baa816fc264fb722495776aab437a36be515e42345428b7f32ac17ff`
-- Payload: `Xidi-v4.3.1/Win32/dinput8.dll` plus license notices.
+- URL: <https://github.com/samuelgr/Xidi/releases/download/v5.0.0/Xidi-v5.0.0.zip>
+- SHA-256: `41b6d23692d7e8043deef032ae5e619ee96aaef1586f58e4a541d4c15429b8cd`
+- Payload: `Xidi-v5.0.0/Win32/dinput8.dll` and `Win32/Xidi.32.dll` (the
+  wrapper loads its main binary from beside the game) plus license notices.
+  Both import the 32-bit VC++ runtime DLLs bundled beside them.
 
-Xidi 5.0 is deliberately not adopted without a required feature or CMR04
-runtime evidence.
+Adopted on 2026-11-09 (#1) after the CMR3 launcher ran it in its game and
+a headless CMR04 run showed the same pad layout as 4.3.1
+(`docs/RUNTIME_NOTES.md`). Xidi 5 rejects the `[Import]` section 4.3.1
+used, so `Xidi.ini` has none. Until then, 4.3.1 (SHA-256
+`78120f44…17ff`) was bundled.
 
 ### DXVK 3.1.1
 

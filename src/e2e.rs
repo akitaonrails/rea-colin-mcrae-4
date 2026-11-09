@@ -302,8 +302,10 @@ fn gamepad_switch_and_flag_reach_xidi_the_environment_and_winebus() {
     assert!(has_line(&saved, "controller = off"));
     let off = launch(&saved, &[]);
     assert_eq!(off, launch("", &["--controller", "off"]));
-    assert!(!off.wrappers.contains(&"dinput8.dll"));
-    assert!(off.taken_out.contains(&"dinput8.dll"));
+    for xidi in ["dinput8.dll", "Xidi.32.dll"] {
+        assert!(!off.wrappers.contains(&xidi), "{xidi}");
+        assert!(off.taken_out.contains(&xidi), "{xidi}");
+    }
     assert!(off.files.contains(&("Xidi.ini", None)));
     assert!(off.winebus.is_empty());
     assert!(!off.gamepad_profile);
@@ -313,8 +315,11 @@ fn gamepad_switch_and_flag_reach_xidi_the_environment_and_winebus() {
     );
 
     let on = launch("", &["--controller", "on"]);
+    // Xidi 5: the dinput8.dll wrapper and the main binary it loads.
     assert!(on.wrappers.contains(&"dinput8.dll"));
+    assert!(on.wrappers.contains(&"Xidi.32.dll"));
     assert!(file(&on, "Xidi.ini").contains("TriggerRT = Axis(Y, -)"));
+    assert!(!file(&on, "Xidi.ini").contains("[Import]"));
     assert_eq!(on.winebus, [("Map Controllers", 1)]);
     assert_eq!(
         env(&on, "WINEDLLOVERRIDES"),

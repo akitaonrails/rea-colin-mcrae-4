@@ -4,6 +4,29 @@ This page distinguishes controlled runtime evidence from coverage that is
 still unknown. Portable tests and package inspection support the implementation
 but are not treated as gameplay evidence.
 
+## 2026-11-09: Xidi 5.0.0 (#1)
+
+Release build with Xidi 5.0.0 (the `dinput8.dll` wrapper and its
+`Xidi.32.dll` main binary, `Xidi.ini` without `[Import]`), packaged by
+`packaging/build-windows.sh` into `.work/xidi5-dist`; the same `cmr4.exe`
+(`7dca9f4c…1b41`), Wine 11.21 and gamescope in the `gaming` box, with the
+2026-11-05 harness copied to `.work/rgx5/` (`env -i`, fresh private
+prefix, `gamescope --backend headless`, one null sink, only our own
+processes listed or signalled). Logs in `.work/rgx5/logs/` (local, not in
+Git).
+
+| Check | Result |
+|---|---|
+| `cmr4-play --play --look widescreen`, fresh prefix | **VERIFIED**: `launcher.log` names both files as Xidi 5.0.0 and installs `dinput8.dll`, `Xidi.32.dll` and the four VC++ DLLs; the main menu is drawn (`xidi5-menu/menu.jpg`); the game's only window is `PC_CMR4` (no Xidi message box); Alt+F4 ended it in 0.27 s |
+| Xidi's own log (the runtime's `cmr4.exe` started directly, `[Log]` on in the runtime copy only) | **VERIFIED**: version 5.0.0 loaded from the runtime's `Xidi.32.dll`, system DirectInput found without `[Import]`, no error or warning lines; `CMR04Gamepad` has 4 axes (X, Y, Z, RotZ), 12 buttons and a hat, and the game selected X, Y, Z, RotZ, the hat and buttons 1–12 |
+| The same with Xidi 4.3.1 and its `[Import]` (baseline) | **Same layout and selection**, line for line; the only difference is Xidi 5's extra "Selected physical controller backend" line. So the pedal axis new profiles bind (`src/profile.rs`, 16) still matches |
+| Xidi 5.0.0 with the old `[Import]` section (negative control) | Xidi logs "Import: Unrecognized section name" and "None of the settings in the configuration file were applied": the pedals would have stayed on the stick. This is the error the new `Xidi.ini` avoids |
+
+The game folder's hashes were the same afterwards and no file in it was
+newer than the first run; no process of the test was left. Not checked:
+driving with a real pad (needs a person; the layout above is what the
+bindings depend on) and native Windows.
+
 ## 2026-11-05: rea-launcher-sdk v0.4.3 bump, close hook loaded with the game
 
 The close hook no longer comes from the launcher (`Running::message_hook`

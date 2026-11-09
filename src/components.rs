@@ -18,7 +18,11 @@ use crate::registry;
 
 pub const DGVOODOO_DLLS: [&str; 1] = ["D3D9.dll"];
 pub const DXVK_DLLS: [&str; 2] = ["d3d11.dll", "dxgi.dll"];
+/// Xidi 5's DirectInput wrapper, which the game loads.
 pub const XIDI_DLL: &str = "dinput8.dll";
+/// Xidi 5's main binary: the wrapper loads it from beside the game.
+pub const XIDI_MAIN_DLL: &str = "Xidi.32.dll";
+pub const XIDI_DLLS: [&str; 2] = [XIDI_DLL, XIDI_MAIN_DLL];
 pub const XIDI_VC_DLLS: [&str; 4] = [
     "msvcp140.dll",
     "msvcp140_atomic_wait.dll",
@@ -92,12 +96,17 @@ SaturationPercentTriggerRT = 100
 Enabled = no
 Level = 1
 
-[Import]
-dinput8.dll = C:\Windows\system32\dinput8.dll
-
 [Workarounds]
 ActiveVirtualControllerMask = 0x01
 ";
+
+/// SHA-256 of the `Xidi.ini` texts earlier releases wrote (0.1.0; 0.2.0 to
+/// 0.4.4, for Xidi 4.3.1, with an `[Import]` section). They are the
+/// launcher's: replaced with the gamepad on, taken out with it off.
+const EARLIER_XIDI_INI: [&str; 2] = [
+    "67c8a9792a769906a350010ffdfa278df8d96d3301eaec9820f6a0ad8931bf43",
+    "a641ec358d8bdc9ec417c478d31701a68b9bde9fe16aeb05982c955bed9532f4",
+];
 
 pub const WINE_OVERRIDES: &str = "dinput8,msvcp140,msvcp140_atomic_wait,concrt140,vcruntime140,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d";
 
@@ -120,7 +129,7 @@ pub fn validate(components: &Path, controller: bool, wine: bool) -> Result<(), S
     let mut names = DGVOODOO_DLLS.to_vec();
     names.push(CLOSE_HOOK_DLL);
     if controller {
-        names.push(XIDI_DLL);
+        names.extend(XIDI_DLLS);
         names.extend(XIDI_VC_DLLS);
     }
     if wine {
@@ -165,14 +174,15 @@ pub fn describe(components: &Path) -> Vec<String> {
     let version = |name: &str| match name {
         "D3D9.dll" => "dgVoodoo2 2.80",
         "d3d11.dll" | "dxgi.dll" => "DXVK 3.1.1",
-        XIDI_DLL => "Xidi 4.3.1",
+        XIDI_DLL | XIDI_MAIN_DLL => "Xidi 5.0.0",
         CLOSE_HOOK_DLL => "rea-launcher-close-hook",
         _ => "",
     };
     DGVOODOO_DLLS
         .into_iter()
         .chain(DXVK_DLLS)
-        .chain([XIDI_DLL, CLOSE_HOOK_DLL])
+        .chain(XIDI_DLLS)
+        .chain([CLOSE_HOOK_DLL])
         .map(
             |name| match rea_launcher::identify::sha256_file(&components.join(name)) {
                 Ok(digest) => format!(
@@ -300,13 +310,13 @@ pub fn install(
     .map_err(|error| format!("cannot write dgVoodoo.conf: {error}"))?;
 
     if settings.controller() {
-        for name in [XIDI_DLL].into_iter().chain(XIDI_VC_DLLS) {
+        for name in XIDI_DLLS.into_iter().chain(XIDI_VC_DLLS) {
             install_wrapper(&mut ledger, runtime, components, name)?;
         }
         fsx::write_atomic(&runtime.join("Xidi.ini"), XIDI_CONF)
             .map_err(|error| format!("cannot write Xidi.ini: {error}"))?;
     } else {
-        for name in [XIDI_DLL].into_iter().chain(XIDI_VC_DLLS) {
+        for name in XIDI_DLLS.into_iter().chain(XIDI_VC_DLLS) {
             take_out(
                 &mut ledger,
                 name,
@@ -315,7 +325,12 @@ pub fn install(
                 ),
             )?;
         }
-        if fs::read(runtime.join("Xidi.ini")).is_ok_and(|bytes| bytes == XIDI_CONF.as_bytes()) {
+        // Ours: this release's text or an earlier release's (the SDK's
+        // `Ledger::known_with_earlier`); a player's own Xidi.ini stays.
+        let ours = ledger
+            .known_with_earlier("Xidi.ini", vec![XIDI_CONF.into()], &EARLIER_XIDI_INI)
+            .map_err(ledger_error("Xidi.ini"))?;
+        if fs::read(runtime.join("Xidi.ini")).is_ok_and(|bytes| ours.contains(&bytes)) {
             fsx::remove(&runtime.join("Xidi.ini"))
                 .map_err(|error| format!("cannot remove owned Xidi.ini: {error}"))?;
         }
@@ -352,7 +367,8 @@ mod tests {
         for name in DGVOODOO_DLLS
             .into_iter()
             .chain(DXVK_DLLS)
-            .chain([XIDI_DLL, CLOSE_HOOK_DLL])
+            .chain(XIDI_DLLS)
+            .chain([CLOSE_HOOK_DLL])
             .chain(XIDI_VC_DLLS)
         {
             fs::write(path.join(name), format!("bundle {name}")).unwrap();
@@ -549,19 +565,21 @@ mod tests {
             "StickLeftY = Null",
             "TriggerRT = Axis(Y, -)",
             "TriggerLT = Axis(Y, +)",
-            "dinput8.dll = C:\\Windows\\system32\\dinput8.dll",
             "ActiveVirtualControllerMask = 0x01",
         ] {
             assert!(XIDI_CONF.contains(line), "{line}");
         }
+        // Xidi 5 finds the system DirectInput itself; an [Import] section
+        // is a configuration error and then none of Xidi.ini applies.
+        assert!(!XIDI_CONF.contains("[Import]"));
         // Keys on top of the pad would change nothing CMR04 needs and, as the
         // keyboard-only mapping showed, hide the pad's axes from the game.
         assert!(!XIDI_CONF.contains("Keyboard("));
-        // Xidi 4.3.1 rejects unknown [Log] keys (seen in the CMR3 launcher).
+        // Xidi rejects unknown [Log] keys (seen with 4.3.1 in the CMR3 launcher).
         assert!(!XIDI_CONF.contains("Append"));
     }
 
-    /// The exact Xidi.ini verified in the game on 2026-11-02 (see
+    /// The exact Xidi.ini verified in the game with Xidi 5.0.0 (see
     /// docs/RUNTIME_NOTES.md). Any change to the mapping must update the
     /// fixture on purpose and be checked in the game again.
     const XIDI_GOLDEN: &str = include_str!("../tests/fixtures/xidi.ini");
@@ -598,21 +616,24 @@ mod tests {
         let components = temp("describe");
         write_components(&components);
         let lines = describe(&components);
-        assert_eq!(lines.len(), 5);
+        assert_eq!(lines.len(), 6);
         assert!(lines[0].starts_with("D3D9.dll: ") && lines[0].ends_with("(dgVoodoo2 2.80)"));
+        for name in XIDI_DLLS {
+            assert!(
+                lines
+                    .iter()
+                    .any(|l| l.starts_with(&format!("{name}: ")) && l.ends_with("(Xidi 5.0.0)")),
+                "{name}: {lines:?}"
+            );
+        }
         assert!(
-            lines
-                .iter()
-                .any(|l| l.starts_with("dinput8.dll: ") && l.ends_with("(Xidi 4.3.1)"))
-        );
-        assert!(
-            lines[4].starts_with("rea_close_hook.dll: ")
-                && lines[4].ends_with("(rea-launcher-close-hook)"),
+            lines[5].starts_with("rea_close_hook.dll: ")
+                && lines[5].ends_with("(rea-launcher-close-hook)"),
             "{}",
-            lines[4]
+            lines[5]
         );
         fs::remove_file(components.join(CLOSE_HOOK_DLL)).unwrap();
-        assert_eq!(describe(&components)[4], "rea_close_hook.dll: not bundled");
+        assert_eq!(describe(&components)[5], "rea_close_hook.dll: not bundled");
         fs::remove_dir_all(components).unwrap();
     }
 
@@ -646,6 +667,7 @@ mod tests {
         let error = validate(&components, true, true).unwrap_err();
         assert!(error.contains("D3D9.dll"));
         assert!(error.contains("dinput8.dll"));
+        assert!(error.contains("Xidi.32.dll"));
         assert!(error.contains("dxgi.dll"));
         assert!(validate(&components, false, true).is_err());
         assert!(validate(&components, true, false).is_err());
@@ -656,6 +678,13 @@ mod tests {
         {
             fs::write(components.join(name), name).unwrap();
         }
+        // Xidi 5's wrapper is nothing without its main binary.
+        assert!(
+            validate(&components, true, false)
+                .unwrap_err()
+                .contains(XIDI_MAIN_DLL)
+        );
+        fs::write(components.join(XIDI_MAIN_DLL), "main").unwrap();
         // The close hook is needed on every platform.
         assert!(
             validate(&components, true, false)
@@ -987,6 +1016,120 @@ mod tests {
         assert!(!runtime.join("Xidi.ini").exists());
         assert_eq!(fs::read(runtime.join("dsound.dll")).unwrap(), b"user DSOAL");
 
+        for path in [game, runtime, components] {
+            fs::remove_dir_all(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn xidi_brings_its_main_binary_and_takes_it_out_again() {
+        let game = temp("xidi5-game");
+        let runtime = temp("xidi5-runtime");
+        let components = temp("xidi5-components");
+        fs::create_dir_all(&game).unwrap();
+        fs::create_dir_all(&runtime).unwrap();
+        write_components(&components);
+        let platform = Platform::new(true, false, None);
+        install(
+            &game,
+            &runtime,
+            &components,
+            &Settings::default(),
+            true,
+            &platform,
+        )
+        .unwrap();
+        // Xidi 5's dinput8.dll loads its main binary from beside the game.
+        for name in XIDI_DLLS {
+            assert_eq!(
+                fs::read(runtime.join(name)).unwrap(),
+                format!("bundle {name}").as_bytes()
+            );
+        }
+        let off = Settings {
+            controller: Some(false),
+            ..Settings::default()
+        };
+        install(&game, &runtime, &components, &off, true, &platform).unwrap();
+        for name in XIDI_DLLS.into_iter().chain(["Xidi.ini"]) {
+            assert!(!runtime.join(name).exists(), "{name}");
+        }
+        for path in [game, runtime, components] {
+            fs::remove_dir_all(path).unwrap();
+        }
+    }
+
+    /// The Xidi.ini of 0.2.0–0.4.4, for Xidi 4.3.1: today's with the
+    /// `[Import]` section Xidi 5 rejects.
+    fn xidi_ini_for_4_3_1() -> String {
+        XIDI_CONF.replace(
+            "[Workarounds]",
+            "[Import]\ndinput8.dll = C:\\Windows\\system32\\dinput8.dll\n\n[Workarounds]",
+        )
+    }
+
+    #[test]
+    fn earlier_xidi_ini_digests_are_the_texts_releases_wrote() {
+        let digest = |text: &str| {
+            rea_launcher::identify::hex(&rea_launcher::identify::sha256(text.as_bytes()))
+        };
+        assert!(EARLIER_XIDI_INI.contains(&digest(&xidi_ini_for_4_3_1()).as_str()));
+        assert!(!EARLIER_XIDI_INI.contains(&digest(XIDI_CONF).as_str()));
+    }
+
+    #[test]
+    fn a_runtime_from_a_xidi_4_release_is_upgraded_and_taken_out() {
+        let game = temp("xidi4-game");
+        let runtime = temp("xidi4-runtime");
+        let components = temp("xidi4-components");
+        fs::create_dir_all(&game).unwrap();
+        fs::create_dir_all(&runtime).unwrap();
+        write_components(&components);
+        let platform = Platform::new(true, false, None);
+        // An earlier release installed Xidi 4.3.1 (no Xidi.32.dll) and
+        // its Xidi.ini with [Import].
+        let new_wrapper = fs::read(components.join(XIDI_DLL)).unwrap();
+        fs::write(components.join(XIDI_DLL), b"xidi 4.3.1").unwrap();
+        fs::remove_file(components.join(XIDI_MAIN_DLL)).unwrap();
+        let on = Settings::default();
+        let mut ledger = Ledger::load(&game, &runtime, OWNERSHIP_FILE);
+        install_wrapper(&mut ledger, &runtime, &components, XIDI_DLL).unwrap();
+        fs::write(runtime.join("Xidi.ini"), xidi_ini_for_4_3_1()).unwrap();
+        fs::write(components.join(XIDI_DLL), &new_wrapper).unwrap();
+        fs::write(components.join(XIDI_MAIN_DLL), "bundle Xidi.32.dll").unwrap();
+
+        // The first start after the update, gamepad off: all of it goes.
+        let off = Settings {
+            controller: Some(false),
+            ..Settings::default()
+        };
+        install(&game, &runtime, &components, &off, true, &platform).unwrap();
+        for name in XIDI_DLLS.into_iter().chain(["Xidi.ini"]) {
+            assert!(!runtime.join(name).exists(), "{name}");
+        }
+
+        // Gamepad on, over an earlier release's files: replaced.
+        let mut ledger = Ledger::load(&game, &runtime, OWNERSHIP_FILE);
+        fs::write(components.join(XIDI_DLL), b"xidi 4.3.1").unwrap();
+        install_wrapper(&mut ledger, &runtime, &components, XIDI_DLL).unwrap();
+        fs::write(components.join(XIDI_DLL), &new_wrapper).unwrap();
+        fs::write(runtime.join("Xidi.ini"), xidi_ini_for_4_3_1()).unwrap();
+        install(&game, &runtime, &components, &on, true, &platform).unwrap();
+        assert_eq!(fs::read(runtime.join(XIDI_DLL)).unwrap(), new_wrapper);
+        assert!(runtime.join(XIDI_MAIN_DLL).is_file());
+        assert_eq!(
+            fs::read_to_string(runtime.join("Xidi.ini")).unwrap(),
+            XIDI_CONF
+        );
+
+        // A Xidi.ini of the player's own is left alone when the pad goes off.
+        install(&game, &runtime, &components, &off, true, &platform).unwrap();
+        fs::write(runtime.join("Xidi.ini"), "[Mapper]\nType = XInputNative\n").unwrap();
+        install(&game, &runtime, &components, &off, true, &platform).unwrap();
+        assert_eq!(
+            fs::read_to_string(runtime.join("Xidi.ini")).unwrap(),
+            "[Mapper]\nType = XInputNative\n"
+        );
         for path in [game, runtime, components] {
             fs::remove_dir_all(path).unwrap();
         }
