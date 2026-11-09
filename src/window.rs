@@ -16,9 +16,12 @@ use rea_launcher_ui::theme::{self, Metrics, Palette, body, semibold, tint};
 use rea_launcher_ui::widgets::{self, Crop, LookCard};
 use rea_launcher_ui::window::Layout;
 
+use rea_launcher::identify::Known;
+use rea_launcher::installer::InstallerBuild;
+
 use crate::config::{self, Look, OPTIONS, Resolution};
 use crate::form::{self, Form, Tab};
-use crate::{GAME_EXE, edition};
+use crate::{GAME_EXE, edition, source};
 
 // CMR04-style palette: graphite and white type with a red-orange racing
 // accent. WCAG contrast: INK on GRAPHITE 16.5:1, on PANEL 14.1:1; MUTED on
@@ -75,6 +78,8 @@ pub struct Host {
     pub pick_folder: fn(&str) -> Option<PathBuf>,
     /// Opens a web page in the browser (`dialog::open_url`).
     pub open_url: fn(&str),
+    /// The installers the launcher unpacks (`source::INSTALLERS`).
+    pub installers: &'static [Known<InstallerBuild>],
 }
 
 /// What the Game folder field found.
@@ -86,17 +91,41 @@ pub enum Check {
     /// A build the launcher doesn't know: playable, without the fix. Holds
     /// its SHA-256.
     Unknown(String),
+    /// The installer the launcher unpacks on the first Play: what to say.
+    Installer(String),
+    /// An installer the launcher doesn't know, left alone: the SDK's
+    /// message (with where to report it) and the setup program's SHA-256.
+    UnknownInstaller {
+        message: String,
+        sha256: String,
+    },
     Problem(String),
 }
 
 impl Check {
     pub fn ready(&self) -> bool {
-        matches!(self, Check::Found(_) | Check::Unknown(_))
+        matches!(
+            self,
+            Check::Found(_) | Check::Unknown(_) | Check::Installer(_)
+        )
     }
 }
 
-/// Looks at `folder`'s `cmr4.exe` (any case) as a launch would.
-pub fn check_game(folder: &str, widescreen: bool) -> Check {
+/// The setup program's SHA-256 in the SDK's unknown-installer message
+/// ("SHA-256: <64 hex digits>").
+fn reported_sha256(message: &str) -> Option<String> {
+    let rest = message.split("SHA-256: ").nth(1)?;
+    let hex: String = rest.chars().take_while(char::is_ascii_hexdigit).collect();
+    (hex.len() == 64).then_some(hex)
+}
+
+/// Looks at `folder` as a launch would: its `cmr4.exe` (any case), or
+/// else one of `installers`.
+pub fn check_game(
+    folder: &str,
+    widescreen: bool,
+    installers: &'static [Known<InstallerBuild>],
+) -> Check {
     let folder = folder.trim();
     if folder.is_empty() {
         return Check::Empty;
@@ -107,15 +136,17 @@ pub fn check_game(folder: &str, widescreen: bool) -> Check {
             "This folder doesn't exist. Check the path, or press Browse… to pick it.".into(),
         );
     }
-    let Some(exe) = std::fs::read_dir(dir).ok().and_then(|entries| {
-        entries.flatten().map(|entry| entry.path()).find(|path| {
-            path.file_name()
-                .is_some_and(|name| name.eq_ignore_ascii_case(GAME_EXE))
-        })
-    }) else {
-        return Check::Problem(format!(
-            "There is no {GAME_EXE} in this folder. Choose the folder the game is installed in."
-        ));
+    let Some(exe) = source::game_exe(dir) else {
+        return match source::installer_in(dir, installers) {
+            Ok(Some(found)) => Check::Installer(source::found_note(&found)),
+            Ok(None) => Check::Problem(format!(
+                "There is no {GAME_EXE} or supported installer in this folder. Choose the installed game's folder, or the installer's."
+            )),
+            Err(message) => match reported_sha256(&message) {
+                Some(sha256) => Check::UnknownInstaller { message, sha256 },
+                None => Check::Problem(message),
+            },
+        };
     };
     match std::fs::read(&exe) {
         Ok(bytes) => {
@@ -126,6 +157,9 @@ pub fn check_game(folder: &str, widescreen: bool) -> Check {
             }
             let exe = edition::prepare(&bytes, widescreen);
             match exe.edition {
+                Some(name) if source::is_launchers_copy(dir) => {
+                    Check::Found(source::unpacked_note(name))
+                }
                 Some(name) => Check::Found(format!("Found {name}. Ready to play.")),
                 None => Check::Unknown(exe.sha256),
             }
@@ -168,7 +202,7 @@ impl Window {
         let form = Form::open(text, host.screen);
         let widescreen = form.settings().widescreen();
         Self {
-            check: check_game(&form.game, widescreen),
+            check: check_game(&form.game, widescreen, host.installers),
             checked: (form.game.clone(), widescreen),
             form,
             tab: Tab::Play,
@@ -281,7 +315,7 @@ impl Window {
         }
         let now = (self.form.game.clone(), self.form.settings().widescreen());
         if now != self.checked {
-            self.check = check_game(&now.0, now.1);
+            self.check = check_game(&now.0, now.1, self.host.installers);
             self.checked = now;
         }
     }
@@ -330,13 +364,13 @@ impl Window {
     fn play_tab(&mut self, ui: &mut egui::Ui) {
         widgets::heading(ui, option("game").label);
         let hint = if self.host.linux {
-            "The folder with cmr4.exe, e.g. Z:\\home\\you\\Games\\CMR04"
+            "The folder with cmr4.exe or the game's installer, e.g. Z:\\home\\you\\Games\\CMR04"
         } else {
-            "The folder with your installed cmr4.exe"
+            "The folder with your installed cmr4.exe, or with the game's installer"
         };
         let pick = self.host.pick_folder;
         if widgets::folder_field(ui, &mut self.form.game, option("game").label, hint, || {
-            pick("Choose the folder with your cmr4.exe")
+            pick("Choose the folder with cmr4.exe or the game's installer")
         }) {
             self.error = None;
         }
@@ -349,12 +383,31 @@ impl Window {
             Check::Empty => (option("game").description.to_string(), MUTED),
             Check::Found(name) => (name.clone(), INK),
             Check::Unknown(_) => (edition::UNKNOWN_SHORT.to_string(), ERROR),
+            Check::Installer(note) => (note.clone(), INK),
+            Check::UnknownInstaller { message, .. } => (
+                format!(
+                    "{} Report it, or choose an installed game.",
+                    message.lines().next().unwrap_or_default()
+                ),
+                ERROR,
+            ),
             Check::Problem(message) => (message.clone(), ERROR),
         };
         ui.horizontal(|ui| {
-            if let Check::Unknown(sha256) = &self.check {
-                let report = widgets::outline_button(ui, "Report this version…");
-                widgets::name_control(&report, None, Some(&edition::unknown_message(sha256)));
+            let report = match &self.check {
+                Check::Unknown(sha256) => Some((
+                    "Report this version…",
+                    sha256,
+                    edition::unknown_message(sha256),
+                )),
+                Check::UnknownInstaller { message, sha256 } => {
+                    Some(("Report this installer…", sha256, message.clone()))
+                }
+                _ => None,
+            };
+            if let Some((label, sha256, description)) = report {
+                let report = widgets::outline_button(ui, label);
+                widgets::name_control(&report, None, Some(&description));
                 if report.clicked() {
                     (self.host.open_url)(&edition::report_url(sha256));
                 }
@@ -546,6 +599,7 @@ mod tests {
             pads: 1,
             pick_folder: |_| None,
             open_url: |_| {},
+            installers: crate::source::INSTALLERS,
         }
     }
 

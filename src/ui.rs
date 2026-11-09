@@ -3,6 +3,7 @@
 
 use std::path::Path;
 
+use cmr4_launcher::source;
 use cmr4_launcher::window::{Host, METRICS, PALETTE, TITLE, Window};
 use rea_launcher_ui::pad::{self, PadNav};
 use rea_launcher_ui::window::{SIZE, WindowFit};
@@ -63,6 +64,7 @@ pub fn show(settings_path: &Path, text: Option<&str>, linux: bool) -> Result<Out
         open_url: |url| {
             let _ = dialog::open_url(url);
         },
+        installers: source::INSTALLERS,
     };
     let path = settings_path.to_path_buf();
     eframe::run_native(

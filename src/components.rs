@@ -125,6 +125,24 @@ pub fn app_override_dlls(controller: bool) -> Vec<&'static str> {
     dlls
 }
 
+/// The bundled innoextract 1.9 (`rea_launcher_win32::innoextract::EXE`,
+/// named here for the portable code): it unpacks the supported installer
+/// (`source`), and is never copied into the game.
+pub const INNOEXTRACT_EXE: &str = "innoextract.exe";
+
+/// innoextract is in the package: checked at every start like the DLLs,
+/// so a damaged package says so before a player's first unpack.
+pub fn validate_unpacker(components: &Path) -> Result<(), String> {
+    if components.join(INNOEXTRACT_EXE).is_file() {
+        Ok(())
+    } else {
+        Err(format!(
+            "missing required component {INNOEXTRACT_EXE} in {}",
+            components.display()
+        ))
+    }
+}
+
 pub fn validate(components: &Path, controller: bool, wine: bool) -> Result<(), String> {
     let mut names = DGVOODOO_DLLS.to_vec();
     names.push(CLOSE_HOOK_DLL);
@@ -176,13 +194,14 @@ pub fn describe(components: &Path) -> Vec<String> {
         "d3d11.dll" | "dxgi.dll" => "DXVK 3.1.1",
         XIDI_DLL | XIDI_MAIN_DLL => "Xidi 5.0.0",
         CLOSE_HOOK_DLL => "rea-launcher-close-hook",
+        INNOEXTRACT_EXE => "innoextract 1.9",
         _ => "",
     };
     DGVOODOO_DLLS
         .into_iter()
         .chain(DXVK_DLLS)
         .chain(XIDI_DLLS)
-        .chain([CLOSE_HOOK_DLL])
+        .chain([CLOSE_HOOK_DLL, INNOEXTRACT_EXE])
         .map(
             |name| match rea_launcher::identify::sha256_file(&components.join(name)) {
                 Ok(digest) => format!(
@@ -615,8 +634,9 @@ mod tests {
     fn the_log_names_each_bundled_dll_with_its_digest_and_version() {
         let components = temp("describe");
         write_components(&components);
+        fs::write(components.join(INNOEXTRACT_EXE), "innoextract").unwrap();
         let lines = describe(&components);
-        assert_eq!(lines.len(), 6);
+        assert_eq!(lines.len(), 7);
         assert!(lines[0].starts_with("D3D9.dll: ") && lines[0].ends_with("(dgVoodoo2 2.80)"));
         for name in XIDI_DLLS {
             assert!(
@@ -632,8 +652,15 @@ mod tests {
             "{}",
             lines[5]
         );
+        assert!(
+            lines[6].starts_with("innoextract.exe: ") && lines[6].ends_with("(innoextract 1.9)"),
+            "{}",
+            lines[6]
+        );
         fs::remove_file(components.join(CLOSE_HOOK_DLL)).unwrap();
+        fs::remove_file(components.join(INNOEXTRACT_EXE)).unwrap();
         assert_eq!(describe(&components)[5], "rea_close_hook.dll: not bundled");
+        assert_eq!(describe(&components)[6], "innoextract.exe: not bundled");
         fs::remove_dir_all(components).unwrap();
     }
 
@@ -658,6 +685,20 @@ mod tests {
         assert!(!requests.matches(WM_SYSCOMMAND, 0xF140, 0)); // SC_SCREENSAVE
         // The intro movies' window is closed with WM_CLOSE: never the game.
         assert!(!requests.matches(WM_CLOSE, 0, 0));
+    }
+
+    #[test]
+    fn a_package_without_innoextract_fails_clearly() {
+        let components = temp("unpacker");
+        fs::create_dir_all(&components).unwrap();
+        let error = validate_unpacker(&components).unwrap_err();
+        assert!(
+            error.starts_with("missing required component innoextract.exe in "),
+            "{error}"
+        );
+        fs::write(components.join(INNOEXTRACT_EXE), "innoextract").unwrap();
+        assert_eq!(validate_unpacker(&components), Ok(()));
+        fs::remove_dir_all(components).unwrap();
     }
 
     #[test]

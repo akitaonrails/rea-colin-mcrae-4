@@ -3,6 +3,8 @@
 #[cfg(windows)]
 mod ui;
 #[cfg(windows)]
+mod unpack;
+#[cfg(windows)]
 mod win32;
 
 #[cfg(windows)]
@@ -15,16 +17,18 @@ mod app {
     use cmr4_launcher::edition::{self, Prepared};
     use cmr4_launcher::instance::{self, SecondStart};
     use cmr4_launcher::window::TITLE;
-    use cmr4_launcher::{GAME_EXE, components, plan, profile, runtime};
-    use rea_launcher::fsx;
+    use cmr4_launcher::{GAME_EXE, components, plan, profile, runtime, source};
     use rea_launcher::identify::validate_pe32;
     use rea_launcher::log::Log;
+    use rea_launcher::{fsx, paths};
+    use rea_launcher_win32::disk;
     use rea_launcher_win32::gpu::{self, Glx};
+    use rea_launcher_win32::innoextract::Unpacked;
     use rea_launcher_win32::instance::Window;
     use rea_launcher_win32::process;
     use rea_launcher_win32::report::{self, Mode, Run};
 
-    use crate::{ui, win32};
+    use crate::{ui, unpack, win32};
 
     const WINDOW_CLOSED: u32 = 3;
     const WINDOW_UNAVAILABLE: u32 = 4;
@@ -64,6 +68,20 @@ mod app {
     /// An error the launcher stops on.
     pub fn fatal(text: &str) {
         report::fatal(TITLE, text, mode());
+    }
+
+    /// Whether a player may be watching this run (the SDK's rule for
+    /// dialogs): then the unpack shows its progress window, also under
+    /// the Linux helper's `--no-window` game run.
+    fn watched() -> bool {
+        matches!(mode(), Mode::Play { interactive: true })
+    }
+
+    fn components_dir() -> Result<PathBuf, String> {
+        std::env::current_exe()
+            .ok()
+            .and_then(|path| path.parent().map(|dir| dir.join("components")))
+            .ok_or_else(|| "cannot locate the launcher's components folder".to_owned())
     }
 
     fn first_line(text: &str) -> &str {
@@ -224,7 +242,7 @@ mod app {
             }
         }
 
-        let existing = existing.unwrap_or_default();
+        let mut existing = existing.unwrap_or_default();
         let (saved, warnings) = Settings::parse_file(&existing);
         for warning in warnings {
             log_line(&format!("warning: {warning}"));
@@ -232,7 +250,7 @@ mod app {
         let target = win32::display_target();
         let screen = target.map(|t| t.size);
         // A look sets the values its own source (file or flags) left unset.
-        let saved = saved.resolve_look(screen);
+        let mut saved = saved.resolve_look(screen);
         let cli_values = cli.settings.resolve_look(screen);
         let mut settings = saved.clone().merged(cli_values.clone());
         if settings.resolution.is_none() {
@@ -241,12 +259,53 @@ mod app {
         log_line(&format!("resolution: {}", settings.resolution().value()));
         let game = find_game(&settings)?;
         let cwd = std::env::current_dir().map_err(|error| format!("current directory: {error}"))?;
-        let game = runtime::game_folder(&game, &cwd)?;
+        let mut game = runtime::game_folder(&game, &cwd)?;
         let runtime = settings
             .runtime
             .clone()
             .unwrap_or_else(|| home().join("CMR4"));
         let runtime = runtime::runtime_folder(&runtime, &game, &cwd)?;
+        // A resolution the launcher picked from the screen is saved, except
+        // inside gamescope, whose output is cmr4-play's fallback size.
+        let picked = (!gamescope).then(|| settings.resolution());
+        // The folder the player named: an installed game, or the
+        // supported installer, unpacked once into a folder of our own.
+        let named = game.clone();
+        let mut unpacked = None;
+        if let Some(found) = source::installer_in(&game, source::INSTALLERS)? {
+            let dest = source::unpacked_dir(&runtime);
+            paths::check_separate(&game, &dest)?;
+            log_line(&format!(
+                "installer: {} ({}), SHA-256 {}",
+                found.setup.display(),
+                found.build.name,
+                rea_launcher::identify::hex(&found.sha256)
+            ));
+            if cli.check {
+                remember(
+                    &settings_path,
+                    config::remember(&existing, &saved, &cli_values, &named, picked),
+                )?;
+                let text = source::check_text(&found, &game, &dest, disk::free_space(&dest))?;
+                log_line("check passed: the installer will be unpacked on the first Play");
+                note(&text);
+                return Ok(0);
+            }
+            let components_dir = components_dir()?;
+            components::validate_unpacker(&components_dir)?;
+            match unpack::run(&found, &dest, &components_dir, watched(), &mut |line| {
+                log_line(line)
+            })? {
+                Unpacked::Cancelled => return Ok(0),
+                Unpacked::Ready(done) => log_line(&format!(
+                    "unpacked game: {} in {}",
+                    done.game,
+                    dest.display()
+                )),
+            }
+            game = dest.clone();
+            unpacked = Some(dest);
+        }
         settings.game = Some(game.clone());
         settings.runtime = Some(runtime.clone());
         log_line(&format!("game: {}", game.display()));
@@ -268,13 +327,21 @@ mod app {
                 edition::unknown_message(&exe.sha256)
             ));
         }
-        // Only --game is remembered from the command line. A resolution the
-        // launcher picked from the screen is saved too, except inside
-        // gamescope, whose output is cmr4-play's fallback size.
-        let picked = (!gamescope).then(|| settings.resolution());
+        // Only --game is remembered from the command line, and the picked
+        // resolution. An unpacked game becomes the saved game folder,
+        // unless the folder came from --game.
+        if let Some(dest) = &unpacked {
+            let from_cli = cli_values.game.is_some();
+            if let Some(text) = config::point_at_unpacked(&existing, &cli_values, dest) {
+                remember(&settings_path, Some(text.clone()))?;
+                existing = text;
+                saved.game = Some(dest.clone());
+            }
+            log_line(&source::unpacked_message(dest, from_cli));
+        }
         remember(
             &settings_path,
-            config::remember(&existing, &saved, &cli_values, &game, picked),
+            config::remember(&existing, &saved, &cli_values, &named, picked),
         )?;
         if cli.check {
             let mut text = format!(
@@ -290,11 +357,9 @@ mod app {
             return Ok(0);
         }
 
-        let components_dir = std::env::current_exe()
-            .ok()
-            .and_then(|path| path.parent().map(|dir| dir.join("components")))
-            .ok_or("cannot locate the launcher's components folder")?;
+        let components_dir = components_dir()?;
         components::validate(&components_dir, settings.controller(), wine)?;
+        components::validate_unpacker(&components_dir)?;
         for line in components::describe(&components_dir) {
             log_line(&format!("component {line}"));
         }

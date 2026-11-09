@@ -126,7 +126,7 @@ pub const OPTIONS: &[OptionSpec] = &[
         "game",
         Kind::Path,
         "Game folder",
-        "The folder of your installed game, with cmr4.exe. It is only read, never changed.",
+        "The folder of your installed game, with cmr4.exe, or of its supported installer, which is unpacked once and never run. It is only read, never changed.",
     ),
     OptionSpec::new(
         "look",
@@ -353,6 +353,24 @@ pub fn remember(
         out = set_key(&out, "resolution", &picked.value());
     }
     Some(out)
+}
+
+/// After the launcher unpacked the game from an installer into `dest`:
+/// the settings file `text` with `game` pointing at `dest`, every other
+/// line kept, so the next start finds an installed game and the installer
+/// files are no longer needed. None when the game folder came from
+/// `--game` (in `cli`): a flag is for one run, so the file stays as it is
+/// and the player is only told where the game went.
+pub fn point_at_unpacked(text: &str, cli: &Settings, dest: &Path) -> Option<String> {
+    if cli.game.is_some() {
+        return None;
+    }
+    let out = if text.trim().is_empty() {
+        template()
+    } else {
+        refresh_header(text)
+    };
+    Some(set_key(&out, "game", &dest.display().to_string()))
 }
 
 const HEADING: &str = "\
@@ -946,6 +964,32 @@ mod tests {
             "{warnings:?}"
         );
         assert!(warnings[2].contains("line 4: unknown setting \"future\""));
+    }
+
+    #[test]
+    fn an_unpacked_game_becomes_the_saved_game_folder_unless_game_was_a_flag() {
+        let dest = Path::new(r"C:\Users\p\AppData\Local\CMR4Launcher\CMR4-game");
+        let file = "# mine\ngame = D:\\Repacks\\CMR04\nvsync = on\n";
+        // The folder came from the file (the settings window wrote it).
+        let text = point_at_unpacked(file, &Settings::default(), dest).unwrap();
+        assert_eq!(
+            text,
+            "# mine\ngame = C:\\Users\\p\\AppData\\Local\\CMR4Launcher\\CMR4-game\nvsync = on\n"
+        );
+        let (read, _) = Settings::parse_file(&text);
+        assert_eq!(read.game.as_deref(), Some(dest));
+        // Then nothing else is rewritten for the game folder.
+        assert_eq!(
+            remember(&text, &read, &Settings::default(), dest, None),
+            None
+        );
+        // A first run with no file yet starts from the template.
+        let fresh = point_at_unpacked("", &Settings::default(), dest).unwrap();
+        assert!(fresh.starts_with("# Colin McRae Rally 04 launcher settings."));
+        assert_eq!(Settings::parse_file(&fresh).0.game.as_deref(), Some(dest));
+        // --game is a one-run flag: the file is not pointed anywhere new.
+        let cli = args(&["--game", r"D:\Repacks\CMR04"]).unwrap().settings;
+        assert_eq!(point_at_unpacked(file, &cli, dest), None);
     }
 
     #[test]

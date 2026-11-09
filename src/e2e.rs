@@ -60,6 +60,7 @@ fn host() -> Host {
         pads: 1,
         pick_folder: |_| None,
         open_url: |_| {},
+        installers: crate::source::tests::stand_in_table(),
     }
 }
 
@@ -460,7 +461,10 @@ fn play_waits_for_the_game_folder_and_says_why() {
     ui.state_mut().form.game = dir.display().to_string();
     ui.run();
     ui.run();
-    assert!(ui.query_by_label_contains("There is no cmr4.exe").is_some());
+    assert!(
+        ui.query_by_label_contains("There is no cmr4.exe or supported installer")
+            .is_some()
+    );
     ui.state_mut().form.game = fake_game(&dir).display().to_string();
     ui.run();
     ui.run();
@@ -480,6 +484,125 @@ fn play_waits_for_the_game_folder_and_says_why() {
     // First run: the template, the game folder, the recommended look's values.
     assert!(saved.starts_with("# Colin McRae Rally 04 launcher settings."));
     assert!(has_line(&saved, "resolution = 3840x2160"));
+}
+
+/// The window over a game folder field set to `folder` (no settings file
+/// yet), checked.
+fn open_on(path: &Path, folder: &Path) -> Harness<'static, Window> {
+    let mut ui = testing::harness(
+        &PALETTE,
+        &METRICS,
+        Window::new(path.to_path_buf(), None, host()),
+        |ui, window| window.draw(ui),
+    );
+    ui.state_mut().form.game = folder.display().to_string();
+    ui.run();
+    ui.run();
+    ui
+}
+
+/// The private-copy note stays above the footer whatever the game folder
+/// row says.
+fn assert_play_tab_fits(ui: &Harness<'static, Window>) {
+    let footer_top = ui.get_by_role_and_label(Role::Button, "Play").rect().top();
+    let note = ui.get_by_label_contains("Where the launcher keeps its own copy");
+    assert!(
+        note.rect().bottom() <= footer_top,
+        "the private-copy note ({:?}) runs under the footer (top {footer_top})",
+        note.rect()
+    );
+}
+
+#[test]
+fn an_installer_folder_is_accepted_and_play_saves_it_for_the_unpack() {
+    let (dir, _clean) = scratch("installer");
+    let repack = dir.join("CMR04 Repack");
+    crate::source::tests::write_stand_in(&repack);
+    let path = dir.join(config::FILE_NAME);
+    let mut ui = open_on(&path, &repack);
+    ui.get_by_label(
+        "Found the stand-in repack. Play unpacks the game from it once (2.2 GB free needed); the installer is never run and its files are only read.",
+    );
+    ui.get_by_label("Ready. Press Play or Enter.");
+    assert!(ui.query_by_label_contains("Report this").is_none());
+    assert_play_tab_fits(&ui);
+    let saved = play(&mut ui, &path);
+    // The launcher unpacks it on this Play, then points `game` at the copy.
+    assert!(
+        has_line(&saved, &format!("game = {}", repack.display())),
+        "{saved}"
+    );
+    // Nothing was written into the installer's folder.
+    let mut names: Vec<_> = fs::read_dir(&repack)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().into_string().unwrap())
+        .collect();
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "Stand-in_Setup-1.bin",
+            "Stand-in_Setup-2.bin",
+            "Stand-in_Setup.exe"
+        ]
+    );
+}
+
+#[test]
+fn an_unknown_installer_is_left_alone_with_a_report_button() {
+    let (dir, _clean) = scratch("unknown-installer");
+    let other = dir.join("Some Setup");
+    crate::source::tests::write_unknown_inno(&other);
+    let path = dir.join(config::FILE_NAME);
+    let mut ui = open_on(&path, &other);
+    ui.get_by_label(
+        "setup.exe is an installer this launcher doesn't know, so it was left alone. Report it, or choose an installed game.",
+    );
+    let report = ui.get_by_role_and_label(Role::Button, "Report this installer…");
+    let about = testing::description(&report).unwrap();
+    assert!(about.contains("SHA-256: "), "{about}");
+    assert!(about.contains("unknown-edition.yml"), "{about}");
+    let play_button = ui.get_by_role_and_label(Role::Button, "Play");
+    assert!(testing::disabled(&play_button));
+    assert_play_tab_fits(&ui);
+    play_button.click();
+    ui.run();
+    assert!(!ui.state().played && !path.exists());
+}
+
+#[test]
+fn a_missing_installer_part_is_named_and_play_waits() {
+    let (dir, _clean) = scratch("installer-part");
+    let repack = dir.join("CMR04 Repack");
+    crate::source::tests::write_stand_in(&repack);
+    fs::remove_file(repack.join("Stand-in_Setup-1.bin")).unwrap();
+    let ui = open_on(&dir.join(config::FILE_NAME), &repack);
+    assert!(
+        ui.query_by_label_contains("Stand-in_Setup-1.bin is missing in ")
+            .is_some()
+    );
+    assert!(testing::disabled(
+        &ui.get_by_role_and_label(Role::Button, "Play")
+    ));
+}
+
+#[test]
+fn the_folder_the_launcher_unpacked_says_where_it_came_from() {
+    let (dir, _clean) = scratch("unpacked");
+    let game = dir.join("CMR4-game");
+    fs::create_dir_all(&game).unwrap();
+    // Known bytes can't be in the repository: the check of an unknown
+    // build stays, and a known one in the launcher's copy reads like this.
+    assert_eq!(
+        crate::source::unpacked_note("cmr4.exe 1.0.0.0"),
+        "Found cmr4.exe 1.0.0.0, unpacked from your installer. Ready to play."
+    );
+    fs::write(game.join(rea_launcher::installer::MARKER), "00").unwrap();
+    let synthetic = fake_game(&dir);
+    fs::rename(synthetic.join("CMR4.EXE"), game.join("cmr4.exe")).unwrap();
+    let ui = open_on(&dir.join(config::FILE_NAME), &game);
+    // An unknown build is reported as such even in the launcher's copy.
+    assert!(ui.query_by_label("Report this version…").is_some());
 }
 
 /// Found in the real-game run of 2026-11-02: with an unknown build the
