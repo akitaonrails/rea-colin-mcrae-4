@@ -6,6 +6,8 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-11-09
+
 ### Changed
 
 - Updated Xidi, the gamepad bridge, from 4.3.1 to 5.0.0 (#1). Xidi 5
@@ -439,7 +441,8 @@ Rally 04 on Windows 10/11 and on Linux (Wine, Proton, AppImage).
 - Windows zip and AppImage built in CI from pinned component archives, with
   a package inventory check that rejects unlisted files and game assets.
 
-[Unreleased]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.4...HEAD
+[Unreleased]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.5...HEAD
+[0.4.5]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.3...v0.4.4
 [0.4.2]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.0...v0.4.1
