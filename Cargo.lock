@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "cmr4-launcher"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "rea-launcher",
  "rea-launcher-build",
