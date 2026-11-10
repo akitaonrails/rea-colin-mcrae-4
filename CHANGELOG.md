@@ -6,6 +6,8 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-09
+
 ### Fixed
 
 - The game's settings no longer depend on Windows' registry
@@ -497,7 +499,8 @@ Rally 04 on Windows 10/11 and on Linux (Wine, Proton, AppImage).
 - Windows zip and AppImage built in CI from pinned component archives, with
   a package inventory check that rejects unlisted files and game assets.
 
-[Unreleased]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.5...v0.5.0
 [0.4.5]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.3...v0.4.4
