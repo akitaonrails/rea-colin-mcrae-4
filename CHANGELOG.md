@@ -6,6 +6,12 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Updated rea-launcher-sdk to v0.7.0. An unpacked game folder whose
+  files were deleted is unpacked again on the next start instead of
+  failing the game check.
+
 ## [0.5.1] - 2026-11-09
 
 ### Fixed
