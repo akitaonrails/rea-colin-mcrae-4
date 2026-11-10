@@ -302,10 +302,10 @@ Registry entries the launcher writes:
   resolution, language and the game's own graphics choices). The game
   looks for it under `HKLM`; the launcher's hook DLL in the private copy
   sends it here, so no administrator rights are needed. Launchers before
-  0.6.0 wrote it to
+  0.5.1 wrote it to
   `HKLM\SOFTWARE\WOW6432Node\Codemasters\Colin McRae Rally 04` or the
   same under `HKCU\Software\Classes\VirtualStore`; the first start of
-  0.6.0 copies the game's settings from there, and then that old key is
+  0.5.1 copies the game's settings from there, and then that old key is
   no longer used (you can delete it).
 - **Windows only, the high-performance GPU for the private copy:** under
   `HKCU\Software\Microsoft\DirectX\UserGpuPreferences`, the value named

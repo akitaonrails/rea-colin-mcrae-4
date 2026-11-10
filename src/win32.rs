@@ -33,7 +33,7 @@ pub fn gamepad_ids() -> Option<(u16, u16)> {
 
 /// What the game's key held before this launch: Width/Height from the
 /// launcher's HKCU key; while that key doesn't exist yet (a first launch,
-/// or the first since v0.6), the game's own values from where it read them
+/// or the first since launcher 0.5.1), the game's own values from where it read them
 /// before (the VirtualStore, else HKLM), carried over once. An old value
 /// of the wrong type is not carried.
 pub fn previous_values() -> Result<Previous, String> {

@@ -21,7 +21,7 @@ use rea_launcher_win32::reg::{Data, Mismatch, Value, When};
 use crate::config::Resolution;
 
 /// Where the game looks (`HKLM`, 32-bit view) and where launchers before
-/// v0.6 wrote (or its VirtualStore copy): read once to carry the game's
+/// 0.5.1 wrote (or its VirtualStore copy): read once to carry the game's
 /// values over, never written again.
 pub const MACHINE_KEY: &str = r"SOFTWARE\Codemasters\Colin McRae Rally 04";
 /// Where the launcher keeps the game's values (`HKCU`).
