@@ -36,6 +36,7 @@ pub type GameKey = (Key, &'static str, Option<(u32, u32)>);
 
 /// Opens the game's key and reads its current Width/Height.
 pub fn game_registry() -> Result<GameKey, String> {
+    #[allow(deprecated)] // Replaced by the HKCU key and REA_REGISTRY next.
     let (key, place) = Key::machine_or_virtual_store(KEY)?;
     let existing = match (key.dword("Width")?, key.dword("Height")?) {
         (Some(width), Some(height)) => Some((width, height)),

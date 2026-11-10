@@ -6,6 +6,10 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Updated rea-launcher-sdk to v0.6.0.
+
 ## [0.5.0] - 2026-11-09
 
 ### Added
