@@ -17,7 +17,7 @@ mod app {
     use cmr4_launcher::edition::{self, Prepared};
     use cmr4_launcher::instance::{self, SecondStart};
     use cmr4_launcher::window::TITLE;
-    use cmr4_launcher::{GAME_EXE, components, plan, profile, runtime, source};
+    use cmr4_launcher::{GAME_EXE, components, plan, profile, registry, runtime, source};
     use rea_launcher::identify::validate_pe32;
     use rea_launcher::log::Log;
     use rea_launcher::{fsx, paths};
@@ -153,6 +153,37 @@ mod app {
             Ok(false) => log_line("gamepad setup: profile already configured or not created yet"),
             Err(error) => log_line(&format!("warning: gamepad setup: {error}")),
         }
+    }
+
+    /// Why the game would not see its registry values (`--check`): the
+    /// close hook missing from the components or not addable to the exe's
+    /// imports, the redirect's rules refused, or values that don't read
+    /// back from the HKCU key, which this writes as Play would. Empty when
+    /// it will.
+    fn registry_problems(
+        settings: &Settings,
+        exe: &Prepared,
+        runtime: &Path,
+    ) -> Result<Vec<String>, String> {
+        let mut problems = Vec::new();
+        if !components_dir()?.join(components::CLOSE_HOOK_DLL).is_file() {
+            problems.push(format!(
+                "{} is not in the launcher's components folder",
+                components::CLOSE_HOOK_DLL
+            ));
+        }
+        if let Err(error) = components::with_close_hook(&exe.bytes) {
+            problems.push(error);
+        }
+        if let Err(error) = registry::redirect() {
+            problems.push(error.to_string());
+        }
+        let game_mode = registry::game_mode(settings.resolution(), exe.widescreen);
+        let values = registry::values(game_mode, runtime, &win32::previous_values()?);
+        if let Err(wrong) = win32::write_game_registry(&values) {
+            problems.extend(registry::mismatch_lines(&wrong));
+        }
+        Ok(problems)
     }
 
     pub fn run() -> Result<u32, String> {
@@ -344,10 +375,15 @@ mod app {
             config::remember(&existing, &saved, &cli_values, &named, picked),
         )?;
         if cli.check {
+            let problems = registry_problems(&settings, &exe, &runtime)?;
+            if !problems.is_empty() {
+                return Err(registry::not_ready(&problems));
+            }
             let mut text = format!(
-                "Ready to play.\n\nGame folder: {}\n{}",
+                "Ready to play.\n\nGame folder: {}\n{}\nGame settings: HKCU\\{}",
                 game.display(),
-                exe.describe()
+                exe.describe(),
+                registry::USER_KEY
             );
             if exe.edition.is_none() {
                 text = format!("{text}\n\n{}", edition::unknown_message(&exe.sha256));
@@ -394,21 +430,14 @@ mod app {
         // no restore step. The close hook goes into its imports after the
         // fix: Windows loads the hook with the game, and the launcher
         // never touches the running game.
-        let runtime_bytes = match components::with_close_hook(&exe.bytes) {
-            Ok(bytes) => {
-                log_line(&format!(
-                    "close hook: {} added to the runtime cmr4.exe's imports",
-                    components::CLOSE_HOOK_DLL
-                ));
-                bytes
-            }
-            Err(error) => {
-                log_line(&format!(
-                    "warning: {error}; Alt+F4 and window close may not end the game"
-                ));
-                exe.bytes.clone()
-            }
-        };
+        // The hook also hands the game its registry key, so without it the
+        // game would not find its folders: stop.
+        let runtime_bytes = components::with_close_hook(&exe.bytes)
+            .map_err(|error| registry::not_ready(&[error]))?;
+        log_line(&format!(
+            "close hook: {} added to the runtime cmr4.exe's imports",
+            components::CLOSE_HOOK_DLL
+        ));
         if fs::read(&runtime_exe).ok().as_deref() != Some(runtime_bytes.as_slice()) {
             fsx::write_atomic(&runtime_exe, &runtime_bytes)
                 .map_err(|error| format!("cannot write {error}"))?;
@@ -416,7 +445,14 @@ mod app {
         // gamescope exposes one output; elsewhere avoid a portrait primary monitor.
         let output = target.and_then(|t| t.output).filter(|_| !gamescope);
         let platform = components::Platform::new(wine, gamescope, output);
-        let (key, place, existing) = win32::game_registry()?;
+        let previous = win32::previous_values()?;
+        if !previous.carried.is_empty() {
+            let names: Vec<&str> = previous.carried.iter().map(|(name, _)| *name).collect();
+            log_line(&format!(
+                "registry: carrying over the game's own values from its old key: {}",
+                names.join(", ")
+            ));
+        }
         let inherited = win32::inherited_overrides();
         // An unknown build runs without the fix: dgVoodoo then keeps the
         // game's own frame shape.
@@ -425,7 +461,7 @@ mod app {
             exe.widescreen,
             &runtime,
             &platform,
-            existing,
+            &previous,
             inherited.as_deref(),
         );
         components::install(
@@ -453,8 +489,9 @@ mod app {
             plan.game_mode.value(),
         ));
 
-        win32::write_game_registry(&key, &plan.registry)?;
-        drop(key);
+        registry::redirect().map_err(|error| registry::not_ready(&[error.to_string()]))?;
+        win32::write_game_registry(&plan.registry)
+            .map_err(|wrong| registry::not_ready(&registry::mismatch_lines(&wrong)))?;
         if !plan.winebus.is_empty() && win32::map_wine_controllers()? {
             log_line("Wine: winebus Map Controllers seeded (absent before)");
         }
@@ -472,7 +509,8 @@ mod app {
             }
         }
         log_line(&format!(
-            "registry: {place}, game mode {}; Wine: {wine}",
+            "registry: HKCU\\{} written and read back, game mode {}; Wine: {wine}",
+            registry::USER_KEY,
             plan.game_mode.value()
         ));
         for (name, value) in &plan.env {

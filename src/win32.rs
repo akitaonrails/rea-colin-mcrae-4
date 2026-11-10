@@ -5,10 +5,10 @@
 use std::path::Path;
 
 use cmr4_launcher::display;
-use cmr4_launcher::registry::{self, KEY, RegValue, RegWrite};
+use cmr4_launcher::registry::{self, Previous};
 use rea_launcher_win32::instance::{self, AlreadyRunning, Guard};
 use rea_launcher_win32::process::Launch;
-use rea_launcher_win32::reg::Key;
+use rea_launcher_win32::reg::{self, Data, Hive, Key, Mismatch, Value};
 use rea_launcher_win32::{display as screens, wine};
 
 pub use rea_launcher_win32::display::wine_dpi_scale;
@@ -31,35 +31,46 @@ pub fn gamepad_ids() -> Option<(u16, u16)> {
     rea_launcher_win32::xinput::ids(0)
 }
 
-/// The game's open key, where it is (log label) and its Width/Height.
-pub type GameKey = (Key, &'static str, Option<(u32, u32)>);
-
-/// Opens the game's key and reads its current Width/Height.
-pub fn game_registry() -> Result<GameKey, String> {
-    #[allow(deprecated)] // Replaced by the HKCU key and REA_REGISTRY next.
-    let (key, place) = Key::machine_or_virtual_store(KEY)?;
-    let existing = match (key.dword("Width")?, key.dword("Height")?) {
-        (Some(width), Some(height)) => Some((width, height)),
-        _ => None,
-    };
-    Ok((key, place.describe(), existing))
+/// What the game's key held before this launch: Width/Height from the
+/// launcher's HKCU key; while that key doesn't exist yet (a first launch,
+/// or the first since v0.6), the game's own values from where it read them
+/// before (the VirtualStore, else HKLM), carried over once. An old value
+/// of the wrong type is not carried.
+pub fn previous_values() -> Result<Previous, String> {
+    previous_at(registry::USER_KEY, registry::MACHINE_KEY)
 }
 
-/// Writes the plan's values (`registry::writes`) into `key`.
-pub fn write_game_registry(key: &Key, writes: &[RegWrite]) -> Result<(), String> {
-    for write in writes {
-        match (&write.value, write.if_missing) {
-            (RegValue::String(text), false) => key.set_string(write.name, text)?,
-            (RegValue::String(text), true) => {
-                key.set_string_if_missing(write.name, text)?;
-            }
-            (RegValue::Dword(n), false) => key.set_dword(write.name, *n)?,
-            (RegValue::Dword(n), true) => {
-                key.seed_dwords(&[(write.name, *n)])?;
-            }
+fn previous_at(user_key: &str, machine_key: &str) -> Result<Previous, String> {
+    fn size(width: Option<u32>, height: Option<u32>) -> Option<(u32, u32)> {
+        width.zip(height)
+    }
+    if let Some(key) = Key::open_read(Hive::CurrentUser, user_key)? {
+        return Ok(Previous {
+            size: size(key.dword("Width")?, key.dword("Height")?),
+            carried: Vec::new(),
+        });
+    }
+    let old = Key::read_machine(machine_key)?;
+    let dword = |name| old.dword(name).ok().flatten();
+    let mut carried = Vec::new();
+    if let Some(text) = old.string("LANGUAGE").ok().flatten() {
+        carried.push(("LANGUAGE", Data::String(text)));
+    }
+    for name in registry::CARRIED_DWORDS {
+        if let Some(value) = dword(name) {
+            carried.push((name, Data::Dword(value)));
         }
     }
-    Ok(())
+    Ok(Previous {
+        size: size(dword("Width"), dword("Height")),
+        carried,
+    })
+}
+
+/// Writes the plan's values under `HKCU\<registry::USER_KEY>` and reads
+/// them back; the error lists every value the game would not see.
+pub fn write_game_registry(values: &[Value]) -> Result<(), Vec<Mismatch>> {
+    reg::write_verified(Hive::CurrentUser, registry::USER_KEY, values)
 }
 
 /// Seeds Wine's `Map Controllers` when the prefix has no value yet; a value
@@ -150,6 +161,9 @@ pub fn run_game(
 mod tests {
     use super::*;
 
+    use windows_sys::Win32::System::Registry::{
+        HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, RegDeleteTreeW,
+    };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DestroyWindow, WS_OVERLAPPEDWINDOW, WS_VISIBLE,
     };
@@ -163,7 +177,6 @@ mod tests {
     /// take back only ours. On native Windows nothing is written.
     #[test]
     fn wine_dll_overrides_round_trip_and_keep_the_players_value() {
-        use rea_launcher_win32::reg::Hive;
         let exe = "cmr4-launcher-test.exe";
         let key = Key::create(Hive::CurrentUser, &wine::app_defaults_key(exe)).unwrap();
         for dll in ["d3d9", "dinput8", "dsound"] {
@@ -205,6 +218,100 @@ mod tests {
         for dll in ["d3d9", "dinput8", "dsound"] {
             let _ = key.delete_value(dll);
         }
+    }
+
+    /// Deletes a test key and everything under it.
+    fn delete_tree(hive: HKEY, path: &str) {
+        // SAFETY: a predefined root and a NUL-terminated path.
+        unsafe { RegDeleteTreeW(hive, wide(path).as_ptr()) };
+    }
+
+    /// Under `scripts/wine-test` (and on Windows, HKCU only): the old
+    /// key's values are carried over once into the HKCU key, read back
+    /// through `write_verified`; afterwards the HKCU key is what counts.
+    #[test]
+    fn the_hkcu_key_carries_old_values_over_once_and_reads_back() {
+        use cmr4_launcher::config::Resolution;
+        let user = r"Software\rea-cmr4-launcher-test\Colin McRae Rally 04";
+        let machine = r"SOFTWARE\rea-cmr4-launcher-test\Colin McRae Rally 04";
+        let wow64 = reg::windows_is_64_bit();
+        let store = reg::virtual_store_path(machine, wow64);
+        let clean = || {
+            delete_tree(HKEY_CURRENT_USER, r"Software\rea-cmr4-launcher-test");
+            delete_tree(
+                HKEY_CURRENT_USER,
+                &reg::virtual_store_path(r"SOFTWARE\rea-cmr4-launcher-test", wow64),
+            );
+            if is_wine() {
+                delete_tree(HKEY_LOCAL_MACHINE, r"SOFTWARE\rea-cmr4-launcher-test");
+                delete_tree(
+                    HKEY_LOCAL_MACHINE,
+                    r"SOFTWARE\WOW6432Node\rea-cmr4-launcher-test",
+                );
+            }
+        };
+        clean();
+        // Nothing anywhere: a first run gets the defaults.
+        assert_eq!(previous_at(user, machine).unwrap(), Previous::default());
+        // An older launcher's VirtualStore copy (and, under Wine, HKLM).
+        let old = Key::create(Hive::CurrentUser, &store).unwrap();
+        old.set_string("LANGUAGE", "F").unwrap();
+        old.set_dword("SPEC_SELECTION1", 2).unwrap();
+        old.set_dword("Width", 800).unwrap();
+        old.set_dword("Height", 600).unwrap();
+        old.set_string("ADAPTER_VID", "not a dword").unwrap();
+        drop(old);
+        if is_wine() {
+            let hklm = Key::machine(machine).unwrap();
+            hklm.set_dword("ADAPTER_PID", 7).unwrap();
+            hklm.set_dword("SPEC_SELECTION1", 9).unwrap();
+        }
+        let previous = previous_at(user, machine).unwrap();
+        assert_eq!(previous.size, Some((800, 600)));
+        let mut carried = vec![
+            ("LANGUAGE", Data::String("F".into())),
+            ("SPEC_SELECTION1", Data::Dword(2)),
+        ];
+        if is_wine() {
+            carried.insert(1, ("ADAPTER_PID", Data::Dword(7)));
+        }
+        assert_eq!(previous.carried, carried, "VirtualStore first, then HKLM");
+        let values = registry::values(
+            Resolution::Original,
+            std::path::Path::new(r"C:\CMR4"),
+            &previous,
+        );
+        reg::write_verified(Hive::CurrentUser, user, &values).unwrap();
+        let key = Key::open_read(Hive::CurrentUser, user).unwrap().unwrap();
+        assert_eq!(
+            key.string("INSTALL_PATH").unwrap().as_deref(),
+            Some(r"C:\CMR4")
+        );
+        assert_eq!(key.string("LANGUAGE").unwrap().as_deref(), Some("F"));
+        assert_eq!(key.dword("SPEC_SELECTION1").unwrap(), Some(2));
+        assert_eq!(key.dword("Width").unwrap(), Some(800));
+        assert_eq!(key.dword("ADAPTER_VID").unwrap(), Some(0));
+        // The game changes its own values; the next launch keeps them and
+        // no longer looks at the old key.
+        let game = Key::create(Hive::CurrentUser, user).unwrap();
+        game.set_string("LANGUAGE", "G").unwrap();
+        game.set_dword("Width", 1280).unwrap();
+        game.set_dword("Height", 960).unwrap();
+        drop(game);
+        let again = previous_at(user, machine).unwrap();
+        assert_eq!(again.size, Some((1280, 960)));
+        assert!(again.carried.is_empty());
+        let values = registry::values(
+            Resolution::Custom(1440, 1080),
+            std::path::Path::new(r"C:\CMR4"),
+            &again,
+        );
+        reg::write_verified(Hive::CurrentUser, user, &values).unwrap();
+        assert_eq!(key.string("LANGUAGE").unwrap().as_deref(), Some("G"));
+        assert_eq!(key.dword("Width").unwrap(), Some(1440));
+        drop(key);
+        clean();
+        assert!(Key::open_read(Hive::CurrentUser, user).unwrap().is_none());
     }
 
     #[test]

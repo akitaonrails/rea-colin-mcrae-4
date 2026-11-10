@@ -41,7 +41,7 @@ fn launch(
         widescreen,
         Path::new(RUNTIME),
         &platform,
-        None,
+        &Default::default(),
         inherited,
     );
     format!(

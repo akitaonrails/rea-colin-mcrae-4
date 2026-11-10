@@ -15,8 +15,9 @@ use crate::components::Platform;
 use crate::config::{self, Resolution, Settings};
 use crate::form::Tab;
 use crate::plan::{self, Plan};
-use crate::registry::RegValue;
+use crate::registry::Previous;
 use crate::window::{Host, METRICS, PALETTE, Window};
+use rea_launcher_win32::reg::{Data as RegValue, When};
 
 const UHD: Option<(u32, u32)> = Some((3840, 2160));
 
@@ -113,7 +114,7 @@ fn launch(cfg: &str, flags: &[&str]) -> Plan {
         settings.widescreen(),
         &runtime,
         &Platform::new(true, false, None),
-        None,
+        &Previous::default(),
         None,
     )
 }
@@ -149,7 +150,7 @@ fn reg(plan: &Plan, name: &str) -> RegValue {
         .iter()
         .find(|w| w.name == name)
         .unwrap()
-        .value
+        .data
         .clone()
 }
 
@@ -367,7 +368,7 @@ fn native_windows_writes_no_wine_dll_overrides() {
         true,
         Path::new(r"C:\CMR4"),
         &Platform::new(false, false, None),
-        None,
+        &Previous::default(),
         None,
     );
     assert!(plan.app_dll_overrides.is_empty());
@@ -740,15 +741,16 @@ fn hostile_game_and_runtime_paths_sync_and_resolve() {
         true,
         &runtime,
         &Platform::default(),
-        None,
+        &Previous::default(),
         None,
     );
     assert_eq!(
         reg(&plan, "INSTALL_PATH"),
         RegValue::String(runtime.display().to_string())
     );
-    // On Windows the only environment changes are the close hook's setup
-    // and its self-attach switch (it is in cmr4.exe's imports).
+    // On Windows the only environment changes are the close hook's setup,
+    // its self-attach switch and the registry redirect (it is in
+    // cmr4.exe's imports).
     assert!(plan.prefer_fast_gpu);
     assert_eq!(
         plan.env,
@@ -757,7 +759,8 @@ fn hostile_game_and_runtime_paths_sync_and_resolve() {
                 "REA_CLOSE_HOOK",
                 "class=PC_CMR4;strategy=terminate".to_string()
             ),
-            ("REA_CLOSE_HOOK_ATTACH", "1".to_string())
+            ("REA_CLOSE_HOOK_ATTACH", "1".to_string()),
+            ("REA_REGISTRY", crate::registry::REDIRECT.to_string())
         ]
     );
     assert!(plan.wrappers.contains(&"rea_close_hook.dll"));
@@ -772,7 +775,10 @@ fn the_plan_keeps_first_run_defaults_and_the_players_overrides() {
         true,
         runtime,
         &Platform::new(true, true, None),
-        Some((800, 600)),
+        &Previous {
+            size: Some((800, 600)),
+            ..Previous::default()
+        },
         Some("d3d9.dll=b;xinput1_3=n"),
     );
     assert_eq!(
@@ -780,8 +786,13 @@ fn the_plan_keeps_first_run_defaults_and_the_players_overrides() {
         RegValue::String(r"C:\CMR4".into())
     );
     assert_eq!(reg(&plan, "Width"), RegValue::Dword(1440));
-    let seeded: Vec<_> = plan.registry.iter().filter(|w| w.if_missing).collect();
-    assert_eq!(seeded.len(), 10, "LANGUAGE and the nine graphics defaults");
+    let seeded: Vec<_> = plan
+        .registry
+        .iter()
+        .filter(|w| w.when == When::IfMissing)
+        .map(|w| w.name.as_str())
+        .collect();
+    assert_eq!(seeded, ["LANGUAGE", "ADAPTER_VID", "ADAPTER_PID"]);
     assert_eq!(
         plan.env,
         [
@@ -790,6 +801,7 @@ fn the_plan_keeps_first_run_defaults_and_the_players_overrides() {
                 "class=PC_CMR4;strategy=terminate".to_string()
             ),
             ("REA_CLOSE_HOOK_ATTACH", "1".to_string()),
+            ("REA_REGISTRY", crate::registry::REDIRECT.to_string()),
             (
                 "WINEDLLOVERRIDES",
                 "dinput8,msvcp140,msvcp140_atomic_wait,concrt140,vcruntime140,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d;xinput1_3=n".to_string()

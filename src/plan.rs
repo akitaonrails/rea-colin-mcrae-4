@@ -11,7 +11,8 @@ use crate::components::{
     self, CLOSE_HOOK_CONFIG, CLOSE_HOOK_DLL, DGVOODOO_DLLS, DXVK_DLLS, Platform, XIDI_CONF,
 };
 use crate::config::{Resolution, Settings};
-use crate::registry::{self, RegWrite};
+use crate::registry::{self, Previous};
+use rea_launcher_win32::reg::Value;
 
 /// Windows only: where the fast-GPU preference for the runtime's
 /// `cmr4.exe` goes (`rea_launcher_win32::gpu::prefer_fast_gpu`), set only
@@ -52,8 +53,9 @@ pub struct Plan {
     /// Generated files: (runtime-relative name, contents); None removes
     /// the launcher's own copy.
     pub files: Vec<(&'static str, Option<String>)>,
-    /// Values under `registry::KEY` (32-bit view, or the VirtualStore).
-    pub registry: Vec<RegWrite>,
+    /// Values under `HKCU\<registry::USER_KEY>`, where the close hook's
+    /// redirect (`REA_REGISTRY` in `env`) sends the game's `HKLM` opens.
+    pub registry: Vec<Value>,
     /// Seeded once under Wine's bus key, kept when the player set it.
     pub winebus: Vec<(&'static str, u32)>,
     /// The game's environment changes.
@@ -75,14 +77,14 @@ pub struct Plan {
 
 /// The plan for `settings` (resolved, with a resolution), with the
 /// widescreen fix applied to the exe or not (`widescreen`), the
-/// `runtime` folder, where the game runs, the registry's current
-/// Width/Height and the player's own `WINEDLLOVERRIDES`.
+/// `runtime` folder, where the game runs, what the game's key held before
+/// (`previous`) and the player's own `WINEDLLOVERRIDES`.
 pub fn plan(
     settings: &Settings,
     widescreen: bool,
     runtime: &Path,
     platform: &Platform,
-    existing_size: Option<(u32, u32)>,
+    previous: &Previous,
     inherited_overrides: Option<&str>,
 ) -> Plan {
     let controller = settings.controller();
@@ -110,10 +112,12 @@ pub fn plan(
     }
     // The close hook (components::CLOSE_HOOK_DLL, in the runtime exe's
     // imports) reads its setup from the game's environment, on Windows and
-    // under Wine alike, and attaches itself to the game's window thread.
+    // under Wine alike, attaches itself to the game's window thread and
+    // sends the game's opens of its HKLM key to the launcher's HKCU key.
     let mut env = vec![
         (rea_close_hook::ENV, CLOSE_HOOK_CONFIG.to_owned()),
         (rea_close_hook::ATTACH_ENV, "1".to_owned()),
+        (rea_close_hook::registry::ENV, registry::REDIRECT.to_owned()),
     ];
     let mut winebus = Vec::new();
     let mut app_dll_overrides = Vec::new();
@@ -141,7 +145,7 @@ pub fn plan(
         wrappers,
         taken_out,
         files,
-        registry: registry::writes(game_mode, runtime, existing_size),
+        registry: registry::values(game_mode, runtime, previous),
         winebus,
         env,
         app_dll_overrides,
@@ -173,9 +177,9 @@ impl Plan {
         });
         let _ = writeln!(out, "prefer fast GPU: {}", self.prefer_fast_gpu);
         let _ = writeln!(out, "gamepad profile setup: {}", self.gamepad_profile);
-        let _ = writeln!(out, "\n[registry {}]", registry::KEY);
-        for write in &self.registry {
-            let _ = writeln!(out, "{}", write.describe());
+        let _ = writeln!(out, "\n[registry HKCU\\{}]", registry::USER_KEY);
+        for value in &self.registry {
+            let _ = writeln!(out, "{}", registry::describe(value));
         }
         let _ = writeln!(out, "\n[winebus, seeded when absent]");
         for (name, value) in &self.winebus {

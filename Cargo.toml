@@ -35,10 +35,11 @@ rea-launcher-build = { git = "https://github.com/akitaonrails/rea-launcher-sdk",
 rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.6.0", features = ["testing"] }
 
 # The Wine test of the second-start window search (src/win32.rs) creates
-# a window titled like the launcher's.
+# a window titled like the launcher's; the registry test deletes its keys.
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
+    "Win32_System_Registry",
     "Win32_UI_WindowsAndMessaging",
 ] }
 

@@ -11,29 +11,20 @@ arguments: (none)
 prefer fast GPU: true
 gamepad profile setup: true
 
-[registry SOFTWARE\Codemasters\Colin McRae Rally 04]
-AUDIO_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
-CD_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
+[registry HKCU\Software\Codemasters\Colin McRae Rally 04]
 INSTALL_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
-VIDEO_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
 Width = dword:1440
 Height = dword:1080
 LANGUAGE = string:"E" (if missing)
-Adapter = dword:0 (if missing)
-ADAPTER_PID = dword:0 (if missing)
 ADAPTER_VID = dword:0 (if missing)
-BitDepth = dword:1 (if missing)
-ZDepth = dword:1 (if missing)
-SHADERS = dword:1 (if missing)
-FSAA = dword:0 (if missing)
-Gamma = dword:1 (if missing)
-MOVIE_QUALITY = dword:0 (if missing)
+ADAPTER_PID = dword:0 (if missing)
 
 [winebus, seeded when absent]
 
 [environment]
 REA_CLOSE_HOOK=class=PC_CMR4;strategy=terminate
 REA_CLOSE_HOOK_ATTACH=1
+REA_REGISTRY=HKLM\SOFTWARE\Codemasters\Colin McRae Rally 04 -> HKCU\Software\Codemasters\Colin McRae Rally 04
 
 [file dgVoodoo.conf]
 [General]

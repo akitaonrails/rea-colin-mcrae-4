@@ -11,23 +11,13 @@ arguments: (none)
 prefer fast GPU: false
 gamepad profile setup: true
 
-[registry SOFTWARE\Codemasters\Colin McRae Rally 04]
-AUDIO_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
-CD_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
+[registry HKCU\Software\Codemasters\Colin McRae Rally 04]
 INSTALL_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
-VIDEO_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
 Width = dword:1024
 Height = dword:768
 LANGUAGE = string:"E" (if missing)
-Adapter = dword:0 (if missing)
-ADAPTER_PID = dword:0 (if missing)
 ADAPTER_VID = dword:0 (if missing)
-BitDepth = dword:1 (if missing)
-ZDepth = dword:1 (if missing)
-SHADERS = dword:1 (if missing)
-FSAA = dword:0 (if missing)
-Gamma = dword:1 (if missing)
-MOVIE_QUALITY = dword:0 (if missing)
+ADAPTER_PID = dword:0 (if missing)
 
 [winebus, seeded when absent]
 Map Controllers = dword:1
@@ -46,6 +36,7 @@ dxgi = native,builtin
 [environment]
 REA_CLOSE_HOOK=class=PC_CMR4;strategy=terminate
 REA_CLOSE_HOOK_ATTACH=1
+REA_REGISTRY=HKLM\SOFTWARE\Codemasters\Colin McRae Rally 04 -> HKCU\Software\Codemasters\Colin McRae Rally 04
 WINEDLLOVERRIDES=dinput8,msvcp140,msvcp140_atomic_wait,concrt140,vcruntime140,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d
 
 [file dgVoodoo.conf]
