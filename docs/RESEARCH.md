@@ -132,7 +132,10 @@ The exact sequence that determined the final policy:
 2. Fresh-prefix testing showed that CMR04 also needed `AUDIO_PATH`, `CD_PATH`,
    `INSTALL_PATH`, and `VIDEO_PATH` pointed at the private runtime. The
    launcher now always writes those paths and seeds game defaults only if
-   missing, preserving player choices thereafter.
+   missing, preserving player choices thereafter. (2026-11-09, launcher 0.5.1: `cmr4.exe` contains only the
+   `INSTALL_PATH` name of those four, and with only `INSTALL_PATH` the game
+   reaches its menu; the other three, and the graphics defaults, were never
+   read. See `RUNTIME_NOTES.md`.)
 3. dgVoodoo2 2.80 plus DXVK reached CMR04's title and 3D attract demo at 4K
    after those paths were seeded. The measured swapchain was 3840x2160.
 4. The exact final package copied 1661 files on its first launch and zero on

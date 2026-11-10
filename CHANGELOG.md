@@ -6,9 +6,34 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The game's settings no longer depend on Windows' registry
+  virtualization. Without administrator rights the launcher's writes to
+  the machine-wide key landed in a per-user copy (the VirtualStore) that
+  Windows doesn't always show the game; then the game could miss its
+  install path (no data) and your resolution (and the widescreen fix's
+  4:3 mode) while `--check` said ready (the same problem as
+  akitaonrails/rea-colin-mcrae#6). The settings now live in
+  `HKCU\Software\Codemasters\Colin McRae Rally 04`, and the hook DLL
+  in the private copy points the game there. No administrator rights
+  needed, on Windows and under Wine alike.
+- Your settings are carried over: on the first start of this version the
+  game's language, graphics choices, adapter and (with the Original look)
+  resolution are copied from where an older launcher left them.
+- Play and `--check` stop with a clear list when the game would not see
+  its settings (the hook DLL missing or not loadable into the game, or a
+  value that doesn't read back), instead of starting a game that can't
+  find its data. `--check` names the settings key.
+
 ### Changed
 
-- Updated rea-launcher-sdk to v0.6.0.
+- Only what `cmr4.exe` reads is written: `INSTALL_PATH`, `Width`/`Height`,
+  `LANGUAGE`, `ADAPTER_VID`/`ADAPTER_PID`. `AUDIO_PATH`, `CD_PATH`,
+  `VIDEO_PATH`, `Adapter`, `BitDepth`, `ZDepth`, `SHADERS`, `FSAA`,
+  `Gamma` and `MOVIE_QUALITY` are not in the game at all and are no
+  longer written.
+- Updated rea-launcher-sdk to v0.6.0 (the hook's registry redirect).
 
 ## [0.5.0] - 2026-11-09
 

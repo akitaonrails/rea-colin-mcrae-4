@@ -4,6 +4,38 @@ This page distinguishes controlled runtime evidence from coverage that is
 still unknown. Portable tests and package inspection support the implementation
 but are not treated as gameplay evidence.
 
+## 2026-11-09: the game's key in HKCU, redirected (rea-launcher-sdk v0.6.0)
+
+The launcher writes the game's values to
+`HKCU\Software\Codemasters\Colin McRae Rally 04` and sets
+`REA_REGISTRY` so `rea_close_hook.dll`, already in the private copy's
+imports, sends `cmr4.exe`'s opens of
+`HKLM\SOFTWARE\CODEMASTERS\Colin McRae Rally 04` there (the VirtualStore
+fallback is gone: akitaonrails/rea-colin-mcrae#6). Release build packaged
+by `packaging/build-windows.sh` into `.work/reg-dist`; the same
+`cmr4.exe` (`7dca9f4c…1b41`), Wine 11.21 and gamescope in the `gaming`
+box, the 2026-11-05 harness copied to `.work/rgreg/` and `.work/rgcarry/`
+(`env -i`, new private prefixes, `gamescope --backend headless`, one null
+sink, only our own processes signalled, our prefix's `wineserver -k`).
+Registry read from the prefixes' `user.reg`/`system.reg`.
+
+| Check | Result |
+|---|---|
+| New prefix with no key for the game anywhere (HKLM both views, HKCU, VirtualStore); `cmr4-play --play --resolution 640x480` | **VERIFIED**: main menu reached (`hkcu-640/menu.jpg`); afterwards only `HKCU\Software\Codemasters\Colin McRae Rally 04` exists, with INSTALL_PATH (the private copy), Width/Height 640x480, LANGUAGE, ADAPTER_VID/PID, and SPEC_SELECTION1–3, which the game wrote itself through the redirected handle; nothing under HKLM or the VirtualStore |
+| Resolution applied: `CMR4Launcher.exe --no-window --resolution 640x480` then `1440x1080`, both in a fixed 1920x1080 gamescope | **VERIFIED**: both reach the menu; the 640x480 run is visibly softer, upscaled by dgVoodoo (`compare-640-vs-1440.png`, `zoom-compare.png`): in the same text crop, 10.5 blurred edge pixels per solid pixel against 4.0 at 1440x1080 |
+| Control: the runtime `cmr4.exe` started directly with the launcher's environment minus `REA_REGISTRY`, HKLM empty | **The old failure**: the game created its own HKLM key with `INSTALL_PATH = D:\cmr4_pc_data` (its built-in default) and crashed (page fault at 0x524B7A) before any menu |
+| With that stale HKLM key left in place, Play at 1440x1080 | **VERIFIED**: menu reached; the HKLM values are ignored |
+| Carry-over: a new prefix seeded with an older launcher's VirtualStore copy (LANGUAGE F, 800x600, SPEC_SELECTION3, INSTALL_PATH `C:\old\place`) and HKLM (LANGUAGE G, SPEC_SELECTION1); `--look original` | **VERIFIED**: log "carrying over the game's own values from its old key: LANGUAGE, SPEC_SELECTION1, SPEC_SELECTION3"; HKCU then holds LANGUAGE F (VirtualStore over HKLM), Width/Height 800x600, both SPEC_SELECTIONs, INSTALL_PATH replaced by the private copy; menu reached; the old keys left untouched. The menu stayed in English with LANGUAGE F, so whether this build honours the value is not shown here |
+| `--check --linux` | **VERIFIED**: "Ready to play" with "Game settings: HKCU\Software\Codemasters\Colin McRae Rally 04", exit 0; with `rea_close_hook.dll` removed from a copy of the package: "Not ready to play: … rea_close_hook.dll is not in the launcher's components folder" and what to do, exit 1 |
+
+Every run ended with SC_CLOSE (game exit 0) and no process of the test
+left; the game folder's hashes were the same afterwards and no file in it
+was newer than the first run.
+
+Pending: native Windows without administrator rights (the game reaches
+its menu at the chosen resolution, the key exists only under HKCU), and a
+player's existing VirtualStore settings carried over there.
+
 ## 2026-11-09: playing from the Magipack repack (rea-launcher-sdk v0.5.0)
 
 Debug i686 build under Wine 11.21 in the `gaming` box, headless (`env -i`,

@@ -24,7 +24,7 @@ analogue triggers. Click to watch (2⅓ minutes, with sound).*
 
 | Problem | What the launcher does |
 | --- | --- |
-| The game crashes on a fresh install: it expects install paths and first-run graphics defaults in the registry. | Writes the paths on every launch and adds the defaults only when they are missing. |
+| The game crashes on a fresh install: it expects its install path and settings in the machine-wide registry, which needs administrator rights, and on Windows a copy written without them may never reach the game. | Keeps the game's settings in your own part of the registry (no administrator rights needed) and points the game there. Writes the install path on every launch, adds first-run defaults only when they are missing, and brings over the settings an older launcher left. |
 | The old Direct3D 9 renderer struggles on modern systems. | Installs the tested dgVoodoo2 wrapper. Under Wine or Proton it also adds DXVK, so the game draws through Vulkan on your graphics card. |
 | Alt+F4 and closing the window do nothing (Super+W in Hyprland too), so the game had to be killed. | A small hook ends the game when you press Alt+F4 or close its window. |
 | The known 16:9 patch squeezes the cars: rendered directly at 16:9, cars and scenery come out 25% too narrow. | The community fix was made for a 4:3 picture stretched to 16:9, so the launcher has the game render 4:3 (2880x2160 for a 4K screen) and dgVoodoo stretches it. You get correct proportions and the wider view. |
@@ -298,8 +298,15 @@ back to the game folder.
 Registry entries the launcher writes:
 
 - **The game's key**, on Windows and in the Wine prefix:
-  `HKLM\SOFTWARE\WOW6432Node\Codemasters\Colin McRae Rally 04`, or the
-  same under `HKCU\Software\Classes\VirtualStore`.
+  `HKCU\Software\Codemasters\Colin McRae Rally 04` (the install path,
+  resolution, language and the game's own graphics choices). The game
+  looks for it under `HKLM`; the launcher's hook DLL in the private copy
+  sends it here, so no administrator rights are needed. Launchers before
+  0.6.0 wrote it to
+  `HKLM\SOFTWARE\WOW6432Node\Codemasters\Colin McRae Rally 04` or the
+  same under `HKCU\Software\Classes\VirtualStore`; the first start of
+  0.6.0 copies the game's settings from there, and then that old key is
+  no longer used (you can delete it).
 - **Windows only, the high-performance GPU for the private copy:** under
   `HKCU\Software\Microsoft\DirectX\UserGpuPreferences`, the value named
   after the runtime's `cmr4.exe` (for example
