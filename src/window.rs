@@ -13,8 +13,9 @@ use rea_launcher_ui::egui::{self, Align2, Color32, Key, TextureHandle};
 use rea_launcher_ui::pad::Nav;
 use rea_launcher_ui::spec::{self as ui_spec, mark_rendered};
 use rea_launcher_ui::theme::{self, Metrics, Palette, body, semibold, tint};
+use rea_launcher_ui::unpack::{self, Unpacking};
 use rea_launcher_ui::widgets::{self, Crop, LookCard};
-use rea_launcher_ui::window::Layout;
+use rea_launcher_ui::window::{Layout, WindowFit};
 
 use rea_launcher::identify::Known;
 use rea_launcher::installer::InstallerBuild;
@@ -64,6 +65,27 @@ pub const METRICS: Metrics = Metrics {
 };
 pub const PHOTO_W: f32 = 300.0;
 pub const TITLE: &str = "Colin McRae Rally 04";
+/// The photo strip's portrait in both windows (THIRD_PARTY.md).
+pub const PORTRAIT: &[u8] = include_bytes!("../assets/portrait.jpg");
+/// The credit the portrait's CC BY 2.0 licence asks for, under it in both
+/// windows.
+pub const PHOTO_CREDIT: &str = "Photo: Carolyn Williams, CC BY 2.0";
+
+/// The unpack window: the settings window's title, photo strip and fit.
+pub fn unpack_window(fit: WindowFit) -> unpack::Window<'static> {
+    unpack::Window {
+        title: TITLE,
+        fit,
+        hero_jpeg: Some(PORTRAIT),
+        photo_width: PHOTO_W,
+    }
+}
+
+/// What the unpack window shows for `installer` (`total` bytes unpacked),
+/// with the portrait's credit.
+pub fn unpacking(installer: &str, total: u64) -> Unpacking {
+    Unpacking::new(TITLE, installer, total).with_credit(PHOTO_CREDIT)
+}
 
 /// What the window needs from the platform.
 #[derive(Debug, Clone, Copy)]
@@ -251,8 +273,7 @@ impl Window {
     pub fn draw(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         if self.portrait.is_none() {
-            self.portrait =
-                widgets::load_jpeg(&ctx, "portrait", include_bytes!("../assets/portrait.jpg"));
+            self.portrait = widgets::load_jpeg(&ctx, "portrait", PORTRAIT);
         }
         let full = ui.max_rect();
         let layout = Layout::new(full, PHOTO_W);
@@ -330,7 +351,7 @@ impl Window {
         let x = rect.left() + 20.0;
         let y = rect.bottom() - 16.0;
         for (dy, text, font, color) in [
-            (0.0, "Photo: Carolyn Williams, CC BY 2.0", body(12.0), MUTED),
+            (0.0, PHOTO_CREDIT, body(12.0), MUTED),
             (
                 17.0,
                 "1968–2007, World Rally Champion 1995",
@@ -625,5 +646,38 @@ mod tests {
             ui.run();
         }
         cfg_spec::assert_parity(OPTIONS, &ui_spec::rendered_keys(&ui.ctx));
+    }
+
+    /// The unpack window shows the settings window's portrait, with its
+    /// CC BY 2.0 credit as a label inside the photo strip.
+    #[test]
+    fn the_unpack_window_shows_the_portrait_with_its_credit() {
+        use rea_launcher_ui::egui::Role;
+        use rea_launcher_ui::testing::Queryable;
+        use rea_launcher_ui::unpack::draw_unpack;
+        use rea_launcher_ui::window::SIZE;
+
+        let page = unpack_window(WindowFit::new(SIZE, false, None, 1.0));
+        assert_eq!(page.title, TITLE);
+        assert_eq!(page.hero_jpeg, Some(PORTRAIT));
+        assert_eq!(page.photo_width, PHOTO_W);
+
+        let state = unpacking("the Magipack repack", 2_200_000_000);
+        assert_eq!(state.game, TITLE);
+        let mut ui = testing::harness(&PALETTE, &METRICS, state, |ui, u| {
+            if u.hero.is_none() {
+                u.hero = widgets::load_jpeg(ui.ctx(), "hero", PORTRAIT);
+            }
+            u.photo_width = PHOTO_W;
+            draw_unpack(ui, u);
+        });
+        ui.run();
+        assert!(ui.state().hero.is_some(), "the portrait decodes");
+        let credit = ui.get_by_role_and_label(Role::Label, PHOTO_CREDIT);
+        assert!(
+            credit.rect().max.x <= PHOTO_W + 1.0,
+            "inside the photo strip: {:?}",
+            credit.rect()
+        );
     }
 }

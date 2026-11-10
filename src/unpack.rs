@@ -5,9 +5,9 @@
 use std::path::Path;
 
 use cmr4_launcher::source;
-use cmr4_launcher::window::{METRICS, PALETTE, PHOTO_W, TITLE};
+use cmr4_launcher::window::{METRICS, PALETTE, unpack_window, unpacking};
 use rea_launcher::installer::Installer;
-use rea_launcher_ui::unpack::{self, Unpacking};
+use rea_launcher_ui::unpack;
 use rea_launcher_ui::window::{SIZE, WindowFit};
 use rea_launcher_win32::innoextract::{self, Unpacked};
 use rea_launcher_win32::xinput;
@@ -37,15 +37,8 @@ pub fn run(
         unpack::show(
             &PALETTE,
             &METRICS,
-            // No photo: the settings window's portrait carries its credit
-            // line, which this window has no room for.
-            unpack::Window {
-                title: TITLE,
-                fit,
-                hero_jpeg: None,
-                photo_width: PHOTO_W,
-            },
-            Unpacking::new(TITLE, found.build.name, found.build.unpacked),
+            unpack_window(fit),
+            unpacking(found.build.name, found.build.unpacked),
             job,
             xinput::buttons,
         )

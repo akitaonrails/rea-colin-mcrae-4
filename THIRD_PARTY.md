@@ -24,7 +24,7 @@ carry these notices and the components' licence files.
 
 | Asset | License and attribution | Source |
 | --- | --- | --- |
-| `assets/portrait.jpg` — Colin McRae, photo by Carolyn Williams (resized), credited in the window | CC BY 2.0 | https://commons.wikimedia.org/wiki/File:Colin_Mcrae_crop.jpg |
+| `assets/portrait.jpg` — Colin McRae, photo by Carolyn Williams (resized), credited in the settings and unpack windows | CC BY 2.0 | https://commons.wikimedia.org/wiki/File:Colin_Mcrae_crop.jpg |
 | Barlow fonts (`Barlow-*.ttf`, `BarlowCondensed-*.ttf`), embedded from the shared `rea-launcher-ui` crate (`crates/rea-launcher-ui/assets/fonts` in rea-launcher-sdk) | SIL OFL 1.1; notice in that folder's `OFL.txt` | https://github.com/jpt/barlow |
 | `packaging/appimage/cmr4-launcher.png` | Project icon (MIT OR Apache-2.0), set in Barlow | this repository |
 

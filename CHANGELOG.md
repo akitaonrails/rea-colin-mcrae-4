@@ -8,6 +8,9 @@ All notable changes to this project. The format follows
 
 ### Changed
 
+- The window shown while the game is unpacked from your installer has
+  the settings window's photo of Colin McRae, with its credit.
+
 - Updated rea-launcher-sdk to v0.7.0. An unpacked game folder whose
   files were deleted is unpacked again on the next start instead of
   failing the game check.
