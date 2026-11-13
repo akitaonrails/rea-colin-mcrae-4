@@ -48,3 +48,13 @@ panic = "abort"
 opt-level = "s"
 lto = true
 strip = true
+
+# TEMPORARY: the wheel support builds on the SDK's unreleased wheel work
+# (local branch feat/dinput-wheel). Replace with the v0.9.0 tag (sdk-bump)
+# and remove this table at release.
+[patch."https://github.com/akitaonrails/rea-launcher-sdk"]
+rea-launcher = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher" }
+rea-launcher-build = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher-build" }
+rea-launcher-close-hook = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher-close-hook" }
+rea-launcher-ui = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher-ui" }
+rea-launcher-win32 = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher-win32" }
