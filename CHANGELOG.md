@@ -6,6 +6,28 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Wheel support: a layer in the launcher's copy of the game shows CMR04
+  one virtual wheel made from your wheel and, when separate, your pedals,
+  with a steering lock (540° by default), deadzone, curve, separate
+  analogue pedals and force feedback at your strength.
+- A **Wheel** tab in the settings window: wheel support (Auto/On/Off),
+  wheel and pedal pickers, a live check of what the game gets, steering
+  lock, deadzone, curve, pedal inversion and calibration, force-feedback
+  strength, direction and a test. Every setting is also a `launcher.cfg`
+  key and a flag (`wheel`, `wheel_device`, `wheel_pedals`, `wheel_lock`,
+  `wheel_deadzone`, `wheel_curve`, `wheel_invert_throttle`,
+  `wheel_invert_brake`, `wheel_ffb`, `wheel_ffb_invert`, `wheel_log`).
+- A profile never set up drives with the wheel at once (as with the pad),
+  and your own wheel and pad setups are kept when you switch between
+  them.
+
+### Changed
+
+- With the wheel shown, the pad becomes the game's second controller.
+- Updated rea-launcher-sdk to v0.9.0.
+
 ## [0.5.2] - 2026-11-10
 
 ### Changed

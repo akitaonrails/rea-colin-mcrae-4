@@ -4,6 +4,16 @@ This page distinguishes controlled runtime evidence from coverage that is
 still unknown. Portable tests and package inspection support the implementation
 but are not treated as gameplay evidence.
 
+## 2026-11-13: wheel support (rea-launcher-sdk feat/dinput-wheel)
+
+| Check | Result |
+|---|---|
+| Profile seeding, stash and restore (`src/profile.rs`) | **VERIFIED (host tests)** against fixtures built from the offsets: the pad seed is byte for byte 0.5.2's; the wheel seed's values at their file offsets; wheel↔pad runs restore the player's tweaked records; player 1's slot only for a profile never set up |
+| Wheel tab, options, launch decision | **VERIFIED (host and Wine e2e)**: every wheel key from the window and as a flag reaches `launcher.cfg`, the runtime `rea_wheel.ini` and `REA_WHEEL_MODE`; Auto/On/Off decisions with stand-in device lists; tab cycling and pad navigation |
+| Close hook and wheel layer in one `cmr4.exe` | **BLOCKED**: both SDK rlibs export `DllMain`, so the launcher (which links both for `import_into`) fails to link for Windows (`duplicate symbol: _DllMain@12`); reported to the SDK |
+| Headless real-game run (fake wheel, seeded record kept, close hook ends the game) | **NOT RUN**: needs the Windows build above |
+| Real wheels (force direction and feel, Fanatec twins and separate pedals, Logitech, Thrustmaster, re-plugging mid-stage, Wine's hidraw/SDL backends) | **NEEDS A REAL WHEEL** |
+
 ## 2026-11-09: the game's key in HKCU, redirected (rea-launcher-sdk v0.6.0)
 
 The launcher writes the game's values to

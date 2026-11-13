@@ -163,8 +163,9 @@ helper; `launcher.log` records each step.
 
 **Play** holds the game folder, the look and the private copy folder.
 **Picture** sets the resolution, a frame-rate cap and VSync. **Controls**
-turns the Gamepad on or off and shows what the game sees. Settings are
-saved when you press **Play**.
+turns the Gamepad on or off and shows what the game sees. **Wheel** sets
+up a steering wheel and pedals ([Wheels](#wheels)). Settings are saved
+when you press **Play**.
 
 | Look | Resolution | View | Frame-rate cap | When to pick it |
 | --- | --- | --- | --- | --- |
@@ -221,6 +222,67 @@ directly. Buttons and the D-pad work, but under Wine the pad's axes did
 not drive the car in our tests, so keep it on unless your setup needs
 otherwise.
 
+## Wheels
+
+CMR04 reads wheels through DirectInput itself, and on a modern wheel that
+goes wrong: a 900–1080° wheel turns the whole range into full lock,
+separate USB pedals (Fanatec, Heusinkveld, Simucube setups) can't drive
+together with the wheel, the default pedal axis is a combined one, and
+force feedback is fragile. The launcher puts a small layer
+(`rea_dinput.dll`, from rea-launcher-sdk) into its private copy of the
+game. It shows the game **one virtual wheel, "rea wheel"**, made from your
+wheel and, when they are a separate device, your pedals:
+
+- steering after the **steering lock** you pick (540° by default, a rally
+  car's), the deadzone and the curve;
+- throttle and brake on separate analogue axes;
+- your wheel's buttons and hat;
+- the game's force feedback on your wheel, at your strength, kept alive
+  when the wheel is re-acquired.
+
+**Wheel support** (`wheel`): **Auto** (the default) shows the virtual
+wheel when a wheel is plugged in as the game starts; **On** always shows
+it (centred until your wheel is there); **Off** leaves the game's
+controllers as they are. The launcher decides before the game starts and
+tells the layer (`REA_WHEEL_MODE`), so the two always agree.
+
+**The Wheel tab** shows which wheel and pedals will drive and a **live
+check** of exactly what the game will get (steering, throttle, brake).
+There you pick a wheel or pedal device by hand, set the steering lock,
+deadzone, curve, pedal inversion and force-feedback strength and
+direction, **Calibrate pedals** (press and release each pedal), and
+**Test force feedback**.
+
+**A profile never set up drives with the wheel at once:** the launcher
+seeds the game's controls for the virtual wheel (steering on X, separate
+analogue pedals, no deadzones, force feedback on, autocentre off), as it
+does for the pad. The game keeps one setup per controller slot and resets
+one whose device changed, so the launcher keeps a copy of your own wheel
+and pad setups (`.cmr4-controller-records`) and puts them back when you
+switch between a wheel run and a pad run. With the wheel, the pad moves
+behind it (second controller); it gets analogue pedals from its second
+run.
+
+**Steering lock in the tab vs your wheel's software:** set your wheel's
+own rotation to its maximum (or leave the driver's default) and pick the
+lock in the tab; the layer scales the wheel's whole rotation to the lock
+you chose. Setting both makes the lock smaller than you meant.
+
+**Fanatec pedals on their own USB** (and other separate pedal boxes): the
+layer merges them with the wheel; calibrate them once in the tab so the
+right axes are used. **Fanatec twin devices** (two HID collections of one
+wheel) are handled: the one with force feedback is taken. **Xbox-mode
+wheels** (G920/G923 Xbox, T248X in Xbox mode) appear as a pad through
+Xidi: switch the wheel to its PC/PS mode, or set **Controls → Gamepad**
+off. **Direct-drive bases:** start with a lower strength.
+
+Limits: the game reads steering in 256 steps; one controller per player;
+devices are chosen when the game starts (plug the wheel in first); real
+wheels haven't been tested yet (see
+[docs/RUNTIME_NOTES.md](docs/RUNTIME_NOTES.md)). If something is off,
+switch on **Keep a log for bug reports** in the tab and attach
+`rea_wheel.log` (in the private copy) with `launcher.log`.
+
 ## Options
 
 Every option has the same name in the window, in `launcher.cfg` (with
@@ -236,6 +298,16 @@ lives is under [Where things live](#where-things-live).
 | `fps_limit` / `--fps-limit` | Picture: Frame-rate cap | 0 to 1000; `0` or `off` is no cap | no cap | The most frames per second the game draws. |
 | `vsync` / `--vsync` | Picture: VSync | `on`, `off` | off | Waits for the screen before showing each frame: no tearing, slightly more input delay. |
 | `controller` / `--controller` | Controls: Gamepad | `on`, `off` | on | Lets the game use an Xbox-style pad through Xidi: the left stick steers and the triggers are analogue pedals. |
+| `wheel` / `--wheel` | Wheel: Wheel support | `auto`, `on`, `off` | auto | Shows the game one virtual wheel made from your wheel and pedals ([Wheels](#wheels)); auto when a wheel is plugged in as the game starts. |
+| `wheel_device` / `--wheel-device` | Wheel: Wheel | a DirectInput instance GUID | picked automatically | The wheel to drive with. |
+| `wheel_pedals` / `--wheel-pedals` | Wheel: Pedals | a DirectInput instance GUID | the calibrated pedals, else the wheel's own | Separate pedals. |
+| `wheel_lock` / `--wheel-lock` | Wheel: Steering lock | `180`, `270`, `360`, `540`, `900`, `full` | 540 | How far you turn the wheel for full lock in the game. |
+| `wheel_deadzone` / `--wheel-deadzone` | Wheel: Deadzone | 0 to 25 (percent) | 0 | A band in the centre that does nothing. |
+| `wheel_curve` / `--wheel-curve` | Wheel: Curve | 0 to 100 | 0 (linear) | Softens small turns near the centre. |
+| `wheel_invert_throttle`, `wheel_invert_brake` / `--wheel-invert-throttle`, `--wheel-invert-brake` | Wheel: Invert throttle, Invert brake | `on`, `off` | off | For a pedal that reads backwards. |
+| `wheel_ffb` / `--wheel-ffb` | Wheel: Strength | 0 to 100 (percent) | 50 | Force-feedback strength; 0 is off. |
+| `wheel_ffb_invert` / `--wheel-ffb-invert` | Wheel: Reverse force feedback | `on`, `off` | off | Only for a wheel that pulls the wrong way. |
+| `wheel_log` / `--wheel-log` | Wheel: Keep a log for bug reports | `on`, `off` | off | Writes `rea_wheel.log` in the private copy. |
 | `runtime` / `--runtime` | Play: Private copy folder | a folder outside the game folder | `%LOCALAPPDATA%\CMR4Launcher\CMR4` | Where the launcher keeps its own copy of the game, with your saves and settings. |
 
 `on`/`off` also accept `true`/`false`, `yes`/`no` and `1`/`0`. An invalid
@@ -284,6 +356,8 @@ private copy (after a launcher was ended while playing).
 | Your saves | inside the runtime, next to its `cmr4.exe` | the same |
 | Wine prefix | — | `~/.local/share/cmr4-launcher/prefix` |
 | `cmr4-play`'s files (the window's error output, the session lock) | — | `~/.config/cmr4-launcher` |
+| The pedal calibration (`rea_wheel.ini`) | next to `launcher.cfg` | the same |
+| The wheel layer and its files (`rea_dinput.dll`, `rea_wheel.ini` written at each start, `rea_wheel.log`), the copies of your controller setups (`.cmr4-controller-records`) | inside the runtime, next to its `cmr4.exe` | the same |
 
 A `launcher.cfg` next to `CMR4Launcher.exe` is used instead (portable
 setup). Under Proton everything above is inside Steam's
@@ -322,8 +396,9 @@ Registry entries the launcher writes:
 
 `launcher.log` records what the launcher did and why: the game version and
 its SHA-256, the look and settings, each bundled DLL with its SHA-256, the
-DLL overrides and close-hook setup (`REA_CLOSE_HOOK`,
-`REA_CLOSE_HOOK_ATTACH`) given to the game,
+DLL overrides, close-hook setup (`REA_CLOSE_HOOK`,
+`REA_CLOSE_HOOK_ATTACH`) and wheel decision (`REA_WHEEL_MODE`) given to
+the game,
 the monitor and dgVoodoo output it chose, and the `controller setup:` step. It starts afresh past 1 MiB. Remove personal
 paths before posting it.
 

@@ -296,4 +296,43 @@ Wine's settings window seeds `UseEGL=N` only if absent and is created at its
 final scaled size. Linux passes both SDL controller and joystick background
 event variables independently, preserving existing user values.
 
+## Wheels
+
+Community fixes first: none exists for a modern wheel in CMR04 (searched
+2026-11-13: PCGamingWiki, GitHub, mod sites). The PCGW "force feedback
+restore module" is a Xidi ini for pad rumble. So the wheel goes through
+rea-launcher-sdk's in-game DirectInput layer (`rea-launcher-dinput`), and
+the launcher seeds the game's controls for its fixed virtual wheel.
+
+What the game does (static analysis of `cmr4.exe` `7dca9f4c…`, shared with
+CMR3 and CMR2005; V = seen in the binary):
+
+- `EnumDevices(DI8DEVCLASS_GAMECTRL, ATTACHEDONLY)` opens every controller
+  with no filter, sets every axis to `DIPROP_RANGE` 0..255 by object ID
+  (0x533633), and numbers controls as buttons, two codes per hat, then the
+  axes in `EnumObjects` order (0x533940). The virtual wheel (32 buttons,
+  one hat, X/Y/Z/Rz) is therefore 34/35/36/37 for steering, combined
+  pedals, throttle and brake (V).
+- Force feedback runs only if `GetProperty(DIPROP_FFGAIN)` succeeds (V);
+  the layer answers it.
+- One controller per player; no steering lock setting anywhere (V).
+
+`OPTIONS` (987,056 bytes, no checksum): one 0x2520-byte record per
+player and controller slot at `0x64 + player*0x29C40 + slot*0x2520`
+(0x41F1F0); slots 0 keyboard, 1 mouse, then controllers in `EnumDevices`
+order (0x533CC6). With the virtual wheel listed first it is slot 2
+(0x4AA4) and the pad slot 3 (0x6FC4). `0xA71AC + 4*player` is the
+player's **slot number** (0x4B4E0B), not a device type. On load a record
+whose `+0x74` PID / `+0x78` VID don't match the device in its slot is
+reset to that device's defaults (0x4B4E30, 0x4FBF30), so the player's
+tweaks for another device are lost; hence the launcher's stash of
+records by device. The wheel seed (`src/profile.rs`, `wheel_record`):
+flags `0x13` (attached, force feedback on, strength step 4: full; the
+layer applies the player's strength, V 0x457BC7), analogue steering and
+pedals (`+1` = 0), the game's driving defaults with accelerate on Z (36)
+and brake on Rz (37), tunings without deadzone for steering (action 7)
+and the pedals (9, 10) (semantics at 0x532BB0), autocentre off
+(`+0x251C` = 1, 0x457660). The research notes with every offset are the
+SDK's `.work/wheels/seed-cmr4.md`.
+
 See [RUNTIME_NOTES.md](RUNTIME_NOTES.md) for remaining verification.
