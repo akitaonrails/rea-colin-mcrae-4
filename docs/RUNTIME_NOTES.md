@@ -13,9 +13,15 @@ gamescope 3.17.0 in the `gaming` box, the 2026-11-05 harness
 (`.work/rgwheel/`: `env -i`, a fresh private prefix, `gamescope --backend
 headless`, one null sink, XTest input), and the game's state read from our
 own `cmr4.exe`'s memory at the addresses of the seed research. Re-run
-against the SDK's review fixes (f022a0c: the strength as the wheel's
-gain, the `dll` profile): the checks, Wine tests, package exports and the
-wheel-on game run (`logs/wheel-on-2/`) gave the same results.
+against the SDK's review fixes (f022a0c, the `dll` profile): the checks,
+Wine tests, package exports and the wheel-on game run
+(`logs/wheel-on-2/`) gave the same results. (That build applied the
+strength as the wheel's gain; v0.9.0 scales each effect again and passes
+the game's `DIPROP_FFGAIN` through. No run here reached force feedback.)
+2026-11-13, pinned to rea-launcher-sdk v0.9.0 (`c8afb83`): the wheel-on
+run through the launcher passed again (layer 0.9.0, the virtual wheel
+created and its ranges set, the memory checks, Alt+F4 ending the game in
+0.27 s; `logs/wheel-090/`).
 
 | Check | Result |
 |---|---|

@@ -8,25 +8,43 @@ All notable changes to this project. The format follows
 
 ### Added
 
-- Wheel support: a layer in the launcher's copy of the game shows CMR04
-  one virtual wheel made from your wheel and, when separate, your pedals,
-  with a steering lock (540° by default), deadzone, curve, separate
-  analogue pedals and force feedback at your strength.
+- **Wheel support.** CMR04 reads wheels itself and gets modern ones
+  wrong: a 900–1080° wheel turns its whole range into full lock, pedals
+  on their own USB can't drive with the wheel, and the pedals share one
+  axis. The launcher now shows the game one virtual wheel, "rea wheel",
+  made from your wheel and, when separate, your pedals: steering after a
+  steering lock (540° by default), deadzone and curve, throttle and brake
+  on separate analogue axes, and the game's force feedback on your wheel
+  at your strength. With **Auto** (the default) it's there when a wheel is
+  plugged in as the game starts.
 - A **Wheel** tab in the settings window: wheel support (Auto/On/Off),
-  wheel and pedal pickers, a live check of what the game gets, steering
-  lock, deadzone, curve, pedal inversion and calibration, force-feedback
-  strength, direction and a test. Every setting is also a `launcher.cfg`
-  key and a flag (`wheel`, `wheel_device`, `wheel_pedals`, `wheel_lock`,
+  which wheel and pedals drive, a live check of what the game will get,
+  steering lock, deadzone, curve, pedal inversion, pedal calibration,
+  force-feedback strength and direction, a force-feedback test, and a log
+  for bug reports. Every setting is also a `launcher.cfg` key and a flag
+  (`wheel`, `wheel_device`, `wheel_pedals`, `wheel_lock`,
   `wheel_deadzone`, `wheel_curve`, `wheel_invert_throttle`,
   `wheel_invert_brake`, `wheel_ffb`, `wheel_ffb_invert`, `wheel_log`).
-- A profile never set up drives with the wheel at once (as with the pad),
-  and your own wheel and pad setups are kept when you switch between
-  them.
+- A profile never set up drives with the wheel at once, as it does with
+  the pad, and your own wheel and pad setups are kept when you switch
+  between wheel and pad runs.
+- **Not tested on real wheels yet**: it was checked in the game with a
+  stand-in wheel. If something is off, turn on **Keep a log for bug
+  reports** in the Wheel tab and open an issue with `rea_wheel.log` (in
+  the private copy) and `launcher.log`, and say which wheel and pedals you
+  have.
 
 ### Changed
 
 - With the wheel shown, the pad becomes the game's second controller.
-- Updated rea-launcher-sdk to v0.9.0.
+- `launcher.log` names each controller setup step (`controller setup:`).
+- Updated rea-launcher-sdk to v0.9.0 (the wheel layer, the Wheel tab and
+  the wheel options).
+
+### Fixed
+
+- The installer tests no longer fail when the Windows tests are run twice
+  in the same Wine prefix.
 
 ## [0.5.2] - 2026-11-10
 
