@@ -324,7 +324,7 @@ Registry entries the launcher writes:
 its SHA-256, the look and settings, each bundled DLL with its SHA-256, the
 DLL overrides and close-hook setup (`REA_CLOSE_HOOK`,
 `REA_CLOSE_HOOK_ATTACH`) given to the game,
-the monitor and dgVoodoo output it chose, and the `gamepad setup:` step. It starts afresh past 1 MiB. Remove personal
+the monitor and dgVoodoo output it chose, and the `controller setup:` step. It starts afresh past 1 MiB. Remove personal
 paths before posting it.
 
 ## Troubleshooting
@@ -346,7 +346,7 @@ paths before posting it.
   the private copy's drive, or choose a private copy folder on another
   drive (the unpacked game sits next to it).
 - **The pad doesn't drive:** keep the Gamepad on, wake the pad before
-  launching, check the `gamepad setup:` line in the log, and set the
+  launching, check the `controller setup:` lines in the log, and set the
   controls once in Options → Controllers as described above.
 - **The picture is in the wrong place or squashed:** the log's
   `display/render policy` line names the monitor and dgVoodoo output.

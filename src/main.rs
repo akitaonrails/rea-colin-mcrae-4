@@ -140,18 +140,60 @@ mod app {
         fsx::write_atomic(path, text).map_err(|error| format!("cannot write {error}"))
     }
 
-    /// Points an untouched game profile at the connected pad (see `profile`).
-    fn choose_gamepad(path: &Path) {
-        let Some((vendor, product)) = win32::gamepad_ids() else {
-            log_line("gamepad setup: no XInput pad in slot 0; profile left as is");
-            return;
+    /// Gets the game profile's controller records ready for `layout`, and
+    /// keeps a copy of the player's own (see `profile`).
+    fn prepare_controllers(runtime: &Path, layout: profile::Layout) {
+        let ids = |list: &[profile::Ids]| {
+            let names: Vec<String> = list
+                .iter()
+                .map(|ids| format!("{:04x}:{:04x}", ids.vendor, ids.product))
+                .collect();
+            names.join(", ")
         };
-        match profile::choose_gamepad_in(path, vendor, product) {
-            Ok(true) => log_line(&format!(
-                "gamepad setup: profile now uses pad {vendor:04x}:{product:04x} with analogue pedals"
-            )),
-            Ok(false) => log_line("gamepad setup: profile already configured or not created yet"),
-            Err(error) => log_line(&format!("warning: gamepad setup: {error}")),
+        let options = runtime.join("OPTIONS");
+        match profile::prepare_in(&options, &runtime.join(profile::STASH_FILE), layout) {
+            Ok((kept, changes)) => {
+                if !kept.is_empty() {
+                    log_line(&format!(
+                        "controller setup: kept the records of {}",
+                        ids(&kept)
+                    ));
+                }
+                if changes.is_empty() {
+                    log_line("controller setup: profile already set up or not created yet");
+                }
+                if !changes.restored.is_empty() {
+                    log_line(&format!(
+                        "controller setup: restored {}",
+                        ids(&changes.restored)
+                    ));
+                }
+                if !changes.seeded.is_empty() {
+                    log_line(&format!(
+                        "controller setup: set up {} with analogue pedals",
+                        ids(&changes.seeded)
+                    ));
+                }
+                if let Some(slot) = changes.player {
+                    log_line(&format!(
+                        "controller setup: player 1 drives with slot {slot}"
+                    ));
+                }
+            }
+            Err(error) => log_line(&format!("warning: controller setup: {error}")),
+        }
+    }
+
+    /// The controllers the game will list: the Xidi pad when the gamepad
+    /// is on and an XInput pad is connected.
+    fn controller_layout(gamepad: bool) -> profile::Layout {
+        let pad = gamepad.then(win32::gamepad_ids).flatten();
+        if gamepad && pad.is_none() {
+            log_line("controller setup: no XInput pad in slot 0");
+        }
+        profile::Layout {
+            wheel: false,
+            pad: pad.map(|(vendor, product)| profile::Ids { vendor, product }),
         }
     }
 
@@ -516,10 +558,8 @@ mod app {
         for (name, value) in &plan.env {
             log_line(&format!("game environment: {name}={value}"));
         }
-        let options_file = runtime.join("OPTIONS");
-        if plan.gamepad_profile {
-            choose_gamepad(&options_file);
-        }
+        let layout = controller_layout(plan.gamepad_profile);
+        prepare_controllers(&runtime, layout);
         log_line("starting game");
         let code = win32::run_game(&runtime_exe, &runtime, &plan.env, &plan.args)?;
         log_line(&format!("game exited with {code} (0x{code:08x})"));
@@ -530,10 +570,9 @@ mod app {
                 home().join("launcher.log").display()
             ));
         }
-        if plan.gamepad_profile {
-            // A first run creates OPTIONS while playing; set it up for the next.
-            choose_gamepad(&options_file);
-        }
+        // Keeps the player's tweaks from this run; a first run creates
+        // OPTIONS while playing, so it is set up for the next.
+        prepare_controllers(&runtime, layout);
         Ok(code)
     }
 }
