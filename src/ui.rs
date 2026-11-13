@@ -8,6 +8,7 @@ use cmr4_launcher::window::{Host, METRICS, PALETTE, TITLE, Window};
 use rea_launcher_ui::pad::{self, PadNav};
 use rea_launcher_ui::window::{SIZE, WindowFit};
 use rea_launcher_ui::{eframe, egui, theme};
+use rea_launcher_win32::dinput::DirectInput;
 use rea_launcher_win32::{dialog, xinput};
 
 use crate::win32;
@@ -65,6 +66,7 @@ pub fn show(settings_path: &Path, text: Option<&str>, linux: bool) -> Result<Out
             let _ = dialog::open_url(url);
         },
         installers: source::INSTALLERS,
+        wheel_devices: || Box::new(DirectInput::start()),
     };
     let path = settings_path.to_path_buf();
     eframe::run_native(

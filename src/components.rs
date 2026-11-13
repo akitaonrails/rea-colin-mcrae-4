@@ -51,6 +51,11 @@ pub const CLOSE_HOOK_DLL: &str = rea_close_hook::DLL;
 /// `WM_CLOSE` is left alone: the intro movies' window is closed with it on
 /// the same thread.
 pub const CLOSE_HOOK_CONFIG: &str = "class=PC_CMR4;strategy=terminate";
+/// The in-game wheel layer's switch in the game's environment: `on` when
+/// the launcher decided the game gets the virtual wheel
+/// (`rig::shows_virtual_wheel`), else `off`, so the layer never decides
+/// differently from the profile the launcher prepared.
+pub const WHEEL_MODE_ENV: &str = "REA_WHEEL_MODE";
 const OWNERSHIP_FILE: &str = ".cmr4-launcher-components";
 
 /// The runtime's `cmr4.exe` from `bytes` (the game's own, with the

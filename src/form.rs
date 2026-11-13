@@ -7,7 +7,8 @@
 use std::path::PathBuf;
 
 pub use crate::config::{Look, STEAM_DECK_SCREEN, recommended};
-use crate::config::{Resolution, Settings, default_resolution};
+use crate::config::{Resolution, Settings, Wheel, default_resolution};
+use rea_launcher::wheel::dinput::Setup;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Form {
@@ -18,6 +19,8 @@ pub struct Form {
     pub fps_limit: Option<u32>,
     pub vsync: bool,
     pub controller: bool,
+    /// The Wheel tab's settings.
+    pub wheel: Setup,
     /// Remembered so Custom stays picked while editing; otherwise always
     /// `look_of` the picture values.
     pub look: Look,
@@ -40,6 +43,7 @@ impl Form {
             fps_limit: settings.fps_limit(),
             vsync: settings.vsync(),
             controller: settings.controller(),
+            wheel: settings.wheel.setup.clone(),
             look: Look::Custom,
         };
         form.look = form.look_of(screen);
@@ -106,6 +110,7 @@ impl Form {
             fps_limit: Some(self.fps_limit.unwrap_or(0)),
             vsync: Some(self.vsync),
             controller: Some(self.controller),
+            wheel: Wheel::every(self.wheel.clone()),
         }
     }
 
@@ -186,15 +191,16 @@ pub fn picture_note(resolution: Resolution) -> String {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Tab {
     Play,
     Picture,
     Controls,
+    Wheel,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 3] = [Tab::Play, Tab::Picture, Tab::Controls];
+    pub const ALL: [Tab; 4] = [Tab::Play, Tab::Picture, Tab::Controls, Tab::Wheel];
 
     pub fn step(self, by: isize) -> Self {
         let at = Self::ALL.iter().position(|&tab| tab == self).unwrap_or(0) as isize;
@@ -433,9 +439,10 @@ mod tests {
     }
 
     #[test]
-    fn shoulders_wrap_the_three_tabs() {
-        assert_eq!(Tab::Play.step(-1), Tab::Controls);
-        assert_eq!(Tab::Controls.step(1), Tab::Play);
+    fn shoulders_wrap_the_four_tabs() {
+        assert_eq!(Tab::Play.step(-1), Tab::Wheel);
+        assert_eq!(Tab::Controls.step(1), Tab::Wheel);
+        assert_eq!(Tab::Wheel.step(1), Tab::Play);
         assert_eq!(Tab::Play.step(1), Tab::Picture);
     }
 

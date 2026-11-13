@@ -10,6 +10,7 @@ wrappers taken out: d3d11.dll, dxgi.dll
 arguments: (none)
 prefer fast GPU: true
 gamepad profile setup: true
+virtual wheel: false
 
 [registry HKCU\Software\Codemasters\Colin McRae Rally 04]
 INSTALL_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
@@ -25,6 +26,7 @@ ADAPTER_PID = dword:0 (if missing)
 REA_CLOSE_HOOK=class=PC_CMR4;strategy=terminate
 REA_CLOSE_HOOK_ATTACH=1
 REA_REGISTRY=HKLM\SOFTWARE\Codemasters\Colin McRae Rally 04 -> HKCU\Software\Codemasters\Colin McRae Rally 04
+REA_WHEEL_MODE=off
 
 [file dgVoodoo.conf]
 [General]
@@ -74,3 +76,17 @@ Level = 1
 
 [Workarounds]
 ActiveVirtualControllerMask = 0x01
+
+[file rea_wheel.ini]
+# rea_wheel.ini - the wheel settings, written by the launcher
+mode = auto
+lock = 540
+invert_accel = off
+invert_brake = off
+device = 
+pedals = 
+deadzone = 0
+linearity = 0
+ffb_strength = 50
+ffb_invert = off
+log = off

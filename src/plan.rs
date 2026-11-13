@@ -8,10 +8,14 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use crate::components::{
-    self, CLOSE_HOOK_CONFIG, CLOSE_HOOK_DLL, DGVOODOO_DLLS, DXVK_DLLS, Platform, XIDI_CONF,
+    self, CLOSE_HOOK_CONFIG, CLOSE_HOOK_DLL, DGVOODOO_DLLS, DXVK_DLLS, Platform, WHEEL_MODE_ENV,
+    XIDI_CONF,
 };
 use crate::config::{Resolution, Settings};
 use crate::registry::{self, Previous};
+use rea_launcher::cfg::on_off;
+use rea_launcher::wheel::dinput::{self, HEADER, Profile};
+use rea_launcher::wheel::rig::{self, Device};
 use rea_launcher_win32::reg::Value;
 
 /// Windows only: where the fast-GPU preference for the runtime's
@@ -37,6 +41,17 @@ pub fn fast_gpu_log_line(exe: &Path, wrote: bool) -> String {
             exe.display()
         )
     }
+}
+
+/// What a launch knows about wheels.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Wheels<'a> {
+    /// The game controllers DirectInput lists now (only asked for when
+    /// the wheel support is Auto).
+    pub attached: &'a [Device],
+    /// The pedal calibration file's text (`rea_wheel.ini` beside
+    /// `launcher.cfg`), when there is one.
+    pub calibration: Option<&'a str>,
 }
 
 /// Everything one launch changes.
@@ -73,12 +88,15 @@ pub struct Plan {
     pub prefer_fast_gpu: bool,
     /// The game profile is pointed at the connected pad when untouched.
     pub gamepad_profile: bool,
+    /// The wheel layer shows the game its virtual wheel
+    /// (`rig::shows_virtual_wheel`), and the profile gets it.
+    pub wheel: bool,
 }
 
 /// The plan for `settings` (resolved, with a resolution), with the
 /// widescreen fix applied to the exe or not (`widescreen`), the
 /// `runtime` folder, where the game runs, what the game's key held before
-/// (`previous`) and the player's own `WINEDLLOVERRIDES`.
+/// (`previous`), the player's own `WINEDLLOVERRIDES` and the `wheels`.
 pub fn plan(
     settings: &Settings,
     widescreen: bool,
@@ -86,6 +104,7 @@ pub fn plan(
     platform: &Platform,
     previous: &Previous,
     inherited_overrides: Option<&str>,
+    wheels: Wheels,
 ) -> Plan {
     let controller = settings.controller();
     let game_mode = registry::game_mode(settings.resolution(), widescreen);
@@ -119,6 +138,16 @@ pub fn plan(
         (rea_close_hook::ATTACH_ENV, "1".to_owned()),
         (rea_close_hook::registry::ENV, registry::REDIRECT.to_owned()),
     ];
+    // The wheel layer reads its file next to its DLL; the launcher's
+    // decision goes with it, so the game's profile and the layer agree.
+    let setup = &settings.wheel.setup;
+    let wheel = rig::shows_virtual_wheel(setup, wheels.attached);
+    let calibration = wheels.calibration.and_then(Profile::from_cfg);
+    files.push((
+        dinput::FILE,
+        Some(rig::save("", setup, calibration.as_ref(), HEADER)),
+    ));
+    env.push((WHEEL_MODE_ENV, on_off(wheel).to_owned()));
     let mut winebus = Vec::new();
     let mut app_dll_overrides = Vec::new();
     let mut app_dll_overrides_removed = Vec::new();
@@ -153,10 +182,19 @@ pub fn plan(
         args: Vec::new(),
         prefer_fast_gpu: !platform.wine,
         gamepad_profile: controller,
+        wheel,
     }
 }
 
 impl Plan {
+    /// The generated file `name`'s contents (None: not generated, or removed).
+    pub fn file(&self, name: &str) -> Option<&str> {
+        self.files
+            .iter()
+            .find(|(file, _)| *file == name)
+            .and_then(|(_, text)| text.as_deref())
+    }
+
     /// The plan as text, for the golden snapshots and the log.
     pub fn render(&self) -> String {
         let mut out = String::new();
@@ -177,6 +215,7 @@ impl Plan {
         });
         let _ = writeln!(out, "prefer fast GPU: {}", self.prefer_fast_gpu);
         let _ = writeln!(out, "gamepad profile setup: {}", self.gamepad_profile);
+        let _ = writeln!(out, "virtual wheel: {}", self.wheel);
         let _ = writeln!(out, "\n[registry HKCU\\{}]", registry::USER_KEY);
         for value in &self.registry {
             let _ = writeln!(out, "{}", registry::describe(value));

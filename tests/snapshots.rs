@@ -43,6 +43,7 @@ fn launch(
         &platform,
         &Default::default(),
         inherited,
+        plan::Wheels::default(),
     );
     format!(
         "# launcher.cfg: {cfg:?}\n# flags: {flags:?}\n# known build: {known}; platform: {platform:?}; inherited WINEDLLOVERRIDES: {inherited:?}\n# screen: 3840x2160\n\n{}",

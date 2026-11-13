@@ -10,6 +10,7 @@ wrappers taken out: dinput8.dll, Xidi.32.dll, msvcp140.dll, msvcp140_atomic_wait
 arguments: (none)
 prefer fast GPU: false
 gamepad profile setup: false
+virtual wheel: false
 
 [registry HKCU\Software\Codemasters\Colin McRae Rally 04]
 INSTALL_PATH = string:"C:\\Users\\Player\\AppData\\Local\\CMR4Launcher\\CMR4"
@@ -36,6 +37,7 @@ vcruntime140: ours removed
 REA_CLOSE_HOOK=class=PC_CMR4;strategy=terminate
 REA_CLOSE_HOOK_ATTACH=1
 REA_REGISTRY=HKLM\SOFTWARE\Codemasters\Colin McRae Rally 04 -> HKCU\Software\Codemasters\Colin McRae Rally 04
+REA_WHEEL_MODE=off
 WINEDLLOVERRIDES=dsound,d3d9,d3d11,dxgi=n,b;mscoree=d;xinput1_3=n
 
 [file dgVoodoo.conf]
@@ -59,3 +61,17 @@ dgVoodooWatermark                   = false
 ExtraEnumeratedResolutions          = 1920x1200@60
 
 [file Xidi.ini: removed when it is the launcher's]
+
+[file rea_wheel.ini]
+# rea_wheel.ini - the wheel settings, written by the launcher
+mode = auto
+lock = 540
+invert_accel = off
+invert_brake = off
+device = 
+pedals = 
+deadzone = 0
+linearity = 0
+ffb_strength = 50
+ffb_invert = off
+log = off

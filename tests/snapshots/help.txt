@@ -8,6 +8,17 @@ CMR4Launcher [options]
   --fps-limit <0-1000>                   Frame-rate cap
   --vsync on|off                         VSync
   --controller on|off                    Gamepad
+  --wheel auto|on|off                    Wheel support
+  --wheel-device <guid>                  Wheel
+  --wheel-pedals <guid>                  Pedals
+  --wheel-lock 180|270|360|540|900|full  Steering lock
+  --wheel-deadzone <0-25>                Deadzone
+  --wheel-curve <0-100>                  Curve
+  --wheel-invert-throttle on|off         Invert throttle
+  --wheel-invert-brake on|off            Invert brake
+  --wheel-ffb <0-100>                    FFB strength
+  --wheel-ffb-invert on|off              Reverse force feedback
+  --wheel-log on|off                     Wheel log
   --runtime <folder>                     Private copy folder
   --check                                check the game and settings only
   --no-window                            play with saved settings and flags

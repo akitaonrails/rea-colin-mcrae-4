@@ -8,13 +8,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use rea_launcher::pe::{Format, synthetic};
+use rea_launcher::wheel::dinput::{FILE, HEADER, Profile};
+use rea_launcher::wheel::rig::Device;
+use rea_launcher::wheel::{DeviceId, DeviceState, Kind, SteeringLock};
 use rea_launcher_ui::egui::Role;
 use rea_launcher_ui::testing::{self, Harness, Queryable};
 
 use crate::components::Platform;
 use crate::config::{self, Resolution, Settings};
 use crate::form::Tab;
-use crate::plan::{self, Plan};
+use crate::plan::{self, Plan, Wheels};
 use crate::registry::Previous;
 use crate::window::{Host, METRICS, PALETTE, Window};
 use rea_launcher_win32::reg::{Data as RegValue, When};
@@ -62,6 +65,7 @@ fn host() -> Host {
         pick_folder: |_| None,
         open_url: |_| {},
         installers: crate::source::tests::stand_in_table(),
+        wheel_devices: || Box::new(rea_launcher::wheel::rig::Fixed::default()),
     }
 }
 
@@ -96,6 +100,11 @@ fn has_line(text: &str, line: &str) -> bool {
 /// What a launch with this file and these flags would do on a 4K screen
 /// under Wine, for a known build (the fix applies when wanted).
 fn launch(cfg: &str, flags: &[&str]) -> Plan {
+    launch_with(cfg, flags, Wheels::default())
+}
+
+/// [`launch`] with these game controllers and pedal calibration.
+fn launch_with(cfg: &str, flags: &[&str], wheels: Wheels) -> Plan {
     let cli = config::parse_args(flags.iter().map(|f| f.to_string())).unwrap();
     let (file, warnings) = Settings::parse_file(cfg);
     assert!(warnings.is_empty(), "{warnings:?}");
@@ -116,15 +125,12 @@ fn launch(cfg: &str, flags: &[&str]) -> Plan {
         &Platform::new(true, false, None),
         &Previous::default(),
         None,
+        wheels,
     )
 }
 
 fn file(plan: &Plan, name: &str) -> String {
-    plan.files
-        .iter()
-        .find(|(n, _)| *n == name)
-        .and_then(|(_, text)| text.clone())
-        .unwrap_or_default()
+    plan.file(name).unwrap_or_default().to_owned()
 }
 
 fn dgvoodoo(plan: &Plan, key: &str) -> String {
@@ -370,6 +376,7 @@ fn native_windows_writes_no_wine_dll_overrides() {
         &Platform::new(false, false, None),
         &Previous::default(),
         None,
+        Wheels::default(),
     );
     assert!(plan.app_dll_overrides.is_empty());
     assert!(plan.app_dll_overrides_removed.is_empty());
@@ -671,7 +678,7 @@ fn every_tab_renders_and_its_controls_are_reachable_and_named() {
         rea_launcher_ui::egui::Key::Tab,
     );
     ui.run();
-    assert_eq!(ui.state().tab, Tab::Play);
+    assert_eq!(ui.state().tab, Tab::Wheel);
     ui.key_press_modifiers(
         rea_launcher_ui::egui::Modifiers::CTRL | rea_launcher_ui::egui::Modifiers::SHIFT,
         rea_launcher_ui::egui::Key::Tab,
@@ -686,11 +693,13 @@ fn every_tab_renders_and_its_controls_are_reachable_and_named() {
         ui.query_by_label_contains("reads the pad by itself")
             .is_some()
     );
-    // The pad's shoulders change tabs; Start plays.
-    ui.state_mut()
-        .navigate(&[rea_launcher_ui::pad::Nav::NextTab]);
-    ui.run();
-    assert_eq!(ui.state().tab, Tab::Play);
+    // The pad's shoulders change tabs, through the Wheel tab.
+    for tab in [Tab::Wheel, Tab::Play] {
+        ui.state_mut()
+            .navigate(&[rea_launcher_ui::pad::Nav::NextTab]);
+        ui.run();
+        assert_eq!(ui.state().tab, tab);
+    }
 }
 
 #[test]
@@ -743,6 +752,7 @@ fn hostile_game_and_runtime_paths_sync_and_resolve() {
         &Platform::default(),
         &Previous::default(),
         None,
+        Wheels::default(),
     );
     assert_eq!(
         reg(&plan, "INSTALL_PATH"),
@@ -750,7 +760,7 @@ fn hostile_game_and_runtime_paths_sync_and_resolve() {
     );
     // On Windows the only environment changes are the close hook's setup,
     // its self-attach switch and the registry redirect (it is in
-    // cmr4.exe's imports).
+    // cmr4.exe's imports), and the wheel layer's switch.
     assert!(plan.prefer_fast_gpu);
     assert_eq!(
         plan.env,
@@ -760,7 +770,8 @@ fn hostile_game_and_runtime_paths_sync_and_resolve() {
                 "class=PC_CMR4;strategy=terminate".to_string()
             ),
             ("REA_CLOSE_HOOK_ATTACH", "1".to_string()),
-            ("REA_REGISTRY", crate::registry::REDIRECT.to_string())
+            ("REA_REGISTRY", crate::registry::REDIRECT.to_string()),
+            ("REA_WHEEL_MODE", "off".to_string()),
         ]
     );
     assert!(plan.wrappers.contains(&"rea_close_hook.dll"));
@@ -780,6 +791,7 @@ fn the_plan_keeps_first_run_defaults_and_the_players_overrides() {
             ..Previous::default()
         },
         Some("d3d9.dll=b;xinput1_3=n"),
+        Wheels::default(),
     );
     assert_eq!(
         reg(&plan, "INSTALL_PATH"),
@@ -802,6 +814,7 @@ fn the_plan_keeps_first_run_defaults_and_the_players_overrides() {
             ),
             ("REA_CLOSE_HOOK_ATTACH", "1".to_string()),
             ("REA_REGISTRY", crate::registry::REDIRECT.to_string()),
+            ("REA_WHEEL_MODE", "off".to_string()),
             (
                 "WINEDLLOVERRIDES",
                 "dinput8,msvcp140,msvcp140_atomic_wait,concrt140,vcruntime140,dsound,d3d9,d3d11,dxgi=n,b;mscoree=d;xinput1_3=n".to_string()
@@ -813,4 +826,180 @@ fn the_plan_keeps_first_run_defaults_and_the_players_overrides() {
     assert!(text.contains("patch sets: widescreen"));
     assert!(text.contains("LANGUAGE = string:\"E\" (if missing)"));
     assert!(text.contains("[file dgVoodoo.conf]"));
+}
+
+/// A game controller as DirectInput lists it, at rest.
+fn device(name: &str, vid: u16, pid: u16, kind: Kind) -> Device {
+    let state = DeviceState {
+        axes: vec![0; 8],
+        buttons: vec![false; 8],
+    };
+    Device {
+        id: DeviceId {
+            name: name.into(),
+            vid,
+            pid,
+            guid: format!("{{{name}}}"),
+        },
+        kind,
+        axes: 3,
+        buttons: 8,
+        ffb: kind == Kind::Wheel,
+        initial: state.clone(),
+        state,
+    }
+}
+
+/// The value of `key` in an ini-style text.
+fn ini(text: &str, key: &str) -> Option<String> {
+    text.lines().find_map(|line| {
+        let (k, v) = line.split_once('=')?;
+        (k.trim() == key).then(|| v.trim().to_owned())
+    })
+}
+
+#[test]
+fn wheel_tab_and_flags_reach_launcher_cfg_and_the_layer() {
+    let (dir, _clean) = scratch("wheel");
+    let (mut ui, path) = open(&dir, "");
+    tab(&mut ui, "Wheel");
+    // A rally lock by default.
+    assert_eq!(
+        ui.state().wheel.setup.wheel.lock,
+        SteeringLock::Degrees(540)
+    );
+    for (role, label) in [
+        (Role::RadioButton, "On"),
+        (Role::RadioButton, "900°"),
+        (Role::RadioButton, "4 %"),
+        (Role::RadioButton, "75 %"),
+        (Role::Switch, "Invert brake"),
+        (Role::Switch, "Reverse force feedback"),
+    ] {
+        testing::click_in_view(&mut ui, role, label);
+    }
+    let saved = play(&mut ui, &path);
+    for line in [
+        "wheel = on",
+        "wheel_lock = 900",
+        "wheel_deadzone = 4",
+        "wheel_ffb = 75",
+        "wheel_invert_brake = on",
+        "wheel_ffb_invert = on",
+        "wheel_invert_throttle = off",
+    ] {
+        assert!(has_line(&saved, line), "{line} in\n{saved}");
+    }
+    assert!(
+        !path.with_file_name(FILE).exists(),
+        "no calibration yet, no file"
+    );
+    let flags = [
+        "--wheel",
+        "on",
+        "--wheel-lock",
+        "900",
+        "--wheel-deadzone",
+        "4",
+        "--wheel-ffb",
+        "75",
+        "--wheel-invert-brake",
+        "on",
+        "--wheel-ffb-invert",
+        "on",
+    ];
+    let from_file = launch(&picture_only(&saved), &[]);
+    let from_flags = launch("", &flags);
+    let layer = file(&from_file, FILE);
+    assert_eq!(layer, file(&from_flags, FILE));
+    for (key, value) in [
+        ("mode", "on"),
+        ("lock", "900"),
+        ("deadzone", "4"),
+        ("ffb_strength", "75"),
+        ("invert_brake", "on"),
+        ("ffb_invert", "on"),
+    ] {
+        assert_eq!(ini(&layer, key).as_deref(), Some(value), "{key}\n{layer}");
+    }
+    assert!(layer.starts_with(&format!("# {HEADER}")), "{layer}");
+    // On: the game gets the virtual wheel, with or without one attached.
+    for plan in [&from_file, &from_flags] {
+        assert!(plan.wheel);
+        assert_eq!(env(plan, "REA_WHEEL_MODE"), Some("on"));
+    }
+    // A flag overrides one key of the file and keeps the others.
+    let over = launch(&picture_only(&saved), &["--wheel-lock", "full"]);
+    let layer = file(&over, FILE);
+    assert_eq!(ini(&layer, "lock").as_deref(), Some("0"));
+    assert_eq!(ini(&layer, "ffb_strength").as_deref(), Some("75"));
+}
+
+#[test]
+fn the_virtual_wheel_is_shown_only_when_the_setting_and_the_devices_say_so() {
+    let pad = device("Xbox pad", 0x045e, 0x028e, Kind::Pad);
+    let wheel = device("FANATEC CSL DD", 0x0eb7, 0x0020, Kind::Wheel);
+    let shown = |cfg: &str, attached: &[Device]| {
+        let plan = launch_with(
+            cfg,
+            &[],
+            Wheels {
+                attached,
+                calibration: None,
+            },
+        );
+        assert_eq!(
+            env(&plan, "REA_WHEEL_MODE"),
+            Some(if plan.wheel { "on" } else { "off" })
+        );
+        plan.wheel
+    };
+    // Auto (the default): only with a wheel attached.
+    assert!(!shown("", &[]));
+    assert!(!shown("", std::slice::from_ref(&pad)));
+    assert!(shown("", &[pad.clone(), wheel.clone()]));
+    // A pad picked by hand drives the virtual wheel.
+    assert!(shown(
+        "wheel_device = {Xbox pad}\n",
+        std::slice::from_ref(&pad)
+    ));
+    assert!(shown("wheel = on\n", &[]));
+    assert!(!shown("wheel = off\n", &[wheel]));
+}
+
+#[test]
+fn the_pedal_calibration_reaches_the_layer_and_survives_play() {
+    let (dir, _clean) = scratch("calibration");
+    let wheel = device("FANATEC CSL DD", 0x0eb7, 0x0020, Kind::Wheel);
+    let calibration = Profile::guess(wheel.id.clone(), &wheel.initial, None)
+        .to_cfg("# mine\nfuture_key = 7\n", HEADER);
+    let (_, path) = open(&dir, "");
+    let calibration_file = path.with_file_name(FILE);
+    fs::write(&calibration_file, &calibration).unwrap();
+    // The window opens on it and Play leaves it as it is.
+    let text = fs::read_to_string(&path).unwrap();
+    let mut ui = testing::harness(
+        &PALETTE,
+        &METRICS,
+        Window::new(path.clone(), Some(&text), host()),
+        |ui, window| window.draw(ui),
+    );
+    ui.run();
+    assert!(ui.state().wheel.profile.is_some());
+    play(&mut ui, &path);
+    assert_eq!(fs::read_to_string(&calibration_file).unwrap(), calibration);
+    // The layer's file holds the setup and the calibration, nothing else.
+    let plan = launch_with(
+        "",
+        &[],
+        Wheels {
+            attached: &[],
+            calibration: Some(&calibration),
+        },
+    );
+    let layer = file(&plan, FILE);
+    assert!(layer.contains("wheel_vid"), "{layer}");
+    assert_eq!(ini(&layer, "lock").as_deref(), Some("540"));
+    assert!(!layer.contains("future_key") && !layer.contains("# mine"));
+    assert_eq!(Profile::from_cfg(&layer), Profile::from_cfg(&calibration));
 }

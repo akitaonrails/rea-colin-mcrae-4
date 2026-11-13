@@ -20,7 +20,9 @@ mod app {
     use cmr4_launcher::{GAME_EXE, components, plan, profile, registry, runtime, source};
     use rea_launcher::identify::validate_pe32;
     use rea_launcher::log::Log;
+    use rea_launcher::wheel::dinput::{self as wheel, Mode as WheelMode};
     use rea_launcher::{fsx, paths};
+    use rea_launcher_win32::dinput;
     use rea_launcher_win32::disk;
     use rea_launcher_win32::gpu::{self, Glx};
     use rea_launcher_win32::innoextract::Unpacked;
@@ -184,15 +186,16 @@ mod app {
         }
     }
 
-    /// The controllers the game will list: the Xidi pad when the gamepad
-    /// is on and an XInput pad is connected.
-    fn controller_layout(gamepad: bool) -> profile::Layout {
+    /// The controllers the game will list: the virtual wheel when the
+    /// layer shows it, and the Xidi pad when the gamepad is on and an
+    /// XInput pad is connected.
+    fn controller_layout(gamepad: bool, wheel: bool) -> profile::Layout {
         let pad = gamepad.then(win32::gamepad_ids).flatten();
         if gamepad && pad.is_none() {
             log_line("controller setup: no XInput pad in slot 0");
         }
         profile::Layout {
-            wheel: false,
+            wheel,
             pad: pad.map(|(vendor, product)| profile::Ids { vendor, product }),
         }
     }
@@ -496,6 +499,13 @@ mod app {
             ));
         }
         let inherited = win32::inherited_overrides();
+        // Only Auto asks which controllers are attached.
+        let attached = if settings.wheel.setup.mode == WheelMode::Auto {
+            dinput::list()
+        } else {
+            Vec::new()
+        };
+        let calibration = fs::read_to_string(settings_path.with_file_name(wheel::FILE)).ok();
         // An unknown build runs without the fix: dgVoodoo then keeps the
         // game's own frame shape.
         let plan = plan::plan(
@@ -505,7 +515,16 @@ mod app {
             &platform,
             &previous,
             inherited.as_deref(),
+            plan::Wheels {
+                attached: &attached,
+                calibration: calibration.as_deref(),
+            },
         );
+        log_line(&format!(
+            "wheel: {} game controller(s) attached; the virtual wheel is {}",
+            attached.len(),
+            if plan.wheel { "shown" } else { "not shown" }
+        ));
         components::install(
             &game,
             &runtime,
@@ -558,7 +577,12 @@ mod app {
         for (name, value) in &plan.env {
             log_line(&format!("game environment: {name}={value}"));
         }
-        let layout = controller_layout(plan.gamepad_profile);
+        // The wheel layer's settings, next to it in the runtime.
+        if let Some(text) = plan.file(wheel::FILE) {
+            fsx::write_atomic(&runtime.join(wheel::FILE), text)
+                .map_err(|error| format!("cannot write {error}"))?;
+        }
+        let layout = controller_layout(plan.gamepad_profile, plan.wheel);
         prepare_controllers(&runtime, layout);
         log_line("starting game");
         let code = win32::run_game(&runtime_exe, &runtime, &plan.env, &plan.args)?;

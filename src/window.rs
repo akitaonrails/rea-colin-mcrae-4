@@ -1,4 +1,4 @@
-//! CMR04's three-tab settings window, drawn with `rea_launcher_ui`.
+//! CMR04's four-tab settings window, drawn with `rea_launcher_ui`.
 //!
 //! Everything here is portable, so the window is tested headless
 //! (`egui_kittest`) on the host and under Wine; the Windows binary
@@ -9,11 +9,14 @@ use std::path::{Path, PathBuf};
 
 use rea_launcher::cfg::{OptionSpec, spec as cfg_spec};
 use rea_launcher::identify::validate_pe32;
+use rea_launcher::wheel::dinput;
+use rea_launcher::wheel::rig::WheelDevices;
 use rea_launcher_ui::egui::{self, Align2, Color32, Key, TextureHandle};
 use rea_launcher_ui::pad::Nav;
 use rea_launcher_ui::spec::{self as ui_spec, mark_rendered};
 use rea_launcher_ui::theme::{self, Metrics, Palette, body, semibold, tint};
 use rea_launcher_ui::unpack::{self, Unpacking};
+use rea_launcher_ui::wheel::WheelTab;
 use rea_launcher_ui::widgets::{self, Crop, LookCard};
 use rea_launcher_ui::window::{Layout, WindowFit};
 
@@ -87,6 +90,9 @@ pub fn unpacking(installer: &str, total: u64) -> Unpacking {
     Unpacking::new(TITLE, installer, total).with_credit(PHOTO_CREDIT)
 }
 
+/// The Controls tab's pointer for wheel owners.
+pub const WHEEL_NOTE: &str = "Driving with a wheel? Set it up in the Wheel tab.";
+
 /// What the window needs from the platform.
 #[derive(Debug, Clone, Copy)]
 pub struct Host {
@@ -102,6 +108,8 @@ pub struct Host {
     pub open_url: fn(&str),
     /// The installers the launcher unpacks (`source::INSTALLERS`).
     pub installers: &'static [Known<InstallerBuild>],
+    /// The Wheel tab's devices (`rea_launcher_win32::dinput::DirectInput`).
+    pub wheel_devices: fn() -> Box<dyn WheelDevices>,
 }
 
 /// What the Game folder field found.
@@ -209,8 +217,14 @@ pub struct Window {
     pub check: Check,
     checked: (String, bool),
     pub host: Host,
+    /// The Wheel tab; its setup goes into `launcher.cfg` with the other
+    /// options, its pedal calibration into `calibration`.
+    pub wheel: WheelTab,
+    pub devices: Box<dyn WheelDevices>,
     portrait: Option<TextureHandle>,
     path: PathBuf,
+    /// `rea_wheel.ini` beside `launcher.cfg`: the pedal calibration.
+    calibration: PathBuf,
     pub error: Option<String>,
     pending: Vec<Nav>,
     /// Set when Play saved the settings; the binary then closes the window.
@@ -223,14 +237,19 @@ impl Window {
     pub fn new(path: PathBuf, text: Option<&str>, host: Host) -> Self {
         let form = Form::open(text, host.screen);
         let widescreen = form.settings().widescreen();
+        let calibration = path.with_file_name(dinput::FILE);
+        let saved = std::fs::read_to_string(&calibration).ok();
         Self {
             check: check_game(&form.game, widescreen, host.installers),
             checked: (form.game.clone(), widescreen),
+            wheel: WheelTab::new(form.wheel.clone(), saved.as_deref()),
+            devices: (host.wheel_devices)(),
             form,
             tab: Tab::Play,
             host,
             portrait: None,
             path,
+            calibration,
             error: None,
             pending: Vec::new(),
             played: false,
@@ -243,8 +262,9 @@ impl Window {
     }
 
     /// Saves the settings into the file as it is now (keeping comments
-    /// and keys the window doesn't show) and marks the window played. A
-    /// file that exists but can't be read is not replaced.
+    /// and keys the window doesn't show), and the pedal calibration into
+    /// its own file, and marks the window played. A file that exists but
+    /// can't be read is not replaced.
     fn play(&mut self) {
         if !self.check.ready() {
             self.tab = Tab::Play;
@@ -259,13 +279,32 @@ impl Window {
                 return;
             }
         };
-        match rea_launcher::fsx::write_atomic(&self.path, self.form.save(&text)) {
+        self.form.wheel = self.wheel.setup.clone();
+        let saved = rea_launcher::fsx::write_atomic(&self.path, self.form.save(&text))
+            .and_then(|()| self.save_calibration());
+        match saved {
             Ok(()) => self.played = true,
             Err(error) => {
                 self.error = Some(format!(
                     "Can't save the settings ({error}). Check that the launcher's folder can be written to, then press Play again."
                 ))
             }
+        }
+    }
+
+    /// Writes the pedal calibration, when there is one, keeping the
+    /// file's other lines.
+    fn save_calibration(&self) -> std::io::Result<()> {
+        let existing = match std::fs::read_to_string(&self.calibration) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(error) => return Err(error),
+        };
+        match self.wheel.calibration_text(&existing) {
+            Some(text) if text != existing => {
+                rea_launcher::fsx::write_atomic(&self.calibration, text)
+            }
+            _ => Ok(()),
         }
     }
 
@@ -299,6 +338,7 @@ impl Window {
                     (Tab::Play, "Play"),
                     (Tab::Picture, "Picture"),
                     (Tab::Controls, "Controls"),
+                    (Tab::Wheel, "Wheel"),
                 ],
                 &mut self.tab,
             );
@@ -307,6 +347,9 @@ impl Window {
                 Tab::Play => self.play_tab(ui),
                 Tab::Picture => self.picture_tab(ui),
                 Tab::Controls => self.controls_tab(ui),
+                Tab::Wheel => {
+                    widgets::tab_body(ui, Tab::Wheel, |ui| self.wheel.draw(ui, &mut *self.devices))
+                }
             }
         });
         let hint = if self.check.ready() {
@@ -581,6 +624,7 @@ impl Window {
             count => format!("{count} pads are connected."),
         };
         widgets::note(ui, &pads);
+        widgets::note(ui, WHEEL_NOTE);
         ui.add_space(12.0);
         if !self.form.controller {
             widgets::note(
@@ -621,6 +665,7 @@ mod tests {
             pick_folder: |_| None,
             open_url: |_| {},
             installers: crate::source::INSTALLERS,
+            wheel_devices: || Box::new(rea_launcher::wheel::rig::Fixed::default()),
         }
     }
 

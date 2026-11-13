@@ -5,6 +5,7 @@
 //! window's rows come from it. The keys, defaults, looks and what a launch
 //! remembers are CMR4's.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use rea_launcher::cfg::{
@@ -12,6 +13,8 @@ use rea_launcher::cfg::{
 };
 pub use rea_launcher::cfg::{clear_key, read_file, set_key};
 use rea_launcher::display;
+use rea_launcher::wheel::SteeringLock;
+use rea_launcher::wheel::dinput::{Setup, options as wheel};
 use rea_launcher_win32::report::{self, Audience, Run};
 
 pub const FILE_NAME: &str = "launcher.cfg";
@@ -166,6 +169,18 @@ pub const OPTIONS: &[OptionSpec] = &[
         "Gamepad",
         "Lets the game use an Xbox-style pad: the left stick steers and the triggers are analogue pedals. Off: the game reads the pad on its own (under Wine only its buttons work).",
     ),
+    // The Wheel tab (the SDK's rows, for every DirectInput rally game).
+    wheel::WHEEL,
+    wheel::WHEEL_DEVICE,
+    wheel::WHEEL_PEDALS,
+    wheel::WHEEL_LOCK,
+    wheel::WHEEL_DEADZONE,
+    wheel::WHEEL_CURVE,
+    wheel::WHEEL_INVERT_THROTTLE,
+    wheel::WHEEL_INVERT_BRAKE,
+    wheel::WHEEL_FFB,
+    wheel::WHEEL_FFB_INVERT,
+    wheel::WHEEL_LOG,
     OptionSpec::new(
         "runtime",
         Kind::Path,
@@ -188,6 +203,72 @@ pub const SWITCHES: [(&str, &str); 4] = [
     ("--linux", "started by the Linux helper (cmr4-play)"),
 ];
 
+/// The in-game wheel layer's setup with no option set: the SDK's, with a
+/// 540° steering lock (a rally car's; the same in every CMR launcher).
+pub fn default_wheel() -> Setup {
+    let mut setup = Setup::default();
+    setup.wheel.lock = SteeringLock::Degrees(540);
+    setup
+}
+
+/// The wheel options one source (the file or the flags) set, over
+/// [`default_wheel`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Wheel {
+    pub setup: Setup,
+    set: BTreeSet<&'static str>,
+}
+
+impl Default for Wheel {
+    fn default() -> Self {
+        Self {
+            setup: default_wheel(),
+            set: BTreeSet::new(),
+        }
+    }
+}
+
+impl Wheel {
+    /// Every wheel option set, to `setup`'s values (what the window saves).
+    pub fn every(setup: Setup) -> Wheel {
+        Wheel {
+            setup,
+            set: wheel::OPTIONS.iter().map(|row| row.key).collect(),
+        }
+    }
+
+    /// Takes a wheel key's checked value; false for another key.
+    fn apply(&mut self, key: &str, value: Value) -> bool {
+        let Some(row) = wheel::OPTIONS.iter().find(|row| row.key == key) else {
+            return false;
+        };
+        self.set.insert(row.key);
+        self.setup.apply(row.key, value)
+    }
+
+    /// These options with the ones `over` set on top.
+    fn merged(mut self, over: Wheel) -> Wheel {
+        for row in wheel::OPTIONS
+            .iter()
+            .filter(|row| over.set.contains(row.key))
+        {
+            let text = over.setup.value(row.key).unwrap_or_default();
+            if let Ok(value) = row.parse(&text) {
+                self.apply(row.key, value);
+            }
+        }
+        self
+    }
+
+    /// The value of a wheel key this source set.
+    fn value(&self, key: &str) -> Option<String> {
+        self.set
+            .contains(key)
+            .then(|| self.setup.value(key))
+            .flatten()
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Settings {
     pub game: Option<PathBuf>,
@@ -198,6 +279,7 @@ pub struct Settings {
     pub fps_limit: Option<u32>,
     pub vsync: Option<bool>,
     pub controller: Option<bool>,
+    pub wheel: Wheel,
 }
 
 impl Settings {
@@ -243,11 +325,15 @@ impl Settings {
             fps_limit: over.fps_limit.or(self.fps_limit),
             vsync: over.vsync.or(self.vsync),
             controller: over.controller.or(self.controller),
+            wheel: self.wheel.merged(over.wheel),
         }
     }
 
     /// Takes one checked value from the file or a flag.
     fn apply(&mut self, key: &str, value: Value) -> Result<(), Rejected> {
+        if self.wheel.apply(key, value) {
+            return Ok(());
+        }
         match (key, value) {
             ("game", Value::Text(path)) => self.game = Some(path.into()),
             ("runtime", Value::Text(path)) => self.runtime = Some(path.into()),
@@ -287,7 +373,7 @@ impl Settings {
                 .map(|n| if n == 0 { "off".into() } else { n.to_string() }),
             "vsync" => self.vsync.map(|v| on_off(v).into()),
             "controller" => self.controller.map(|v| on_off(v).into()),
-            _ => None,
+            _ => self.wheel.value(key),
         }
     }
 
@@ -635,6 +721,15 @@ mod audience_tests {
 mod tests {
     use super::*;
 
+    /// The launcher's wheel setup with this lock, wheel and strength.
+    fn wheel_setup(lock: SteeringLock, device: &str, strength: u8) -> Setup {
+        let mut setup = default_wheel();
+        setup.wheel.lock = lock;
+        setup.wheel.device = device.into();
+        setup.ffb.strength = strength;
+        setup
+    }
+
     fn args(values: &[&str]) -> Result<Cli, String> {
         parse_args(values.iter().map(|value| (*value).to_string())).map_err(|bad| bad.message)
     }
@@ -929,6 +1024,50 @@ mod tests {
     }
 
     #[test]
+    fn every_wheel_flag_sets_the_layers_setup_over_the_file() {
+        let (file, warnings) = Settings::parse_file("wheel_ffb = 30\nwheel_curve = 20\n");
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let cli = args(&[
+            "--wheel",
+            "off",
+            "--wheel-device",
+            "{wheel}",
+            "--wheel-pedals",
+            "{pedals}",
+            "--wheel-lock",
+            "full",
+            "--wheel-deadzone",
+            "6",
+            "--wheel-invert-throttle",
+            "on",
+            "--wheel-invert-brake",
+            "on",
+            "--wheel-ffb-invert",
+            "on",
+            "--wheel-log",
+            "on",
+        ])
+        .unwrap();
+        let setup = file.merged(cli.settings).wheel.setup;
+        let mut expected = wheel_setup(SteeringLock::Full, "{wheel}", 30);
+        expected.mode = rea_launcher::wheel::dinput::Mode::Off;
+        expected.pedals = "{pedals}".into();
+        expected.deadzone = 6;
+        expected.linearity = 20;
+        expected.wheel.invert_accel = true;
+        expected.wheel.invert_brake = true;
+        expected.ffb.invert = true;
+        expected.log = true;
+        assert_eq!(setup, expected);
+        // Unset, the launcher's rally lock.
+        assert_eq!(
+            Settings::default().wheel.setup.wheel.lock,
+            SteeringLock::Degrees(540)
+        );
+        assert!(args(&["--wheel-deadzone", "26"]).is_err());
+    }
+
+    #[test]
     fn every_non_default_value_renders_and_reads_back() {
         let settings = Settings {
             game: Some(PathBuf::from(r"C:\Games\CMR 04")),
@@ -938,6 +1077,14 @@ mod tests {
             fps_limit: Some(144),
             vsync: Some(true),
             controller: Some(false),
+            wheel: Wheel::every(Setup {
+                mode: rea_launcher::wheel::dinput::Mode::On,
+                pedals: "{pedals}".into(),
+                deadzone: 4,
+                linearity: 60,
+                log: true,
+                ..wheel_setup(SteeringLock::Full, "{wheel}", 70)
+            }),
         };
         let (read, warnings) = Settings::parse_file(&settings.save_into(""));
         assert!(warnings.is_empty(), "{warnings:?}");
