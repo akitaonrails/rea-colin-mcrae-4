@@ -6,12 +6,23 @@ but are not treated as gameplay evidence.
 
 ## 2026-11-13: wheel support (rea-launcher-sdk feat/dinput-wheel)
 
+Release package built by `packaging/build-windows.sh` into
+`.work/wheel-dist`; the owner's install of `cmr4.exe` (`7dca9f4c…1b41`,
+read-only, its files' SHA-256 the same before and after), Wine 11.21 and
+gamescope 3.17.0 in the `gaming` box, the 2026-11-05 harness
+(`.work/rgwheel/`: `env -i`, a fresh private prefix, `gamescope --backend
+headless`, one null sink, XTest input), and the game's state read from our
+own `cmr4.exe`'s memory at the addresses of the seed research.
+
 | Check | Result |
 |---|---|
-| Profile seeding, stash and restore (`src/profile.rs`) | **VERIFIED (host tests)** against fixtures built from the offsets: the pad seed is byte for byte 0.5.2's; the wheel seed's values at their file offsets; wheel↔pad runs restore the player's tweaked records; player 1's slot only for a profile never set up |
-| Wheel tab, options, launch decision | **VERIFIED (host and Wine e2e)**: every wheel key from the window and as a flag reaches `launcher.cfg`, the runtime `rea_wheel.ini` and `REA_WHEEL_MODE`; Auto/On/Off decisions with stand-in device lists; tab cycling and pad navigation |
-| Close hook and wheel layer in one `cmr4.exe` | **BLOCKED**: both SDK rlibs export `DllMain`, so the launcher (which links both for `import_into`) fails to link for Windows (`duplicate symbol: _DllMain@12`); reported to the SDK |
-| Headless real-game run (fake wheel, seeded record kept, close hook ends the game) | **NOT RUN**: needs the Windows build above |
+| Profile seeding, stash and restore (`src/profile.rs`) | **VERIFIED (host tests)** against fixtures built from the offsets: the pad seed is byte for byte 0.5.2's; wheel↔pad runs restore the player's tweaked records; player 1's slot only for a profile never set up |
+| Wheel tab, options, launch decision | **VERIFIED (host and Wine e2e)**: every wheel key from the window and as a flag reaches `launcher.cfg`, the runtime `rea_wheel.ini` and `REA_WHEEL_MODE`; Auto/On/Off with stand-in device lists; tab cycling and pad navigation |
+| Close hook and wheel layer in one `cmr4.exe` | **VERIFIED**: `cmr4-play --play --wheel on --wheel-log on`: the launcher logs both added to the imports; `rea_wheel.log` shows the layer loaded (`mode on (REA_WHEEL_MODE on)`), the game's `CreateDevice` of the virtual wheel, `SetDataFormat`, four `DIPROP_RANGE` by object ID and `Acquire`; Alt+F4 (XTest) ended the game in 0.27 s through the close hook (`.work/rgwheel/logs/wheel-on/`) |
+| The game binds the seeded record | **VERIFIED** in memory at the main menu, both runs: player 1 slot 2; slot 2's record accelerate 36, brake 37, steering 34, IDs 5245/1209; the device 32 buttons, 4 axes, 1 hat, 38 controls; the mapper's actions 7/9/10 on 34/36/37 and accelerate's seeded tuning (range 65535, applied only when the IDs match). `OPTIONS` on disk holds the seed (slot 2, 36/37, the IDs, flags 0x13, autocentre off) |
+| Auto with a wheel attached | **VERIFIED** with the layer's test-only `fake = wheel` (added by hand to the runtime `rea_wheel.ini` for one direct `cmr4.exe` run, then removed): `mode auto (REA_WHEEL_MODE unset)`, the fake wheel found, hidden from the game, used for the virtual wheel and taken exclusively in the background; the same memory checks pass; Alt+F4 ended the game in 0.01 s (`logs/direct-fake/`) |
+| Xidi's virtual pad without an XInput pad | **SEEN**: Xidi lists "Xidi Virtual Controller 1" (IDs 0000:0000) with no pad connected, so behind the wheel it takes slot 3 even then; the launcher only seeds a pad whose IDs XInput reports |
+| Force feedback in a stage, the game re-saving `OPTIONS` with the wheel | **NOT RUN**: the runs stopped at the main menu (no effects are made there) |
 | Real wheels (force direction and feel, Fanatec twins and separate pedals, Logitech, Thrustmaster, re-plugging mid-stage, Wine's hidraw/SDL backends) | **NEEDS A REAL WHEEL** |
 
 ## 2026-11-09: the game's key in HKCU, redirected (rea-launcher-sdk v0.6.0)
