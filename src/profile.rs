@@ -34,6 +34,7 @@
 //! visiting Options.
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::io;
 use std::path::Path;
 
@@ -144,6 +145,12 @@ fn record(player: usize, slot: usize) -> usize {
 pub struct Ids {
     pub vendor: u16,
     pub product: u16,
+}
+
+impl fmt::Display for Ids {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:04x}:{:04x}", self.vendor, self.product)
+    }
 }
 
 /// The wheel layer's virtual wheel.
@@ -381,6 +388,34 @@ pub fn prepare(profile: &mut [u8], layout: Layout, stash: &Stash) -> Changes {
         changes.player = Some(FIRST_CONTROLLER);
     }
     changes
+}
+
+/// The `launcher.log` lines for what [`prepare_in`] did.
+pub fn describe(kept: &[Ids], changes: &Changes) -> Vec<String> {
+    let list = |ids: &[Ids]| {
+        let names: Vec<String> = ids.iter().map(Ids::to_string).collect();
+        names.join(", ")
+    };
+    let mut lines = Vec::new();
+    if !kept.is_empty() {
+        lines.push(format!("kept the records of {}", list(kept)));
+    }
+    if changes.is_empty() {
+        lines.push("profile already set up or not created yet".to_owned());
+    }
+    if !changes.restored.is_empty() {
+        lines.push(format!("restored {}", list(&changes.restored)));
+    }
+    if !changes.seeded.is_empty() {
+        lines.push(format!(
+            "set up {} with analogue pedals",
+            list(&changes.seeded)
+        ));
+    }
+    if let Some(slot) = changes.player {
+        lines.push(format!("player 1 drives with slot {slot}"));
+    }
+    lines
 }
 
 /// [`Stash::keep`] then [`prepare`] on the `OPTIONS` file at `options`,
@@ -762,6 +797,28 @@ mod tests {
         for foreign in [&b""[..], b"CMR4REC2", &bytes[..bytes.len() - 1]] {
             assert_eq!(Stash::parse(foreign), None);
         }
+    }
+
+    #[test]
+    fn the_log_says_what_changed() {
+        let changes = Changes {
+            restored: vec![PAD],
+            seeded: vec![WHEEL],
+            player: Some(2),
+        };
+        assert_eq!(
+            describe(&[PAD, OTHER_PAD], &changes),
+            [
+                "kept the records of 2dc8:310b, 045e:028e",
+                "restored 2dc8:310b",
+                "set up 1209:5245 with analogue pedals",
+                "player 1 drives with slot 2"
+            ]
+        );
+        assert_eq!(
+            describe(&[], &Changes::default()),
+            ["profile already set up or not created yet"]
+        );
     }
 
     #[test]

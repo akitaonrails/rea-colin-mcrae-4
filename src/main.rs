@@ -145,41 +145,11 @@ mod app {
     /// Gets the game profile's controller records ready for `layout`, and
     /// keeps a copy of the player's own (see `profile`).
     fn prepare_controllers(runtime: &Path, layout: profile::Layout) {
-        let ids = |list: &[profile::Ids]| {
-            let names: Vec<String> = list
-                .iter()
-                .map(|ids| format!("{:04x}:{:04x}", ids.vendor, ids.product))
-                .collect();
-            names.join(", ")
-        };
         let options = runtime.join("OPTIONS");
         match profile::prepare_in(&options, &runtime.join(profile::STASH_FILE), layout) {
             Ok((kept, changes)) => {
-                if !kept.is_empty() {
-                    log_line(&format!(
-                        "controller setup: kept the records of {}",
-                        ids(&kept)
-                    ));
-                }
-                if changes.is_empty() {
-                    log_line("controller setup: profile already set up or not created yet");
-                }
-                if !changes.restored.is_empty() {
-                    log_line(&format!(
-                        "controller setup: restored {}",
-                        ids(&changes.restored)
-                    ));
-                }
-                if !changes.seeded.is_empty() {
-                    log_line(&format!(
-                        "controller setup: set up {} with analogue pedals",
-                        ids(&changes.seeded)
-                    ));
-                }
-                if let Some(slot) = changes.player {
-                    log_line(&format!(
-                        "controller setup: player 1 drives with slot {slot}"
-                    ));
+                for line in profile::describe(&kept, &changes) {
+                    log_line(&format!("controller setup: {line}"));
                 }
             }
             Err(error) => log_line(&format!("warning: controller setup: {error}")),
@@ -202,9 +172,9 @@ mod app {
 
     /// Why the game would not see its registry values (`--check`): the
     /// close hook or the wheel layer missing from the components or not
-    /// addable to the exe's imports, the redirect's rules refused, or values that don't read
-    /// back from the HKCU key, which this writes as Play would. Empty when
-    /// it will.
+    /// addable to the exe's imports, the redirect's rules refused, or
+    /// values that don't read back from the HKCU key, which this writes as
+    /// Play would. Empty when it will.
     fn registry_problems(
         settings: &Settings,
         exe: &Prepared,
