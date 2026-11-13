@@ -5,7 +5,7 @@
 
 patch sets: (none)
 game renders: original
-wrappers installed: D3D9.dll, rea_close_hook.dll, d3d11.dll, dxgi.dll, dinput8.dll, Xidi.32.dll, msvcp140.dll, msvcp140_atomic_wait.dll, concrt140.dll, vcruntime140.dll
+wrappers installed: D3D9.dll, rea_close_hook.dll, rea_dinput.dll, d3d11.dll, dxgi.dll, dinput8.dll, Xidi.32.dll, msvcp140.dll, msvcp140_atomic_wait.dll, concrt140.dll, vcruntime140.dll
 wrappers taken out: (none)
 arguments: (none)
 prefer fast GPU: false

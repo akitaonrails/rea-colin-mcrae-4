@@ -12,15 +12,28 @@ description = "Runs the user's own copy of Colin McRae Rally 04 on modern Window
 name = "CMR4Launcher"
 path = "src/main.rs"
 
+[features]
+# Only for building the shipped DLLs (packaging/build-windows.sh, with
+# --lib so no executable links them): Cargo refuses `--features
+# rea-launcher-dinput/dll` for a package outside the workspace.
+layer-dlls = ["rea-launcher-close-hook/dll", "rea-launcher-dinput/dll"]
+
 [dependencies]
 rea-launcher = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.8.2" }
 # The settings window's drawing is portable (src/window.rs), so its GUI
 # tests run headless on the host as well as under Wine.
 rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.8.2" }
 # The close hook DLL shipped in components/ (built with
-# `cargo build -p rea-launcher-close-hook`); its parser checks our
-# configuration in the host tests.
-rea-launcher-close-hook = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.8.2" }
+# `cargo build -p rea-launcher-close-hook --features
+# rea-launcher-close-hook/dll`); its parser checks our configuration in the
+# host tests. Without `dll` the launcher gets only the library: the DLL's
+# DllMain and exports would clash with the wheel layer's in our exe.
+rea-launcher-close-hook = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.8.2", default-features = false }
+# The in-game wheel layer DLL shipped in components/ (built with
+# `cargo build -p rea-launcher-dinput --features rea-launcher-dinput/dll`;
+# here without `dll`, as above): it shows the game one virtual
+# wheel made from the player's wheel and pedals.
+rea-launcher-dinput = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.8.2", default-features = false }
 
 # Its Windows parts are cfg(windows); who sees a message
 # (report::Audience) is portable and tested on the host.
@@ -49,6 +62,13 @@ opt-level = "s"
 lto = true
 strip = true
 
+# The DLLs that run inside the game (packaging/build-windows.sh): their
+# catch_unwind guards turn a panic into an error code for one call, which
+# needs unwinding; under the exe's abort a panic would end the game.
+[profile.dll]
+inherits = "release"
+panic = "unwind"
+
 # TEMPORARY: the wheel support builds on the SDK's unreleased wheel work
 # (local branch feat/dinput-wheel). Replace with the v0.9.0 tag (sdk-bump)
 # and remove this table at release.
@@ -56,5 +76,6 @@ strip = true
 rea-launcher = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher" }
 rea-launcher-build = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher-build" }
 rea-launcher-close-hook = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher-close-hook" }
+rea-launcher-dinput = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher-dinput" }
 rea-launcher-ui = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher-ui" }
 rea-launcher-win32 = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher-win32" }

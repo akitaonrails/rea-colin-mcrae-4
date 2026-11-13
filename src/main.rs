@@ -201,8 +201,8 @@ mod app {
     }
 
     /// Why the game would not see its registry values (`--check`): the
-    /// close hook missing from the components or not addable to the exe's
-    /// imports, the redirect's rules refused, or values that don't read
+    /// close hook or the wheel layer missing from the components or not
+    /// addable to the exe's imports, the redirect's rules refused, or values that don't read
     /// back from the HKCU key, which this writes as Play would. Empty when
     /// it will.
     fn registry_problems(
@@ -211,13 +211,13 @@ mod app {
         runtime: &Path,
     ) -> Result<Vec<String>, String> {
         let mut problems = Vec::new();
-        if !components_dir()?.join(components::CLOSE_HOOK_DLL).is_file() {
-            problems.push(format!(
-                "{} is not in the launcher's components folder",
-                components::CLOSE_HOOK_DLL
-            ));
+        let components = components_dir()?;
+        for dll in components::IMPORTED_DLLS {
+            if !components.join(dll).is_file() {
+                problems.push(format!("{dll} is not in the launcher's components folder"));
+            }
         }
-        if let Err(error) = components::with_close_hook(&exe.bytes) {
+        if let Err(error) = components::with_imports(&exe.bytes) {
             problems.push(error);
         }
         if let Err(error) = registry::redirect() {
@@ -472,16 +472,16 @@ mod app {
         ));
 
         // Always from the game's own bytes, so switching the fix off needs
-        // no restore step. The close hook goes into its imports after the
-        // fix: Windows loads the hook with the game, and the launcher
-        // never touches the running game.
+        // no restore step. The close hook and the wheel layer go into its
+        // imports after the fix: Windows loads them with the game, and the
+        // launcher never touches the running game.
         // The hook also hands the game its registry key, so without it the
         // game would not find its folders: stop.
-        let runtime_bytes = components::with_close_hook(&exe.bytes)
-            .map_err(|error| registry::not_ready(&[error]))?;
+        let runtime_bytes =
+            components::with_imports(&exe.bytes).map_err(|error| registry::not_ready(&[error]))?;
         log_line(&format!(
-            "close hook: {} added to the runtime cmr4.exe's imports",
-            components::CLOSE_HOOK_DLL
+            "{} added to the runtime cmr4.exe's imports",
+            components::IMPORTED_DLLS.join(" and ")
         ));
         if fs::read(&runtime_exe).ok().as_deref() != Some(runtime_bytes.as_slice()) {
             fsx::write_atomic(&runtime_exe, &runtime_bytes)

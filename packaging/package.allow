@@ -15,6 +15,7 @@ docs/images/launcher-picture.jpg
 docs/images/launcher-play.jpg
 components/D3D9.dll
 components/rea_close_hook.dll
+components/rea_dinput.dll
 components/dinput8.dll
 components/Xidi.32.dll
 components/msvcp140.dll

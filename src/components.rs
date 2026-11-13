@@ -38,7 +38,7 @@ pub const XIDI_OVERRIDE_DLLS: [&str; 5] = [
 ];
 /// The SDK's close hook (`rea-launcher-close-hook`), which lets Alt+F4
 /// and window close end the game. It is installed next to the runtime's
-/// `cmr4.exe`, whose import table names it ([`with_close_hook`]), so
+/// `cmr4.exe`, whose import table names it ([`with_imports`]), so
 /// Windows loads it with the game and it attaches itself
 /// (`REA_CLOSE_HOOK_ATTACH=1`): the launcher never touches the running
 /// game, which antivirus heuristics would take for a keylogger.
@@ -51,21 +51,28 @@ pub const CLOSE_HOOK_DLL: &str = rea_close_hook::DLL;
 /// `WM_CLOSE` is left alone: the intro movies' window is closed with it on
 /// the same thread.
 pub const CLOSE_HOOK_CONFIG: &str = "class=PC_CMR4;strategy=terminate";
-/// The in-game wheel layer's switch in the game's environment: `on` when
-/// the launcher decided the game gets the virtual wheel
-/// (`rig::shows_virtual_wheel`), else `off`, so the layer never decides
-/// differently from the profile the launcher prepared.
-pub const WHEEL_MODE_ENV: &str = "REA_WHEEL_MODE";
+/// The in-game wheel layer (`rea-launcher-dinput`): in the runtime
+/// `cmr4.exe`'s imports too, it wraps the DirectInput the game gets (the
+/// system's, or Xidi's in front of it) and shows the game one virtual
+/// wheel made from the player's wheel and pedals. It reads
+/// `rea_wheel.ini` next to it and the launcher's decision from
+/// `rea_dinput::MODE_ENV`.
+pub const WHEEL_LAYER_DLL: &str = rea_dinput::DLL;
+/// The launcher's DLLs in the runtime exe's import table, loaded with the
+/// game.
+pub const IMPORTED_DLLS: [&str; 2] = [CLOSE_HOOK_DLL, WHEEL_LAYER_DLL];
 const OWNERSHIP_FILE: &str = ".cmr4-launcher-components";
 
 /// The runtime's `cmr4.exe` from `bytes` (the game's own, with the
 /// widescreen fix or not: [`crate::edition::prepare`]) with
-/// [`CLOSE_HOOK_DLL`] in its import table. Built from the player's bytes
-/// on every start, after the patches; an exe that already imports it is
+/// [`IMPORTED_DLLS`] in its import table. Built from the player's bytes
+/// on every start, after the patches; an exe that already imports them is
 /// returned unchanged.
-pub fn with_close_hook(bytes: &[u8]) -> Result<Vec<u8>, String> {
-    rea_close_hook::import_into(bytes)
-        .map_err(|error| format!("cannot add the close hook to cmr4.exe's imports: {error}"))
+pub fn with_imports(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let hooked = rea_close_hook::import_into(bytes)
+        .map_err(|error| format!("cannot add the close hook to cmr4.exe's imports: {error}"))?;
+    rea_dinput::import_into(&hooked)
+        .map_err(|error| format!("cannot add the wheel layer to cmr4.exe's imports: {error}"))
 }
 
 /// Xidi's view of the pad, following the CMR3 launcher's rally mapper.
@@ -150,7 +157,7 @@ pub fn validate_unpacker(components: &Path) -> Result<(), String> {
 
 pub fn validate(components: &Path, controller: bool, wine: bool) -> Result<(), String> {
     let mut names = DGVOODOO_DLLS.to_vec();
-    names.push(CLOSE_HOOK_DLL);
+    names.extend(IMPORTED_DLLS);
     if controller {
         names.extend(XIDI_DLLS);
         names.extend(XIDI_VC_DLLS);
@@ -199,6 +206,7 @@ pub fn describe(components: &Path) -> Vec<String> {
         "d3d11.dll" | "dxgi.dll" => "DXVK 3.1.1",
         XIDI_DLL | XIDI_MAIN_DLL => "Xidi 5.0.0",
         CLOSE_HOOK_DLL => "rea-launcher-close-hook",
+        WHEEL_LAYER_DLL => "rea-launcher-dinput",
         INNOEXTRACT_EXE => "innoextract 1.9",
         _ => "",
     };
@@ -206,7 +214,8 @@ pub fn describe(components: &Path) -> Vec<String> {
         .into_iter()
         .chain(DXVK_DLLS)
         .chain(XIDI_DLLS)
-        .chain([CLOSE_HOOK_DLL, INNOEXTRACT_EXE])
+        .chain(IMPORTED_DLLS)
+        .chain([INNOEXTRACT_EXE])
         .map(
             |name| match rea_launcher::identify::sha256_file(&components.join(name)) {
                 Ok(digest) => format!(
@@ -313,7 +322,7 @@ pub fn install(
     let wine = platform.wine;
     validate(components, settings.controller(), wine)?;
     let mut ledger = Ledger::load(game, runtime, OWNERSHIP_FILE);
-    for name in DGVOODOO_DLLS.into_iter().chain([CLOSE_HOOK_DLL]) {
+    for name in DGVOODOO_DLLS.into_iter().chain(IMPORTED_DLLS) {
         install_wrapper(&mut ledger, runtime, components, name)?;
     }
     for name in DXVK_DLLS {
@@ -392,7 +401,7 @@ mod tests {
             .into_iter()
             .chain(DXVK_DLLS)
             .chain(XIDI_DLLS)
-            .chain([CLOSE_HOOK_DLL])
+            .chain(IMPORTED_DLLS)
             .chain(XIDI_VC_DLLS)
         {
             fs::write(path.join(name), format!("bundle {name}")).unwrap();
@@ -641,7 +650,7 @@ mod tests {
         write_components(&components);
         fs::write(components.join(INNOEXTRACT_EXE), "innoextract").unwrap();
         let lines = describe(&components);
-        assert_eq!(lines.len(), 7);
+        assert_eq!(lines.len(), 8);
         assert!(lines[0].starts_with("D3D9.dll: ") && lines[0].ends_with("(dgVoodoo2 2.80)"));
         for name in XIDI_DLLS {
             assert!(
@@ -658,14 +667,19 @@ mod tests {
             lines[5]
         );
         assert!(
-            lines[6].starts_with("innoextract.exe: ") && lines[6].ends_with("(innoextract 1.9)"),
+            lines[6].starts_with("rea_dinput.dll: ") && lines[6].ends_with("(rea-launcher-dinput)"),
             "{}",
             lines[6]
+        );
+        assert!(
+            lines[7].starts_with("innoextract.exe: ") && lines[7].ends_with("(innoextract 1.9)"),
+            "{}",
+            lines[7]
         );
         fs::remove_file(components.join(CLOSE_HOOK_DLL)).unwrap();
         fs::remove_file(components.join(INNOEXTRACT_EXE)).unwrap();
         assert_eq!(describe(&components)[5], "rea_close_hook.dll: not bundled");
-        assert_eq!(describe(&components)[6], "innoextract.exe: not bundled");
+        assert_eq!(describe(&components)[7], "innoextract.exe: not bundled");
         fs::remove_dir_all(components).unwrap();
     }
 
@@ -731,13 +745,15 @@ mod tests {
                 .contains(XIDI_MAIN_DLL)
         );
         fs::write(components.join(XIDI_MAIN_DLL), "main").unwrap();
-        // The close hook is needed on every platform.
-        assert!(
-            validate(&components, true, false)
-                .unwrap_err()
-                .contains(CLOSE_HOOK_DLL)
-        );
-        fs::write(components.join(CLOSE_HOOK_DLL), "hook").unwrap();
+        // The close hook and the wheel layer are needed on every platform.
+        for dll in IMPORTED_DLLS {
+            assert!(
+                validate(&components, true, false)
+                    .unwrap_err()
+                    .contains(dll)
+            );
+            fs::write(components.join(dll), dll).unwrap();
+        }
         assert_eq!(validate(&components, true, false), Ok(()));
         assert!(
             validate(&components, true, true)
@@ -748,7 +764,7 @@ mod tests {
     }
 
     #[test]
-    fn the_close_hook_goes_next_to_the_runtime_exe_on_every_platform() {
+    fn the_close_hook_and_wheel_layer_go_next_to_the_runtime_exe_on_every_platform() {
         let game = temp("hook-game");
         let components = temp("hook-components");
         fs::create_dir_all(&game).unwrap();
@@ -766,10 +782,12 @@ mod tests {
             let platform = Platform::new(wine, false, None);
             for _ in 0..2 {
                 install(&game, &runtime, &components, &settings, true, &platform).unwrap();
-                assert_eq!(
-                    fs::read(runtime.join(CLOSE_HOOK_DLL)).unwrap(),
-                    b"bundle rea_close_hook.dll"
-                );
+                for dll in IMPORTED_DLLS {
+                    assert_eq!(
+                        fs::read(runtime.join(dll)).unwrap(),
+                        format!("bundle {dll}").as_bytes()
+                    );
+                }
             }
             // A new launcher's hook replaces the one an older one installed.
             fs::write(components.join(CLOSE_HOOK_DLL), "newer hook").unwrap();
@@ -788,29 +806,31 @@ mod tests {
 
     #[test]
     fn a_file_that_is_not_an_exe_gets_no_close_hook() {
-        let error = with_close_hook(b"not a PE file").unwrap_err();
+        let error = with_imports(b"not a PE file").unwrap_err();
         assert!(error.contains("close hook"), "{error}");
     }
 
     /// Windows target (`scripts/wine-test`): a real PE32 (this test
-    /// program, linked like the game) gains the import once, and every
+    /// program, linked like the game) gains both imports once, and every
     /// byte of its sections stays where it was, so a patch applied before
     /// is kept.
     #[cfg(windows)]
     #[test]
-    fn the_close_hook_is_imported_once_and_keeps_the_patched_bytes() {
+    fn the_close_hook_and_wheel_layer_are_imported_once_and_keep_the_patched_bytes() {
         use rea_launcher::pe::edit;
         let exe = fs::read(std::env::current_exe().unwrap()).unwrap();
-        let hooked = with_close_hook(&exe).unwrap();
+        let hooked = with_imports(&exe).unwrap();
         assert_ne!(hooked, exe);
         let imports = edit::imports(&hooked).unwrap();
-        assert!(
-            imports
-                .iter()
-                .any(|import| import.dll.eq_ignore_ascii_case(CLOSE_HOOK_DLL)),
-            "{imports:?}"
-        );
-        assert_eq!(with_close_hook(&hooked).unwrap(), hooked, "added once");
+        for dll in IMPORTED_DLLS {
+            assert!(
+                imports
+                    .iter()
+                    .any(|import| import.dll.eq_ignore_ascii_case(dll)),
+                "{dll}: {imports:?}"
+            );
+        }
+        assert_eq!(with_imports(&hooked).unwrap(), hooked, "added once");
         // Past the headers, the original file is a prefix of the new one
         // (code, data and the widescreen site at 0x77826 don't move).
         let headers = 0x1000.min(exe.len());
@@ -827,7 +847,8 @@ mod tests {
         for name in DGVOODOO_DLLS
             .into_iter()
             .chain(DXVK_DLLS)
-            .chain([XIDI_DLL, CLOSE_HOOK_DLL])
+            .chain([XIDI_DLL])
+            .chain(IMPORTED_DLLS)
         {
             let runtime = runtimes.join(name);
             fs::create_dir_all(&runtime).unwrap();

@@ -8,8 +8,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use crate::components::{
-    self, CLOSE_HOOK_CONFIG, CLOSE_HOOK_DLL, DGVOODOO_DLLS, DXVK_DLLS, Platform, WHEEL_MODE_ENV,
-    XIDI_CONF,
+    self, CLOSE_HOOK_CONFIG, DGVOODOO_DLLS, DXVK_DLLS, IMPORTED_DLLS, Platform, XIDI_CONF,
 };
 use crate::config::{Resolution, Settings};
 use crate::registry::{self, Previous};
@@ -109,7 +108,7 @@ pub fn plan(
     let controller = settings.controller();
     let game_mode = registry::game_mode(settings.resolution(), widescreen);
     let mut wrappers = DGVOODOO_DLLS.to_vec();
-    wrappers.push(CLOSE_HOOK_DLL);
+    wrappers.extend(IMPORTED_DLLS);
     let mut taken_out = Vec::new();
     if platform.wine {
         wrappers.extend(DXVK_DLLS);
@@ -138,8 +137,9 @@ pub fn plan(
         (rea_close_hook::ATTACH_ENV, "1".to_owned()),
         (rea_close_hook::registry::ENV, registry::REDIRECT.to_owned()),
     ];
-    // The wheel layer reads its file next to its DLL; the launcher's
-    // decision goes with it, so the game's profile and the layer agree.
+    // The wheel layer (components::WHEEL_LAYER_DLL, also in the exe's
+    // imports) reads its file next to it; the launcher's decision goes
+    // with it, so the game's profile and the layer agree.
     let setup = &settings.wheel.setup;
     let wheel = rig::shows_virtual_wheel(setup, wheels.attached);
     let calibration = wheels.calibration.and_then(Profile::from_cfg);
@@ -147,7 +147,7 @@ pub fn plan(
         dinput::FILE,
         Some(rig::save("", setup, calibration.as_ref(), HEADER)),
     ));
-    env.push((WHEEL_MODE_ENV, on_off(wheel).to_owned()));
+    env.push((rea_dinput::MODE_ENV, on_off(wheel).to_owned()));
     let mut winebus = Vec::new();
     let mut app_dll_overrides = Vec::new();
     let mut app_dll_overrides_removed = Vec::new();

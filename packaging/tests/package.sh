@@ -16,11 +16,11 @@ done
 chmod +x "$PKG/linux/cmr4-play"
 $SMOKE "$PKG" "$ALLOW" >/dev/null
 echo "ok   complete allowlisted package passes"
-for required in linux/rea-play.sh components/rea_close_hook.dll licenses/Xidi/LICENSE \
+for required in linux/rea-play.sh components/rea_close_hook.dll components/rea_dinput.dll licenses/Xidi/LICENSE \
   components/innoextract.exe licenses/innoextract/innoextract.LICENSE.txt; do
   grep -qx "$required\( .*\)\{0,1\}" "$ALLOW" || { echo "$required is not allowlisted" >&2; exit 1; }
 done
-echo "ok   the play library, close hook, innoextract and licences are shipped"
+echo "ok   the play library, close hook, wheel layer, innoextract and licences are shipped"
 mkdir -p "$PKG/Game"
 echo asset > "$PKG/Game/track.dat"
 if $SMOKE "$PKG" "$ALLOW" >/dev/null 2>&1; then

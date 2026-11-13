@@ -137,7 +137,7 @@ pub fn single_instance(name: &str) -> Result<Guard, AlreadyRunning> {
 /// carries the DLL overrides, so it works without the Linux helper. CMR04
 /// ignores WM_CLOSE and has no OS-level quit path, so Alt+F4 and the
 /// compositor's close action do nothing: the SDK's close-hook DLL, in the
-/// runtime `cmr4.exe`'s imports (`components::with_close_hook`), attaches
+/// runtime `cmr4.exe`'s imports (`components::with_imports`), attaches
 /// itself (`REA_CLOSE_HOOK_ATTACH=1`) and, configured by `REA_CLOSE_HOOK`
 /// (both in `env`, from the plan), ends the process on those requests.
 /// Nothing here touches the running game.
