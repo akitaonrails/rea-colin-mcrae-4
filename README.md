@@ -280,8 +280,9 @@ Limits: the game reads steering in 256 steps; one controller per player;
 devices are chosen when the game starts (plug the wheel in first); real
 wheels haven't been tested yet (see
 [docs/RUNTIME_NOTES.md](docs/RUNTIME_NOTES.md)). If something is off,
-switch on **Keep a log for bug reports** in the tab and attach
-`rea_wheel.log` (in the private copy) with `launcher.log`.
+start the launcher with `--wheel-log on` (or set `wheel_log = on` in
+`launcher.cfg`) and attach `rea_wheel.log` (in the private copy) with
+`launcher.log`.
 
 ## Options
 
@@ -307,7 +308,7 @@ lives is under [Where things live](#where-things-live).
 | `wheel_invert_throttle`, `wheel_invert_brake` / `--wheel-invert-throttle`, `--wheel-invert-brake` | Wheel: Invert throttle, Invert brake | `on`, `off` | off | For a pedal that reads backwards. |
 | `wheel_ffb` / `--wheel-ffb` | Wheel: Strength | 0 to 100 (percent) | 50 | Force-feedback strength; 0 is off. |
 | `wheel_ffb_invert` / `--wheel-ffb-invert` | Wheel: Reverse force feedback | `on`, `off` | off | Only for a wheel that pulls the wrong way. |
-| `wheel_log` / `--wheel-log` | Wheel: Keep a log for bug reports | `on`, `off` | off | Writes `rea_wheel.log` in the private copy. |
+| `wheel_log` / `--wheel-log` | — (`launcher.cfg` and the flag only) | `on`, `off` | off | Writes `rea_wheel.log` in the private copy. |
 | `runtime` / `--runtime` | Play: Private copy folder | a folder outside the game folder | `%LOCALAPPDATA%\CMR4Launcher\CMR4` | Where the launcher keeps its own copy of the game, with your saves and settings. |
 
 `on`/`off` also accept `true`/`false`, `yes`/`no` and `1`/`0`. An invalid

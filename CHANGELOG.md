@@ -6,6 +6,8 @@ All notable changes to this project. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-13
+
 ### Added
 
 - **Wheel support.** CMR04 reads wheels itself and gets modern ones
@@ -20,8 +22,8 @@ All notable changes to this project. The format follows
 - A **Wheel** tab in the settings window: wheel support (Auto/On/Off),
   which wheel and pedals drive, a live check of what the game will get,
   steering lock, deadzone, curve, pedal inversion, pedal calibration,
-  force-feedback strength and direction, a force-feedback test, and a log
-  for bug reports. Every setting is also a `launcher.cfg` key and a flag
+  force-feedback strength and direction, and a force-feedback test. Every
+  setting is also a `launcher.cfg` key and a flag
   (`wheel`, `wheel_device`, `wheel_pedals`, `wheel_lock`,
   `wheel_deadzone`, `wheel_curve`, `wheel_invert_throttle`,
   `wheel_invert_brake`, `wheel_ffb`, `wheel_ffb_invert`, `wheel_log`).
@@ -29,10 +31,10 @@ All notable changes to this project. The format follows
   the pad, and your own wheel and pad setups are kept when you switch
   between wheel and pad runs.
 - **Not tested on real wheels yet**: it was checked in the game with a
-  stand-in wheel. If something is off, turn on **Keep a log for bug
-  reports** in the Wheel tab and open an issue with `rea_wheel.log` (in
-  the private copy) and `launcher.log`, and say which wheel and pedals you
-  have.
+  stand-in wheel. If something is off, start the launcher with
+  `--wheel-log on` (or set `wheel_log = on` in `launcher.cfg`) and open an
+  issue with `rea_wheel.log` (in the private copy) and `launcher.log`, and
+  say which wheel and pedals you have.
 
 ### Changed
 
@@ -550,7 +552,8 @@ Rally 04 on Windows 10/11 and on Linux (Wine, Proton, AppImage).
 - Windows zip and AppImage built in CI from pinned component archives, with
   a package inventory check that rejects unlisted files and game assets.
 
-[Unreleased]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.4.5...v0.5.0
