@@ -226,11 +226,14 @@ pub(crate) mod tests {
         fs::write(dir.join("setup.exe"), bytes).unwrap();
     }
 
+    /// An empty folder with a hostile name. The whole root is cleared, not
+    /// only the folder: tests put siblings next to it (the unpack's
+    /// `CMR4-game`), and Wine reuses process ids, so a later run in the
+    /// same prefix found the earlier run's unpacked marker.
     fn temp(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir()
-            .join(format!("cmr4-source-{}-{name}", std::process::id()))
-            .join("Jogos d'Ação");
-        let _ = fs::remove_dir_all(&dir);
+        let root = std::env::temp_dir().join(format!("cmr4-source-{}-{name}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let dir = root.join("Jogos d'Ação");
         fs::create_dir_all(&dir).unwrap();
         dir
     }
