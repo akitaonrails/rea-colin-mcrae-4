@@ -12,7 +12,10 @@ read-only, its files' SHA-256 the same before and after), Wine 11.21 and
 gamescope 3.17.0 in the `gaming` box, the 2026-11-05 harness
 (`.work/rgwheel/`: `env -i`, a fresh private prefix, `gamescope --backend
 headless`, one null sink, XTest input), and the game's state read from our
-own `cmr4.exe`'s memory at the addresses of the seed research.
+own `cmr4.exe`'s memory at the addresses of the seed research. Re-run
+against the SDK's review fixes (f022a0c: the strength as the wheel's
+gain, the `dll` profile): the checks, Wine tests, package exports and the
+wheel-on game run (`logs/wheel-on-2/`) gave the same results.
 
 | Check | Result |
 |---|---|
