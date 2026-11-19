@@ -15,4 +15,8 @@
 
 xidi samuelgr/Xidi Xidi-
 dxvk doitsujin/dxvk dxvk-
-innoextract dscharrer/innoextract innoextract-
+# innoextract uploads its Linux tarball first, so its prefix is the whole
+# Windows zip name: a new release shows up as "no asset starting with ...",
+# which opens the issue all the same (issue #2: the bare prefix compared
+# the Linux tarball with the pinned zip).
+innoextract dscharrer/innoextract innoextract-1.9-windows.zip
