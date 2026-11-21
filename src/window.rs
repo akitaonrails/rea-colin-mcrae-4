@@ -27,20 +27,17 @@ use crate::config::{self, Look, OPTIONS, Resolution};
 use crate::form::{self, Form, Tab};
 use crate::{GAME_EXE, edition, source};
 
-// CMR04-style palette: graphite and white type with a red-orange racing
-// accent. WCAG contrast: INK on GRAPHITE 16.5:1, on PANEL 14.1:1; MUTED on
-// GRAPHITE 7.7:1, on PANEL 6.6:1; ON_ACCENT on ACCENT 5.8:1 (on
-// ACCENT_HOVER 6.9:1); ACCENT text on GRAPHITE 5.8:1; ERROR (amber, kept
-// apart from the accent's hue) on GRAPHITE 12.3:1; LINE (control borders)
-// 3.4:1 on GRAPHITE, 3.0:1 on PANEL.
-pub const GRAPHITE: Color32 = Color32::from_rgb(0x15, 0x17, 0x1b);
-const PANEL: Color32 = Color32::from_rgb(0x22, 0x25, 0x2b);
-const LINE: Color32 = Color32::from_rgb(0x6b, 0x6e, 0x75);
-const ACCENT: Color32 = Color32::from_rgb(0xff, 0x5a, 0x1f);
-const ACCENT_HOVER: Color32 = Color32::from_rgb(0xff, 0x7a, 0x45);
-const INK: Color32 = Color32::from_rgb(0xf4, 0xf5, 0xf7);
-const MUTED: Color32 = Color32::from_rgb(0xa4, 0xaa, 0xb4);
-const ON_ACCENT: Color32 = Color32::from_rgb(0x15, 0x17, 0x1b);
+// CMR04-style palette: cool alpine slate-steel with an ice-cyan racing accent
+// (distinct from CMR1's cobalt+gold, CMR3's crimson+gold, CMR2005's light
+// cream+crimson, DiRT's charcoal+red-orange, and DiRT Rally's pine+orange).
+pub const GRAPHITE: Color32 = Color32::from_rgb(0x13, 0x1b, 0x24);
+const PANEL: Color32 = Color32::from_rgb(0x1d, 0x28, 0x35);
+const LINE: Color32 = Color32::from_rgb(0x68, 0x7c, 0x91);
+const ACCENT: Color32 = Color32::from_rgb(0x38, 0xbd, 0xf8);
+const ACCENT_HOVER: Color32 = Color32::from_rgb(0x67, 0xd1, 0xfc);
+const INK: Color32 = Color32::from_rgb(0xf1, 0xf5, 0xf9);
+const MUTED: Color32 = Color32::from_rgb(0x9f, 0xb0, 0xc4);
+const ON_ACCENT: Color32 = Color32::from_rgb(0x0b, 0x14, 0x1e);
 const ERROR: Color32 = Color32::from_rgb(0xff, 0xd0, 0x4a);
 
 /// One accent in both roles (Play and whatever is chosen).
@@ -56,8 +53,8 @@ pub const PALETTE: Palette = Palette {
     select: ACCENT,
     on_select: ON_ACCENT,
     error: ERROR,
-    disabled_ink: Color32::from_rgb(0x4f, 0x55, 0x60),
-    disabled_line: Color32::from_rgb(0x2a, 0x2d, 0x33),
+    disabled_ink: Color32::from_rgb(0x5d, 0x70, 0x84),
+    disabled_line: Color32::from_rgb(0x2d, 0x3a, 0x49),
     focus: INK,
     selection: tint(ACCENT, 128),
 };
