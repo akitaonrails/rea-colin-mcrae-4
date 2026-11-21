@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+## [0.6.1] - 2026-11-21
+
 ### Changed
 
 - Changed the settings window palette to cool Alpine Slate & Ice-Cyan so CMR04 is visually distinct from DiRT's charcoal & red-orange palette; replaced placeholder launcher icon with custom 256×256 CMR04 artwork for Windows and Linux shortcuts.
@@ -559,7 +561,8 @@ Rally 04 on Windows 10/11 and on Linux (Wine, Proton, AppImage).
 - Windows zip and AppImage built in CI from pinned component archives, with
   a package inventory check that rejects unlisted files and game assets.
 
-[Unreleased]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/akitaonrails/rea-colin-mcrae-4/compare/v0.5.0...v0.5.1
